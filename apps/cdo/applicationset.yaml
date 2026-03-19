@@ -1,0 +1,39 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: cdo
+  namespace: argocd
+spec:
+  generators:
+    - git:
+        repoURL: https://github.com/code-dot-org/k8s-gitops.git
+        revision: main
+        files:
+          - path: apps/cdo/releases/*/config.yaml
+  template:
+    metadata:
+      name: cdo-{{path.basename}}
+      labels:
+        app.kubernetes.io/managed-by: kargo
+        kargo.akuity.io/project: cdo
+    spec:
+      project: default
+      sources:
+        - repoURL: https://github.com/code-dot-org/code-dot-org.git
+          targetRevision: '{{sourceRevision}}'
+          path: k8s/helm
+          helm:
+            releaseName: '{{path.basename}}'
+            valueFiles:
+              - $values/apps/cdo/env-types/{{envType}}.values.yaml
+              - $values/apps/cdo/releases/{{path.basename}}/values.yaml
+        - repoURL: https://github.com/code-dot-org/k8s-gitops.git
+          targetRevision: main
+          ref: values
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true

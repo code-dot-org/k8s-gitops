@@ -1,0 +1,39 @@
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Stage
+metadata:
+  name: levelbuilder
+  namespace: cdo
+spec:
+  requestedFreight:
+    - origin:
+        kind: Warehouse
+        name: cdo
+      sources:
+        stages:
+          - test
+  promotionTemplate:
+    spec:
+      vars:
+        - name: gitopsRepo
+          value: https://github.com/code-dot-org/k8s-gitops.git
+      steps:
+        - uses: git-clone
+          config:
+            repoURL: ${{ vars.gitopsRepo }}
+            checkout:
+              - branch: main
+                path: ./gitops
+        - uses: yaml-update
+          config:
+            path: ./gitops/apps/cdo/releases/levelbuilder/values.yaml
+            updates:
+              - key: image
+                value: ghcr.io/code-dot-org/code-dot-org:${{ imageFrom("ghcr.io/code-dot-org/code-dot-org").Tag }}
+        - uses: git-commit
+          config:
+            path: ./gitops
+            message: |
+              Promote levelbuilder to ${{ imageFrom("ghcr.io/code-dot-org/code-dot-org").Tag }} [skip ci]
+        - uses: git-push
+          config:
+            path: ./gitops

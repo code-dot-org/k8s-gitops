@@ -1,0 +1,48 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: app-of-apps
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions:
+    - missingkey=error
+  generators:
+    - git:
+        repoURL: https://github.com/code-dot-org/k8s-gitops.git
+        revision: main
+        files:
+          - path: apps/*/application.yaml
+        values:
+          app_dir: '{{index .path.segments 1}}'
+          manifest_file: application.yaml
+    - git:
+        repoURL: https://github.com/code-dot-org/k8s-gitops.git
+        revision: main
+        files:
+          - path: apps/*/applicationset.yaml
+        values:
+          app_dir: '{{index .path.segments 1}}'
+          manifest_file: applicationset.yaml
+  template:
+    metadata:
+      name: '{{.values.app_dir}}'
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/code-dot-org/k8s-gitops.git
+        targetRevision: main
+        path: 'apps/{{.values.app_dir}}'
+        directory:
+          include: '{{.values.manifest_file}}'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: argocd
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        # We retry syncing our top-level apps in case one app creates CRDs
+        # that another app depends on.
+        retry:
+          limit: 2

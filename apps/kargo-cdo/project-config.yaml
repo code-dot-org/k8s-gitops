@@ -1,0 +1,15 @@
+apiVersion: kargo.akuity.io/v1alpha1
+kind: ProjectConfig
+metadata:
+  name: cdo
+  namespace: cdo
+spec:
+  promotionPolicies:
+    - stage: staging
+      autoPromotionEnabled: true
+    - stage: test
+      autoPromotionEnabled: false
+    - stage: autoscale-prod
+      autoPromotionEnabled: false
+    - stage: levelbuilder
+      autoPromotionEnabled: false

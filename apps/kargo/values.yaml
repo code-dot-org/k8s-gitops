@@ -1,0 +1,9 @@
+api:
+  service:
+    type: ClusterIP
+
+controller:
+  replicas: 1
+
+server:
+  replicas: 1

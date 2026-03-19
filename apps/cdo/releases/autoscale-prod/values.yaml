@@ -1,0 +1,5 @@
+image: ghcr.io/code-dot-org/code-dot-org:replace-me
+autoscaling:
+  minReplicas: 3
+locals.yml:
+  stack_name: autoscale-prod

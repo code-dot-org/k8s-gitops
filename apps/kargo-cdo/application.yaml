@@ -1,0 +1,25 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kargo-cdo
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/code-dot-org/k8s-gitops.git
+    targetRevision: main
+    path: apps/kargo-cdo
+    directory:
+      recurse: true
+      exclude: application.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kargo
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      # We depend on CRDs installed by kargo, so if this is the first bootstrap
+      # we will expect to fail on the dry run (since the CRDs aren't installed yet)
+      - SkipDryRunOnMissingResource=true

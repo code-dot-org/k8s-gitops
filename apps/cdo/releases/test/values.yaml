@@ -1,0 +1,3 @@
+image: ghcr.io/code-dot-org/code-dot-org:replace-me
+locals.yml:
+  stack_name: test
