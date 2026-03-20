@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: cdo-applicationset
+  name: codeai
   namespace: argocd
 spec:
   generators:
@@ -9,10 +9,10 @@ spec:
         repoURL: https://github.com/code-dot-org/k8s-gitops.git
         revision: main
         files:
-          - path: apps/cdo-applicationset/releases/*/config.yaml
+          - path: apps/codeai/releases/*/config.yaml
   template:
     metadata:
-      name: cdo-{{path.basename}}
+      name: codeai-{{path.basename}}
       labels:
         app.kubernetes.io/managed-by: kargo
         kargo.akuity.io/project: cdo
@@ -25,8 +25,8 @@ spec:
           helm:
             releaseName: '{{path.basename}}'
             valueFiles:
-              - $values/apps/cdo-applicationset/env-types/{{envType}}.values.yaml
-              - $values/apps/cdo-applicationset/releases/{{path.basename}}/values.yaml
+              - $values/apps/codeai/env-types/{{envType}}.values.yaml
+              - $values/apps/codeai/releases/{{path.basename}}/values.yaml
         - repoURL: https://github.com/code-dot-org/k8s-gitops.git
           targetRevision: main
           ref: values
