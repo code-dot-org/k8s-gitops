@@ -22,19 +22,18 @@ spec:
       destination:
         server: https://kubernetes.default.svc
         namespace: argocd
-      source: {}
+      source:
+        repoURL: https://github.com/code-dot-org/k8s-gitops.git
+        targetRevision: main
+        path: 'apps/{{.path.basename}}'
+        directory:
+          include: '{{.path.filename}}'
   templatePatch: |
     {{- if or .spec.source .spec.sources }}
     metadata: {{ .metadata | toJson }}
     spec: {{ omit .spec "project" | toJson }}
     {{- else }}
     spec:
-      source:
-        repoURL: https://github.com/code-dot-org/k8s-gitops.git
-        targetRevision: main
-        path: {{ printf "apps/%s" .path.basename | toJson }}
-        directory:
-          include: "applicationset.yaml"
       syncPolicy:
         automated:
           prune: true
