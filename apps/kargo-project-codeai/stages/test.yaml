@@ -1,15 +1,16 @@
 apiVersion: kargo.akuity.io/v1alpha1
 kind: Stage
 metadata:
-  name: staging
-  namespace: cdo
+  name: test
+  namespace: kargo-project-codeai
 spec:
   requestedFreight:
     - origin:
         kind: Warehouse
-        name: cdo
+        name: kargo-project-codeai
       sources:
-        direct: true
+        stages:
+          - staging
   promotionTemplate:
     spec:
       vars:
@@ -24,7 +25,7 @@ spec:
                 path: ./gitops
         - uses: yaml-update
           config:
-            path: ./gitops/apps/codeai/releases/staging/values.yaml
+            path: ./gitops/apps/codeai/releases/test/values.yaml
             updates:
               - key: image
                 value: ghcr.io/code-dot-org/code-dot-org:${{ imageFrom("ghcr.io/code-dot-org/code-dot-org").Tag }}
@@ -32,7 +33,7 @@ spec:
           config:
             path: ./gitops
             message: |
-              Promote staging to ${{ imageFrom("ghcr.io/code-dot-org/code-dot-org").Tag }} [skip ci]
+              Promote test to ${{ imageFrom("ghcr.io/code-dot-org/code-dot-org").Tag }} [skip ci]
         - uses: git-push
           config:
             path: ./gitops

@@ -15,7 +15,7 @@ spec:
       name: codeai-{{path.basename}}
       labels:
         app.kubernetes.io/managed-by: kargo
-        kargo.akuity.io/project: cdo
+        kargo.akuity.io/project: kargo-project-codeai
     spec:
       project: default
       sources:

@@ -1,16 +1,15 @@
 apiVersion: kargo.akuity.io/v1alpha1
 kind: Stage
 metadata:
-  name: autoscale-prod
-  namespace: cdo
+  name: staging
+  namespace: kargo-project-codeai
 spec:
   requestedFreight:
     - origin:
         kind: Warehouse
-        name: cdo
+        name: kargo-project-codeai
       sources:
-        stages:
-          - test
+        direct: true
   promotionTemplate:
     spec:
       vars:
@@ -25,7 +24,7 @@ spec:
                 path: ./gitops
         - uses: yaml-update
           config:
-            path: ./gitops/apps/codeai/releases/autoscale-prod/values.yaml
+            path: ./gitops/apps/codeai/releases/staging/values.yaml
             updates:
               - key: image
                 value: ghcr.io/code-dot-org/code-dot-org:${{ imageFrom("ghcr.io/code-dot-org/code-dot-org").Tag }}
@@ -33,7 +32,7 @@ spec:
           config:
             path: ./gitops
             message: |
-              Promote autoscale-prod to ${{ imageFrom("ghcr.io/code-dot-org/code-dot-org").Tag }} [skip ci]
+              Promote staging to ${{ imageFrom("ghcr.io/code-dot-org/code-dot-org").Tag }} [skip ci]
         - uses: git-push
           config:
             path: ./gitops

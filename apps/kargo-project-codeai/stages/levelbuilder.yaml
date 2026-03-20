@@ -2,12 +2,12 @@ apiVersion: kargo.akuity.io/v1alpha1
 kind: Stage
 metadata:
   name: levelbuilder
-  namespace: cdo
+  namespace: kargo-project-codeai
 spec:
   requestedFreight:
     - origin:
         kind: Warehouse
-        name: cdo
+        name: kargo-project-codeai
       sources:
         stages:
           - test

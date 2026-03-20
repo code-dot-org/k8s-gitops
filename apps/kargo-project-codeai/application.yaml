@@ -1,14 +1,14 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: kargo-cdo
+  name: kargo-project-codeai
   namespace: argocd
 spec:
   project: default
   source:
     repoURL: https://github.com/code-dot-org/k8s-gitops.git
     targetRevision: main
-    path: apps/kargo-cdo
+    path: apps/kargo-project-codeai
     directory:
       recurse: true
       exclude: application.yaml
