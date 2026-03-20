@@ -13,31 +13,27 @@ spec:
         revision: main
         files:
           - path: apps/*/application.yaml
-        values:
-          app_dir: '{{index .path.segments 1}}'
-          manifest_file: application.yaml
-    - git:
-        repoURL: https://github.com/code-dot-org/k8s-gitops.git
-        revision: main
-        files:
           - path: apps/*/applicationset.yaml
-        values:
-          app_dir: '{{index .path.segments 1}}'
-          manifest_file: applicationset.yaml
   template:
     metadata:
-      name: '{{.values.app_dir}}'
+      name: '{{.metadata.name}}'
     spec:
-      project: default
-      source:
-        repoURL: https://github.com/code-dot-org/k8s-gitops.git
-        targetRevision: main
-        path: 'apps/{{.values.app_dir}}'
-        directory:
-          include: '{{.values.manifest_file}}'
+      project: '{{default "default" .spec.project}}'
       destination:
         server: https://kubernetes.default.svc
         namespace: argocd
+  templatePatch: |
+    {{- if or .spec.source .spec.sources }}
+    metadata: {{ .metadata | toJson }}
+    spec: {{ omit .spec "project" | toJson }}
+    {{- else }}
+    spec:
+      source:
+        repoURL: https://github.com/code-dot-org/k8s-gitops.git
+        targetRevision: main
+        path: {{ printf "apps/%s" .path.basename | toJson }}
+        directory:
+          include: "applicationset.yaml"
       syncPolicy:
         automated:
           prune: true
@@ -48,3 +44,4 @@ spec:
         # that another app depends on.
         retry:
           limit: 2
+    {{- end }}
