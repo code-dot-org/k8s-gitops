@@ -43,10 +43,6 @@ spec:
                 selfHeal: true
               syncOptions:
                 - ServerSideApply=true
-              # We retry syncing our top-level apps in case one app creates CRDs
-              # that another app depends on.
-              retry:
-                limit: 2
   # This template does a passthrough of values from each apps/*/application.yaml
   # but is not applied to applicationset.yamls.
   template:
@@ -58,8 +54,8 @@ spec:
       destination:
         server: https://kubernetes.default.svc
         namespace: argocd
-      # Default retry policy for application.yaml passthrough.
-      # The patched child syncPolicy is merged on top of this.
+      # We retry syncing our top-level apps in case one app creates CRDs
+      # that another app depends on.
       syncPolicy:
         retry:
           limit: 2
