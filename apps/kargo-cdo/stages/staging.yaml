@@ -24,7 +24,7 @@ spec:
                 path: ./gitops
         - uses: yaml-update
           config:
-            path: ./gitops/apps/cdo/releases/staging/values.yaml
+            path: ./gitops/apps/cdo-applicationset/releases/staging/values.yaml
             updates:
               - key: image
                 value: ghcr.io/code-dot-org/code-dot-org:${{ imageFrom("ghcr.io/code-dot-org/code-dot-org").Tag }}

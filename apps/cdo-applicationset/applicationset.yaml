@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: cdo
+  name: cdo-applicationset
   namespace: argocd
 spec:
   generators:
@@ -9,7 +9,7 @@ spec:
         repoURL: https://github.com/code-dot-org/k8s-gitops.git
         revision: main
         files:
-          - path: apps/cdo/releases/*/config.yaml
+          - path: apps/cdo-applicationset/releases/*/config.yaml
   template:
     metadata:
       name: cdo-{{path.basename}}
@@ -25,8 +25,8 @@ spec:
           helm:
             releaseName: '{{path.basename}}'
             valueFiles:
-              - $values/apps/cdo/env-types/{{envType}}.values.yaml
-              - $values/apps/cdo/releases/{{path.basename}}/values.yaml
+              - $values/apps/cdo-applicationset/env-types/{{envType}}.values.yaml
+              - $values/apps/cdo-applicationset/releases/{{path.basename}}/values.yaml
         - repoURL: https://github.com/code-dot-org/k8s-gitops.git
           targetRevision: main
           ref: values
