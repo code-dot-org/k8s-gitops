@@ -9,7 +9,7 @@ spec:
         repoURL: https://github.com/code-dot-org/k8s-gitops.git
         revision: main
         files:
-          - path: apps/codeai/releases/*/config.yaml
+          - path: apps/codeai/deployments/*/config.yaml
   template:
     metadata:
       name: codeai-{{path.basename}}
@@ -26,7 +26,7 @@ spec:
             releaseName: '{{path.basename}}'
             valueFiles:
               - $values/apps/codeai/env-types/{{envType}}.values.yaml
-              - $values/apps/codeai/releases/{{path.basename}}/values.yaml
+              - $values/apps/codeai/deployments/{{path.basename}}/values.yaml
         - repoURL: https://github.com/code-dot-org/k8s-gitops.git
           targetRevision: main
           ref: values
