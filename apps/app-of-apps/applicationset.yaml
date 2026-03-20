@@ -13,7 +13,34 @@ spec:
         revision: main
         files:
           - path: apps/*/application.yaml
+    - git:
+        repoURL: https://github.com/code-dot-org/k8s-gitops.git
+        revision: main
+        files:
           - path: apps/*/applicationset.yaml
+        template:
+          metadata: {}
+          spec:
+            project: default
+            destination:
+              server: https://kubernetes.default.svc
+              namespace: argocd
+            source:
+              repoURL: https://github.com/code-dot-org/k8s-gitops.git
+              targetRevision: main
+              path: 'apps/{{.path.basename}}'
+              directory:
+                include: "applicationset.yaml"
+            syncPolicy:
+              automated:
+                prune: true
+                selfHeal: true
+              syncOptions:
+                - ServerSideApply=true
+              # We retry syncing our top-level apps in case one app creates CRDs
+              # that another app depends on.
+              retry:
+                limit: 2
   template:
     metadata:
       name: '{{.metadata.name}}'
@@ -22,26 +49,8 @@ spec:
       destination:
         server: https://kubernetes.default.svc
         namespace: argocd
-      source:
-        repoURL: https://github.com/code-dot-org/k8s-gitops.git
-        targetRevision: main
-        path: 'apps/{{.path.basename}}'
-        directory:
-          include: '{{.path.filename}}'
   templatePatch: |
     {{- if or (hasKey .spec "source") (hasKey .spec "sources") }}
     metadata: {{ .metadata | toJson }}
     spec: {{ omit .spec "project" | toJson }}
-    {{- else }}
-    spec:
-      syncPolicy:
-        automated:
-          prune: true
-          selfHeal: true
-        syncOptions:
-          - ServerSideApply=true
-        # We retry syncing our top-level apps in case one app creates CRDs
-        # that another app depends on.
-        retry:
-          limit: 2
     {{- end }}
