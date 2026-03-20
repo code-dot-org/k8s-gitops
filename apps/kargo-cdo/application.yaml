@@ -20,6 +20,7 @@ spec:
       prune: true
       selfHeal: true
     syncOptions:
+      - ServerSideApply=true
       # We depend on CRDs installed by kargo, so if this is the first bootstrap
       # we will expect to fail on the dry run (since the CRDs aren't installed yet)
       - SkipDryRunOnMissingResource=true

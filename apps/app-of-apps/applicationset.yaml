@@ -42,6 +42,8 @@ spec:
         automated:
           prune: true
           selfHeal: true
+        syncOptions:
+          - ServerSideApply=true
         # We retry syncing our top-level apps in case one app creates CRDs
         # that another app depends on.
         retry:
