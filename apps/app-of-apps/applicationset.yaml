@@ -18,7 +18,7 @@ spec:
     metadata:
       name: '{{.metadata.name}}'
     spec:
-      project: '{{default "default" .spec.project}}'
+      project: '{{if hasKey .spec "project"}}{{.spec.project}}{{else}}default{{end}}'
       destination:
         server: https://kubernetes.default.svc
         namespace: argocd
@@ -29,7 +29,7 @@ spec:
         directory:
           include: '{{.path.filename}}'
   templatePatch: |
-    {{- if or .spec.source .spec.sources }}
+    {{- if or (hasKey .spec "source") (hasKey .spec "sources") }}
     metadata: {{ .metadata | toJson }}
     spec: {{ omit .spec "project" | toJson }}
     {{- else }}
