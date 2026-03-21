@@ -1,3 +1,5 @@
 image: ghcr.io/code-dot-org/code-dot-org:k8s-kargo
+autoscaling:
+  maxReplicas: 2
 locals.yml:
   stack_name: staging

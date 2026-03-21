@@ -1,3 +1,5 @@
 envType: production
 namespace: production
-sourceRevision: production
+# FIXME: for quicker testing, avoid waiting on DTTs and DTPs, let alone DTLs.
+# sourceRevision: production
+sourceRevision: staging

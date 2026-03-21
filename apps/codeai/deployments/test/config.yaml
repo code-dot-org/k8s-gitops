@@ -1,3 +1,5 @@
 envType: test
 namespace: test
-sourceRevision: test
+# FIXME: for quicker testing, avoid waiting on DTTs and DTPs, let alone DTLs.
+# sourceRevision: test
+sourceRevision: staging
