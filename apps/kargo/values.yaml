@@ -2,6 +2,10 @@ global:
   sharedResources:
     createNamespace: false
 
+webhooks:
+  # The Kargo chart otherwise expects cert-manager to mint webhook certs.
+  register: false
+
 api:
   host: kargo.k8s.code.org
   adminAccount:
@@ -39,4 +43,7 @@ api:
       alb.ingress.kubernetes.io/ssl-redirect: "443"
       alb.ingress.kubernetes.io/backend-protocol: HTTP
 externalWebhooksServer:
+  enabled: false
+
+webhooksServer:
   enabled: false
