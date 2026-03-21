@@ -1,5 +1,8 @@
 image: ghcr.io/code-dot-org/code-dot-org:production
 autoscaling:
   minReplicas: 3
+resources:
+  requests:
+    ephemeralStorage: 30Gi
 locals.yml:
   stack_name: autoscale-prod
