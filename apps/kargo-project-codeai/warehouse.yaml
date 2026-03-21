@@ -7,3 +7,7 @@ spec:
   subscriptions:
     - image:
         repoURL: ghcr.io/code-dot-org/code-dot-org
+        ignoreTagsRegexes:
+          # Ignore single-platform images when we have a multiplatform option
+          - '.*-amd64$'
+          - '.*-arm64$'
