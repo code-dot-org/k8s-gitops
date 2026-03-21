@@ -1,3 +1,0 @@
-image: ghcr.io/code-dot-org/code-dot-org:k8s-argocd # updated by k8s-commit-image-ref-to-argocd.yml
-locals.yml:
-  stack_name: staging
