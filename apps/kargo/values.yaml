@@ -1,9 +1,42 @@
+global:
+  sharedResources:
+    createNamespace: false
+
 api:
-  service:
-    type: ClusterIP
-
-controller:
-  replicas: 1
-
-server:
-  replicas: 1
+  host: kargo.k8s.code.org
+  adminAccount:
+    enabled: false
+  secretManagementEnabled: false
+  oidc:
+    enabled: true
+    issuerURL: https://dex.k8s.code.org
+    clientID: kargo.k8s.code.org
+    cliClientID: kargo.k8s.code.org-cli
+    admins:
+      claims:
+        groups:
+          - engineers@code.org
+          - infrastructure@code.org
+    viewers:
+      claims:
+        groups:
+          - all@code.org
+          - trusted-contributors@code.org
+          - product@code.org
+  tls:
+    enabled: false
+    terminatedUpstream: true
+  ingress:
+    enabled: true
+    ingressClassName: alb
+    pathType: Prefix
+    tls:
+      enabled: false
+    annotations:
+      alb.ingress.kubernetes.io/scheme: internet-facing
+      alb.ingress.kubernetes.io/target-type: ip
+      alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+      alb.ingress.kubernetes.io/ssl-redirect: "443"
+      alb.ingress.kubernetes.io/backend-protocol: HTTP
+externalWebhooksServer:
+  enabled: false
