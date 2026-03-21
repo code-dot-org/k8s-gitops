@@ -1,5 +1,5 @@
 image: ghcr.io/code-dot-org/code-dot-org:v2025-11-20.0-2077-g2772e87421ab-dirty-cache
 autoscaling:
-  maxReplicas: 2
+  maxReplicas: 1
 locals.yml:
   stack_name: staging

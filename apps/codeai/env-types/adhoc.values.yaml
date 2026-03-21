@@ -1,0 +1,4 @@
+RAILS_ENV: development
+healthChecks:
+  enabled: false
+

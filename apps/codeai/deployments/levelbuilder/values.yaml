@@ -1,5 +1,5 @@
 image: ghcr.io/code-dot-org/code-dot-org:replace-me
 autoscaling:
-  maxReplicas: 2
+  maxReplicas: 1
 locals.yml:
   stack_name: levelbuilder
