@@ -1,4 +1,4 @@
-image: ghcr.io/code-dot-org/code-dot-org:v2025-11-20.0-2077-g2772e87421ab-dirty-cache
+image: ghcr.io/code-dot-org/code-dot-org:v2025-11-20.0-2077-g2772e87421ab-dirty
 autoscaling:
   maxReplicas: 1
 locals.yml:
