@@ -4,7 +4,7 @@ kind: Kustomization
 # resources:
 #   - ../../deployments/production/deploy/base
 components:
-  - ../../components/autoscaling
+  - autoscaling
 namePrefix: production-
 labels:
   - pairs:
