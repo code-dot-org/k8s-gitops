@@ -3,15 +3,5 @@ kind: Kustomization
 # TODO: set the path to the base correctly (if any?) for the kargo-architecture plan
 # resources:
 #   - ../../deployments/staging/deploy/base
-namePrefix: staging-
-labels:
-  - pairs:
-      app.kubernetes.io/name: cdo
-      app.kubernetes.io/instance: staging
-    includeSelectors: true
-    includeTemplates: true
-patches:
-  - path: deployment.patch.yaml
-  # TODO: enable these when gitops envType values start setting dashboard_workers again.
-  # - path: locals.yml.patch.yaml
-  # - path: deployment.resources.patch.yaml
+components:
+  - ../components/staging
