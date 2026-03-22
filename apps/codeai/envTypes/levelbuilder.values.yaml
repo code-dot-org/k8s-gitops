@@ -1,3 +1,5 @@
 RAILS_ENV: levelbuilder
+# dashboard_workers: 27
 healthChecks:
   enabled: true
+require_external_secrets: true

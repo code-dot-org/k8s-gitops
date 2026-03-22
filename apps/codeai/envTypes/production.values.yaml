@@ -1,4 +1,5 @@
 RAILS_ENV: production
+# dashboard_workers: 32
 healthChecks:
   enabled: true
 require_external_secrets: true
