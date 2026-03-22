@@ -1,5 +1,5 @@
 envType: levelbuilder
 namespace: levelbuilder
 # FIXME: for quicker testing, avoid waiting on DTTs and DTPs, let alone DTLs.
-# sourceRevision: levelbuilder
-sourceRevision: staging
+# branch: levelbuilder
+branch: staging
