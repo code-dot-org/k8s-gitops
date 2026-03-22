@@ -9,7 +9,7 @@ spec:
       autoPromotionEnabled: true
     - stage: test
       autoPromotionEnabled: false
-    - stage: autoscale-prod
+    - stage: production
       autoPromotionEnabled: false
     - stage: levelbuilder
       autoPromotionEnabled: false

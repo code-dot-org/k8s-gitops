@@ -1,7 +1,7 @@
 apiVersion: kargo.akuity.io/v1alpha1
 kind: Stage
 metadata:
-  name: autoscale-prod
+  name: production
   namespace: kargo-project-codeai
 spec:
   requestedFreight:
@@ -33,7 +33,7 @@ spec:
           config:
             path: ./gitops
             message: |
-              Promote autoscale-prod to ${{ imageFrom("ghcr.io/code-dot-org/code-dot-org").Tag }} [skip ci]
+              Promote production to ${{ imageFrom("ghcr.io/code-dot-org/code-dot-org").Tag }} [skip ci]
         - uses: git-push
           config:
             path: ./gitops
