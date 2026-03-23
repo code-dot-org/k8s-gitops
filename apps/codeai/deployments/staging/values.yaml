@@ -1,4 +1,4 @@
-image: ghcr.io/code-dot-org/code-dot-org:git-5ebbfeb0160f0f82f4bc68a4df755d786ddabcc0
+image: ghcr.io/code-dot-org/code-dot-org:git-7d0f822bbe4c435f21c35042ee2b2cce5abd79cf
 autoscaling:
   maxReplicas: 1
 locals.yml:
