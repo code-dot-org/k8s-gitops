@@ -1,7 +1,7 @@
 apiVersion: kargo.akuity.io/v1alpha1
 kind: Stage
 metadata:
-  name: staging
+  name: review-infra-changes
   namespace: kargo-project-codeai
 spec:
   requestedFreight:
@@ -9,7 +9,8 @@ spec:
         kind: Warehouse
         name: kargo-project-codeai
       sources:
-        direct: true
+        stages:
+          - test
   promotionTemplate:
     spec:
       vars:
@@ -19,20 +20,23 @@ spec:
           value: https://github.com/code-dot-org/code-dot-org.git
         - name: imageRepo
           value: ghcr.io/code-dot-org/code-dot-org
+        - name: legacyEnv
+          value: production
         - name: deployment
-          value: staging
+          value: production
         - name: envType
-          value: staging
+          value: production
         - name: namespace
-          value: staging
+          value: production
         - name: releaseName
-          value: staging
+          value: production
         - name: targetBranch
-          value: stage/staging
+          value: stage/production
         - name: renderPath
-          value: ./out/apps/codeai/deployments/staging/deploy/manifests.yaml
+          value: ./out/apps/codeai/deployments/production/deploy/manifests.yaml
       steps:
         - uses: git-clone
+          as: gitops
           config:
             repoURL: ${{ vars.gitopsRepo }}
             checkout:
@@ -40,9 +44,25 @@ spec:
                 path: ./meta
                 sparse:
                   - apps/codeai
+              - branch: main
+                path: ./gate
+                sparse:
+                  - warehouses/codeai/legacy-gitflow/production/merged
               - branch: ${{ vars.targetBranch }}
+                as: production
                 create: true
                 path: ./out
+        - uses: yaml-parse
+          as: legacy-gate
+          config:
+            path: ./gate/warehouses/codeai/legacy-gitflow/${{ vars.legacyEnv }}/merged/${{ imageFrom(vars.imageRepo).Tag }}.yaml
+            outputs:
+              - name: revision
+                fromExpression: revision
+              - name: tag
+                fromExpression: tag
+              - name: mergedAt
+                fromExpression: mergedAt
         - uses: git-clone
           config:
             repoURL: ${{ vars.sourceRepo }}
@@ -74,15 +94,27 @@ spec:
           config:
             path: ./out
             message: |
-              Render staging for ${{ commitFrom(vars.sourceRepo).ID }} with ${{ imageFrom(vars.imageRepo).Tag }}
+              Render production for ${{ commitFrom(vars.sourceRepo).ID }} with ${{ imageFrom(vars.imageRepo).Tag }}
         - uses: git-push
+          if: ${{ outputs.commit.commit != outputs.gitops.commits.production }}
+          as: push
           config:
             path: ./out
-            targetBranch: ${{ vars.targetBranch }}
-        - uses: argocd-update
+            generateTargetBranch: true
+        - uses: git-open-pr
+          if: ${{ outputs.commit.commit != outputs.gitops.commits.production }}
+          as: open-pr
           config:
-            apps:
-              - name: codeai-staging
-                sources:
-                  - repoURL: ${{ vars.gitopsRepo }}
-                    desiredRevision: ${{ outputs.commit.commit }}
+            repoURL: ${{ vars.gitopsRepo }}
+            sourceBranch: ${{ outputs.push.branch }}
+            targetBranch: ${{ vars.targetBranch }}
+            createTargetBranch: true
+            title: Render production manifests for ${{ commitFrom(vars.sourceRepo).ID }}
+            description: |
+              Freight commit: ${{ commitFrom(vars.sourceRepo).ID }}
+              Image tag: ${{ imageFrom(vars.imageRepo).Tag }}
+        - uses: git-wait-for-pr
+          if: ${{ outputs.commit.commit != outputs.gitops.commits.production }}
+          config:
+            repoURL: ${{ vars.gitopsRepo }}
+            prNumber: ${{ outputs.open-pr.pr.id }}

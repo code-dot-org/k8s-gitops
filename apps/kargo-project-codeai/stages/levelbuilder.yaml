@@ -16,24 +16,91 @@ spec:
       vars:
         - name: gitopsRepo
           value: https://github.com/code-dot-org/k8s-gitops.git
+        - name: sourceRepo
+          value: https://github.com/code-dot-org/code-dot-org.git
+        - name: imageRepo
+          value: ghcr.io/code-dot-org/code-dot-org
+        - name: legacyEnv
+          value: levelbuilder
+        - name: deployment
+          value: levelbuilder
+        - name: envType
+          value: levelbuilder
+        - name: namespace
+          value: levelbuilder
+        - name: releaseName
+          value: levelbuilder
+        - name: targetBranch
+          value: stage/levelbuilder
+        - name: renderPath
+          value: ./out/apps/codeai/deployments/levelbuilder/deploy/manifests.yaml
       steps:
         - uses: git-clone
           config:
             repoURL: ${{ vars.gitopsRepo }}
             checkout:
               - branch: main
-                path: ./gitops
+                path: ./meta
+                sparse:
+                  - apps/codeai
+              - branch: main
+                path: ./gate
+                sparse:
+                  - warehouses/codeai/legacy-gitflow/levelbuilder/merged
+              - branch: ${{ vars.targetBranch }}
+                create: true
+                path: ./out
+        - uses: yaml-parse
+          as: legacy-gate
+          config:
+            path: ./gate/warehouses/codeai/legacy-gitflow/${{ vars.legacyEnv }}/merged/${{ imageFrom(vars.imageRepo).Tag }}.yaml
+            outputs:
+              - name: revision
+                fromExpression: revision
+              - name: tag
+                fromExpression: tag
+              - name: mergedAt
+                fromExpression: mergedAt
+        - uses: git-clone
+          config:
+            repoURL: ${{ vars.sourceRepo }}
+            checkout:
+              - commit: ${{ commitFrom(vars.sourceRepo).ID }}
+                path: ./src
+                sparse:
+                  - k8s/helm
+        - uses: git-clear
+          config:
+            path: ./out
         - uses: yaml-update
           config:
-            path: ./gitops/apps/codeai/deployments/levelbuilder/values.yaml
+            path: ./meta/apps/codeai/deployments/${{ vars.deployment }}/values.yaml
             updates:
               - key: image
-                value: ghcr.io/code-dot-org/code-dot-org:${{ imageFrom("ghcr.io/code-dot-org/code-dot-org").Tag }}
-        - uses: git-commit
+                value: ${{ imageFrom(vars.imageRepo).RepoURL }}:${{ imageFrom(vars.imageRepo).Tag }}
+        - uses: helm-template
           config:
-            path: ./gitops
+            path: ./src/k8s/helm
+            releaseName: ${{ vars.releaseName }}
+            namespace: ${{ vars.namespace }}
+            valuesFiles:
+              - ./meta/apps/codeai/envTypes/${{ vars.envType }}.values.yaml
+              - ./meta/apps/codeai/deployments/${{ vars.deployment }}/values.yaml
+            outPath: ${{ vars.renderPath }}
+        - uses: git-commit
+          as: commit
+          config:
+            path: ./out
             message: |
-              Promote levelbuilder to ${{ imageFrom("ghcr.io/code-dot-org/code-dot-org").Tag }} [skip ci]
+              Render levelbuilder for ${{ commitFrom(vars.sourceRepo).ID }} with ${{ imageFrom(vars.imageRepo).Tag }}
         - uses: git-push
           config:
-            path: ./gitops
+            path: ./out
+            targetBranch: ${{ vars.targetBranch }}
+        - uses: argocd-update
+          config:
+            apps:
+              - name: codeai-levelbuilder
+                sources:
+                  - repoURL: ${{ vars.gitopsRepo }}
+                    desiredRevision: ${{ outputs.commit.commit }}

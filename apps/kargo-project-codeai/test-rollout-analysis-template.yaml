@@ -1,0 +1,32 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: codeai-test-rollout
+  namespace: kargo-project-codeai
+spec:
+  args:
+    - name: namespace
+    - name: deployment
+    - name: expected_image
+  metrics:
+    - name: rollout-and-image-match
+      successCondition: result == "ok"
+      failureLimit: 1
+      provider:
+        job:
+          spec:
+            backoffLimit: 0
+            template:
+              spec:
+                restartPolicy: Never
+                containers:
+                  - name: verify
+                    image: bitnami/kubectl:1.33.1
+                    command:
+                      - sh
+                      - -ceu
+                      - |
+                        kubectl -n "{{args.namespace}}" rollout status deployment/"{{args.deployment}}" --timeout=10m
+                        actual_image="$(kubectl -n "{{args.namespace}}" get deployment "{{args.deployment}}" -o jsonpath='{.spec.template.spec.containers[?(@.name=="dashboard")].image}')"
+                        test "$actual_image" = "{{args.expected_image}}"
+                        printf 'ok'

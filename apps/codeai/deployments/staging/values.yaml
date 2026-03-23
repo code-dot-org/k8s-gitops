@@ -3,4 +3,3 @@ autoscaling:
   maxReplicas: 1
 locals.yml:
   stack_name: staging
-# argocd-detect-probe: k8s-gitops run 10 at 2026-03-22T10:10:09Z
