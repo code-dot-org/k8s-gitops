@@ -1,4 +1,4 @@
-image: ghcr.io/code-dot-org/code-dot-org:staging # updated by k8s-commit-image-ref-to-argocd.yml
+image: ghcr.io/code-dot-org/code-dot-org:git-d072d04a9e345ffd5716cd5f1c86f92d8bc5ab47 # updated by k8s-commit-to-kargo-warehouse.yml
 autoscaling:
   maxReplicas: 1
 locals.yml:
