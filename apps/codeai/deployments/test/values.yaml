@@ -1,4 +1,4 @@
-image: ghcr.io/code-dot-org/code-dot-org:test # updated by k8s-commit-image-ref-to-argocd.yml
+image: ghcr.io/code-dot-org/code-dot-org:git-7d0f822bbe4c435f21c35042ee2b2cce5abd79cf # updated by k8s-commit-to-kargo-warehouse.yml
 autoscaling:
   maxReplicas: 1
 locals.yml:
