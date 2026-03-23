@@ -1,4 +1,4 @@
-image: ghcr.io/code-dot-org/code-dot-org:git-f3e97c06fe66fe3ddec5b2ad0519928ad9130ecf
+image: ghcr.io/code-dot-org/code-dot-org:git-bfa1d3011be62186ea039786c5847e61d5774746 # updated by k8s-commit-to-kargo-warehouse.yml
 autoscaling:
   maxReplicas: 1
 locals.yml:
