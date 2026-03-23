@@ -9,6 +9,8 @@ spec:
       autoPromotionEnabled: true
     - stage: test
       autoPromotionEnabled: false
+    - stage: review-infra-changes
+      autoPromotionEnabled: false
     - stage: production
       autoPromotionEnabled: false
     - stage: levelbuilder

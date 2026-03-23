@@ -28,13 +28,18 @@ k8s-gitops/
 
       deployments/
         levelbuilder/             # codeai deployment levelbuilder
-          deployment.yaml         # envType=levelbuilder, branch=levelbuilder
+          deployment.yaml         # envType=levelbuilder, targetRevision=<code-dot-org ref>
           values.yaml             # values.yaml for this deployment: dashboard_workers=27, RAILS_ENV=levelbuilder, etc
         ...
 
       envTypes/
         levelbuilder.values.yaml  # base values.yaml for all envType=levelbuilder
         ...
+
+    warehouses/
+      codeai/
+        builds/                   # thin build-lock Freight records for Kargo
+        legacy-gitflow/           # legacy branch merge metadata used as promotion gates
 
     kargo/
       application.yaml            # argocd app for kargo itself
@@ -53,4 +58,3 @@ k8s-gitops/
 ## Bootstrap Cluster
 
 kubectl apply -f apps/app-of-apps/applicationset.yaml
-
