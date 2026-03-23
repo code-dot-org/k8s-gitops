@@ -16,24 +16,110 @@ spec:
       vars:
         - name: gitopsRepo
           value: https://github.com/code-dot-org/k8s-gitops.git
+        - name: imageRepo
+          value: ghcr.io/code-dot-org/code-dot-org
+        - name: capsuleRepo
+          value: ghcr.io/code-dot-org/codeai-release-capsule
+        - name: renderDeployment
+          value: levelbuilder
+        - name: envType
+          value: levelbuilder
+        - name: renderPath
+          value: apps/codeai/deployments/levelbuilder/deploy
+        - name: targetBranch
+          value: stage/levelbuilder
+        - name: legacyEnv
+          value: levelbuilder
       steps:
         - uses: git-clone
           config:
             repoURL: ${{ vars.gitopsRepo }}
             checkout:
               - branch: main
-                path: ./gitops
-        - uses: yaml-update
+                path: ./src
+              - branch: ${{ vars.targetBranch }}
+                create: true
+                path: ./out
+        - uses: yaml-parse
+          as: legacy-gate
           config:
-            path: ./gitops/apps/codeai/deployments/levelbuilder/values.yaml
-            updates:
+            path: ${{ './src/warehouses/codeai/legacy-gitflow/' + vars.legacyEnv + '/merged/' + imageFrom(vars.imageRepo).Tag + '.yaml' }}
+            outputs:
+              - name: revision
+                fromExpression: revision
+              - name: tag
+                fromExpression: tag
+              - name: mergedAt
+                fromExpression: mergedAt
+        - uses: oci-download
+          config:
+            imageRef: ${{ vars.capsuleRepo + '@' + imageFrom(vars.capsuleRepo).Digest }}
+            outPath: ./release-capsule.tar.gz
+        - uses: untar
+          config:
+            inPath: ./release-capsule.tar.gz
+            outPath: ./capsule
+        - uses: yaml-parse
+          as: release
+          config:
+            path: ./capsule/release.yaml
+            outputs:
+              - name: gitCommit
+                fromExpression: gitCommit
+              - name: imageRepoURL
+                fromExpression: image.repoURL
+              - name: imageTag
+                fromExpression: image.tag
+              - name: imageDigest
+                fromExpression: image.digest
+              - name: packageKind
+                fromExpression: package.kind
+              - name: packagePath
+                fromExpression: package.path
+              - name: sbomPath
+                fromExpression: metadata.sbomPath
+              - name: provenancePath
+                fromExpression: metadata.provenancePath
+        - uses: copy
+          config:
+            inPath: "${{ outputs.release.imageRepoURL == vars.imageRepo && outputs.release.imageTag == imageFrom(vars.imageRepo).Tag && outputs.release.imageDigest == imageFrom(vars.imageRepo).Digest && outputs.release.gitCommit == outputs['legacy-gate'].revision && outputs['legacy-gate'].tag == imageFrom(vars.imageRepo).Tag && outputs.release.packageKind == 'helm' && outputs.release.packagePath == 'package/helm' && imageFrom(vars.capsuleRepo).Tag == imageFrom(vars.imageRepo).Tag && imageFrom(vars.imageRepo).Tag == 'git-' + outputs.release.gitCommit ? './capsule/release.yaml' : './capsule/__validation_failed__' }}"
+            outPath: ./validated-release.yaml
+        - uses: copy
+          config:
+            inPath: ${{ './capsule/' + outputs.release.provenancePath }}
+            outPath: ./validated-provenance.json
+        - uses: copy
+          config:
+            inPath: ${{ './capsule/' + outputs.release.sbomPath }}
+            outPath: ./validated-sbom.json
+        - uses: yaml-merge
+          config:
+            inFiles:
+              - ${{ './src/apps/codeai/envTypes/' + vars.envType + '.values.yaml' }}
+              - ${{ './src/apps/codeai/deployments/' + vars.renderDeployment + '/values.yaml' }}
+            outFile: ./values.yaml
+        - uses: git-clear
+          config:
+            path: ${{ './out/' + vars.renderPath }}
+        - uses: helm-template
+          config:
+            path: ${{ './capsule/' + outputs.release.packagePath }}
+            outPath: ${{ './out/' + vars.renderPath }}
+            outLayout: flat
+            releaseName: ${{ vars.renderDeployment }}
+            valuesFiles:
+              - ./values.yaml
+            setValues:
               - key: image
-                value: ghcr.io/code-dot-org/code-dot-org:${{ imageFrom("ghcr.io/code-dot-org/code-dot-org").Tag }}
+                value: ${{ outputs.release.imageRepoURL + '@' + outputs.release.imageDigest }}
+                literal: true
         - uses: git-commit
+          as: commit
           config:
-            path: ./gitops
+            path: ./out
             message: |
-              Promote levelbuilder to ${{ imageFrom("ghcr.io/code-dot-org/code-dot-org").Tag }} [skip ci]
+              Render ${{ vars.renderDeployment }} from capsule ${{ imageFrom(vars.capsuleRepo).Tag }} [skip ci]
         - uses: git-push
           config:
-            path: ./gitops
+            path: ./out
+            targetBranch: ${{ vars.targetBranch }}

@@ -1,5 +1,0 @@
-envType: production
-namespace: production
-# FIXME: for quicker testing, avoid waiting on DTTs and DTPs, let alone DTLs.
-# branch: production
-branch: staging
