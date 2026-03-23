@@ -107,6 +107,14 @@ spec:
             targetBranch: ${{ vars.targetBranch }}
             title: Review CodeAI ${{ vars.renderDeployment }} render for ${{ outputs['build-lock'].releaseId }}
         - uses: git-wait-for-pr
+          as: wait-for-pr
           config:
             repoURL: ${{ vars.gitopsRepo }}
             prNumber: ${{ outputs['open-pr'].pr.id }}
+        - uses: yaml-parse
+          if: ${{ !outputs['wait-for-pr'].pr.merged }}
+          config:
+            path: ./review-pr-must-be-merged.yaml
+            outputs:
+              - name: unreachable
+                fromExpression: required
