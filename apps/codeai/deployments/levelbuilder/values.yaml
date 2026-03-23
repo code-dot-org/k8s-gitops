@@ -1,4 +1,4 @@
-image: ghcr.io/code-dot-org/code-dot-org:levelbuilder # updated by k8s-commit-image-ref-to-argocd.yml
+image: ghcr.io/code-dot-org/code-dot-org:git-e06f65fa4f46a75689e8732d8b8fda7ba2f982ef # updated by k8s-commit-to-kargo-warehouse.yml
 autoscaling:
   maxReplicas: 1
 locals.yml:
