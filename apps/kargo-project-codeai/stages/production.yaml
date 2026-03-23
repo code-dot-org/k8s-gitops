@@ -7,33 +7,84 @@ spec:
   requestedFreight:
     - origin:
         kind: Warehouse
-        name: kargo-project-codeai
+        name: codeai-builds
       sources:
         stages:
-          - test
+          - review-infra-changes
   promotionTemplate:
     spec:
       vars:
         - name: gitopsRepo
           value: https://github.com/code-dot-org/k8s-gitops.git
+        - name: legacyEnv
+          value: production
       steps:
         - uses: git-clone
           config:
             repoURL: ${{ vars.gitopsRepo }}
             checkout:
+              - commit: ${{ commitFrom('https://github.com/code-dot-org/k8s-gitops.git', warehouse('codeai-builds').ID) }}
+                path: ./freight
+              - branch: main
+                path: ./gate
               - branch: main
                 path: ./gitops
+        - uses: yaml-parse
+          as: build-lock
+          config:
+            path: ./freight/warehouses/codeai/builds/current.yaml
+            outputs:
+              - name: releaseId
+                fromExpression: releaseId
+              - name: gitCommit
+                fromExpression: gitCommit
+              - name: packagingKind
+                fromExpression: packaging.kind
+              - name: sourcePath
+                fromExpression: packaging.sourcePath
+        - uses: yaml-parse
+          as: legacy-merge
+          config:
+            path: ./gate/warehouses/codeai/legacy-gitflow/${{ vars.legacyEnv }}/merged/${{ outputs['build-lock'].releaseId }}.yaml
+            outputs:
+              - name: revision
+                fromExpression: revision
+              - name: tag
+                fromExpression: tag
+              - name: mergedAt
+                fromExpression: mergedAt
+        - uses: yaml-parse
+          as: deployment-meta
+          config:
+            path: ./gitops/apps/codeai/deployments/production/deployment.yaml
+            outputs:
+              - name: envType
+                fromExpression: envType
+              - name: namespace
+                fromExpression: namespace
         - uses: yaml-update
           config:
-            path: ./gitops/apps/codeai/deployments/production/values.yaml
+            path: ./gitops/apps/codeai/deployments/production/deploy/kustomization.yaml
             updates:
-              - key: image
-                value: ghcr.io/code-dot-org/code-dot-org:${{ imageFrom("ghcr.io/code-dot-org/code-dot-org").Tag }}
+              - key: namespace
+                value: ${{ outputs['deployment-meta'].namespace }}
+              - key: resources
+                value:
+                  - github.com/code-dot-org/code-dot-org//k8s/kustomize/base?ref=${{ outputs['build-lock'].gitCommit }}
+              - key: components
+                value:
+                  - ../../envTypes/${{ outputs['deployment-meta'].envType }}
+        - uses: kustomize-set-image
+          config:
+            path: ./gitops/apps/codeai/deployments/production/deploy
+            images:
+              - image: code-dot-org
+                newName: ghcr.io/code-dot-org/code-dot-org
+                tag: ${{ outputs['build-lock'].releaseId }}
         - uses: git-commit
           config:
             path: ./gitops
-            message: |
-              Promote production to ${{ imageFrom("ghcr.io/code-dot-org/code-dot-org").Tag }} [skip ci]
+            message: Promote production deploy to ${{ outputs['build-lock'].releaseId }} [skip ci]
         - uses: git-push
           config:
             path: ./gitops

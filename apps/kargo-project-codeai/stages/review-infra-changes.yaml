@@ -1,7 +1,7 @@
 apiVersion: kargo.akuity.io/v1alpha1
 kind: Stage
 metadata:
-  name: test
+  name: review-infra-changes
   namespace: kargo-project-codeai
 spec:
   requestedFreight:
@@ -10,14 +10,14 @@ spec:
         name: codeai-builds
       sources:
         stages:
-          - staging
+          - test
   promotionTemplate:
     spec:
       vars:
         - name: gitopsRepo
           value: https://github.com/code-dot-org/k8s-gitops.git
         - name: legacyEnv
-          value: test
+          value: production
       steps:
         - uses: git-clone
           config:
@@ -56,7 +56,7 @@ spec:
         - uses: yaml-parse
           as: deployment-meta
           config:
-            path: ./gitops/apps/codeai/deployments/test/deployment.yaml
+            path: ./gitops/apps/codeai/deployments/production/deployment.yaml
             outputs:
               - name: envType
                 fromExpression: envType
@@ -64,7 +64,7 @@ spec:
                 fromExpression: namespace
         - uses: yaml-update
           config:
-            path: ./gitops/apps/codeai/deployments/test/deploy/kustomization.yaml
+            path: ./gitops/apps/codeai/deployments/production/deploy/kustomization.yaml
             updates:
               - key: namespace
                 value: ${{ outputs['deployment-meta'].namespace }}
@@ -76,7 +76,7 @@ spec:
                   - ../../envTypes/${{ outputs['deployment-meta'].envType }}
         - uses: kustomize-set-image
           config:
-            path: ./gitops/apps/codeai/deployments/test/deploy
+            path: ./gitops/apps/codeai/deployments/production/deploy
             images:
               - image: code-dot-org
                 newName: ghcr.io/code-dot-org/code-dot-org
@@ -84,7 +84,15 @@ spec:
         - uses: git-commit
           config:
             path: ./gitops
-            message: Promote test deploy to ${{ outputs['build-lock'].releaseId }} [skip ci]
+            message: Review production deploy update for ${{ outputs['build-lock'].releaseId }} [skip ci]
         - uses: git-push
+          as: push
           config:
             path: ./gitops
+            generateTargetBranch: true
+        - uses: git-open-pr
+          config:
+            repoURL: https://github.com/code-dot-org/k8s-gitops.git
+            sourceBranch: ${{ outputs.push.branch }}
+            targetBranch: main
+            title: Review CodeAI production deploy for ${{ outputs['build-lock'].releaseId }}
