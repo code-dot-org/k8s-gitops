@@ -34,6 +34,7 @@ spec:
           value: ./out/apps/codeai/deployments/production/deploy/manifests.yaml
       steps:
         - uses: git-clone
+          as: gitops
           config:
             repoURL: ${{ vars.gitopsRepo }}
             checkout:
@@ -42,6 +43,7 @@ spec:
                 sparse:
                   - apps/codeai
               - branch: ${{ vars.targetBranch }}
+                as: production
                 create: true
                 path: ./out
         - uses: git-clone
@@ -77,11 +79,13 @@ spec:
             message: |
               Render production for ${{ commitFrom(vars.sourceRepo).ID }} with ${{ imageFrom(vars.imageRepo).Tag }}
         - uses: git-push
+          if: ${{ outputs.commit.commit != outputs.gitops.commits.production }}
           as: push
           config:
             path: ./out
             generateTargetBranch: true
         - uses: git-open-pr
+          if: ${{ outputs.commit.commit != outputs.gitops.commits.production }}
           as: open-pr
           config:
             repoURL: ${{ vars.gitopsRepo }}
@@ -93,6 +97,7 @@ spec:
               Freight commit: ${{ commitFrom(vars.sourceRepo).ID }}
               Image tag: ${{ imageFrom(vars.imageRepo).Tag }}
         - uses: git-wait-for-pr
+          if: ${{ outputs.commit.commit != outputs.gitops.commits.production }}
           config:
             repoURL: ${{ vars.gitopsRepo }}
             prNumber: ${{ outputs.open-pr.pr.id }}
