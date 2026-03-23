@@ -7,32 +7,107 @@ spec:
   requestedFreight:
     - origin:
         kind: Warehouse
-        name: kargo-project-codeai
+        name: codeai-builds
       sources:
         direct: true
+  vars:
+    - name: gitopsRepo
+      value: https://github.com/code-dot-org/k8s-gitops.git
+    - name: imageRepo
+      value: ghcr.io/code-dot-org/code-dot-org
+    - name: targetBranch
+      value: stage/${{ ctx.stage }}
   promotionTemplate:
     spec:
-      vars:
-        - name: gitopsRepo
-          value: https://github.com/code-dot-org/k8s-gitops.git
       steps:
         - uses: git-clone
           config:
             repoURL: ${{ vars.gitopsRepo }}
             checkout:
+              - commit: ${{ commitFrom(vars.gitopsRepo, warehouse('codeai-builds')).ID }}
+                path: ./freight
               - branch: main
-                path: ./gitops
+                path: ./meta
+              - branch: ${{ vars.targetBranch }}
+                create: true
+                path: ./out
+        - uses: yaml-parse
+          as: build-lock
+          config:
+            path: ./freight/warehouses/codeai/builds/current.yaml
+            outputs:
+              - name: releaseId
+                fromExpression: releaseId
+              - name: gitCommit
+                fromExpression: gitCommit
+              - name: sourceRepo
+                fromExpression: packaging.sourceRepo
+              - name: sourcePath
+                fromExpression: packaging.sourcePath
+        - uses: yaml-parse
+          as: deployment-meta
+          config:
+            path: ./meta/apps/codeai/deployments/${{ ctx.stage }}/deployment.yaml
+            outputs:
+              - name: envType
+                fromExpression: envType
+              - name: namespace
+                fromExpression: namespace
+        - uses: git-clone
+          config:
+            repoURL: ${{ outputs['build-lock'].sourceRepo }}
+            checkout:
+              - commit: ${{ outputs['build-lock'].gitCommit }}
+                path: ./src
+                sparse:
+                  - ${{ outputs['build-lock'].sourcePath }}
+        - uses: git-clear
+          config:
+            path: ./out/apps/codeai/deployments/${{ ctx.stage }}/deploy
+        - uses: copy
+          config:
+            inPath: ./src/${{ outputs['build-lock'].sourcePath }}
+            outPath: ./work/deployments/source
+        - uses: copy
+          config:
+            inPath: ./meta/apps/codeai/envTypes/${{ outputs['deployment-meta'].envType }}
+            outPath: ./work/deployments/envTypes/${{ outputs['deployment-meta'].envType }}
+        - uses: copy
+          config:
+            inPath: ./meta/apps/codeai/envTypes/components
+            outPath: ./work/deployments/envTypes/components
+        - uses: copy
+          config:
+            inPath: ./meta/apps/codeai/kargo/templates/deploy
+            outPath: ./work/deployments/${{ ctx.stage }}/deploy
         - uses: yaml-update
           config:
-            path: ./gitops/apps/codeai/deployments/staging/values.yaml
+            path: ./work/deployments/${{ ctx.stage }}/deploy/kustomization.yaml
             updates:
-              - key: image
-                value: ghcr.io/code-dot-org/code-dot-org:${{ imageFrom("ghcr.io/code-dot-org/code-dot-org").Tag }}
+              - key: namespace
+                value: ${{ outputs['deployment-meta'].namespace }}
+              - key: resources
+                value:
+                  - ../../source/base
+              - key: components
+                value:
+                  - ../../envTypes/${{ outputs['deployment-meta'].envType }}
+        - uses: kustomize-set-image
+          config:
+            path: ./work/deployments/${{ ctx.stage }}/deploy
+            images:
+              - image: code-dot-org
+                newName: ${{ vars.imageRepo }}
+                tag: ${{ outputs['build-lock'].releaseId }}
+        - uses: kustomize-build
+          config:
+            path: ./work/deployments/${{ ctx.stage }}/deploy
+            outPath: ./out/apps/codeai/deployments/${{ ctx.stage }}/deploy
         - uses: git-commit
           config:
-            path: ./gitops
-            message: |
-              Promote staging to ${{ imageFrom("ghcr.io/code-dot-org/code-dot-org").Tag }} [skip ci]
+            path: ./out
+            message: Render ${{ ctx.stage }} for ${{ outputs['build-lock'].releaseId }}
         - uses: git-push
           config:
-            path: ./gitops
+            path: ./out
+            branch: ${{ vars.targetBranch }}

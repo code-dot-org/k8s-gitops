@@ -24,17 +24,23 @@ k8s-gitops/
       repos.yaml                  # configure application.yaml to load $app_name/*
 
     codeai/
-      applicationset.yaml         # define argocd apps for codeai deployments: deployments/*/deployment.yaml
+      applicationset.yaml         # generate Argo apps from deployments/*/deployment.yaml on main
 
       deployments/
         levelbuilder/             # codeai deployment levelbuilder
           deployment.yaml         # envType=levelbuilder, branch=levelbuilder
-          values.yaml             # values.yaml for this deployment: dashboard_workers=27, RAILS_ENV=levelbuilder, etc
+          deploy/                 # rendered output on stage/levelbuilder branch
+          values.yaml             # legacy Helm-era values kept for compatibility during migration
         ...
 
       envTypes/
         levelbuilder.values.yaml  # base values.yaml for all envType=levelbuilder
         ...
+
+      kargo/
+        templates/
+          deploy/
+            kustomization.yaml    # copied into temp render workdirs before kustomize-build
 
     kargo/
       application.yaml            # argocd app for kargo itself
@@ -44,13 +50,18 @@ k8s-gitops/
       application.yaml            # argocd app for kargo project codeai
       project.yaml                # kargo project for codeai
       project-config.yaml         # kargo projectconfig for codeai
-      warehouse.yaml              # kargo warehouse for codeai
+      warehouse.yaml              # git build-lock warehouse for codeai
       stages/
         levelbuilder.yaml         # kargo stage for codeai deployment levelbuilder
+        review-infra-changes.yaml # opens a PR with rendered production manifests
         ...
+
+  warehouses/
+    codeai/
+      builds/                     # thin build-lock Freight records
+      legacy-gitflow/             # merge facts used for downstream promotion gates
 ```
 
 ## Bootstrap Cluster
 
 kubectl apply -f apps/app-of-apps/applicationset.yaml
-
