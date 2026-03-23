@@ -1,0 +1,32 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: codeai-test-smoke
+  namespace: kargo-project-codeai
+spec:
+  args:
+    - name: healthURL
+  metrics:
+    - name: wait-for-test-health
+      provider:
+        job:
+          spec:
+            backoffLimit: 0
+            template:
+              spec:
+                restartPolicy: Never
+                containers:
+                  - name: curl
+                    image: curlimages/curl:8.12.1
+                    command:
+                      - sh
+                      - -ceu
+                    args:
+                      - |
+                        for attempt in $(seq 1 60); do
+                          if curl -fsS "{{args.healthURL}}" >/dev/null; then
+                            exit 0
+                          fi
+                          sleep 10
+                        done
+                        exit 1

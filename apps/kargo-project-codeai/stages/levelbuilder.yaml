@@ -7,7 +7,7 @@ spec:
   requestedFreight:
     - origin:
         kind: Warehouse
-        name: kargo-project-codeai
+        name: codeai-image
       sources:
         stages:
           - test
@@ -16,24 +16,192 @@ spec:
       vars:
         - name: gitopsRepo
           value: https://github.com/code-dot-org/k8s-gitops.git
+        - name: imageRepo
+          value: ghcr.io/code-dot-org/code-dot-org
+        - name: capsuleRepo
+          value: ghcr.io/code-dot-org/codeai-release-capsule
+        - name: targetBranch
+          value: stage/${{ ctx.stage }}
       steps:
         - uses: git-clone
           config:
             repoURL: ${{ vars.gitopsRepo }}
             checkout:
               - branch: main
-                path: ./gitops
+                path: ./src
+              - branch: ${{ vars.targetBranch }}
+                create: true
+                path: ./out
+        - uses: yaml-parse
+          as: deployment-meta
+          config:
+            path: ./src/apps/codeai/deployments/${{ ctx.stage }}/deployment.yaml
+            outputs:
+              - name: envType
+                fromExpression: envType
+              - name: namespace
+                fromExpression: namespace
+        - uses: yaml-parse
+          as: legacy-gate
+          config:
+            path: ./src/warehouses/codeai/legacy-gitflow/levelbuilder/merged/${{ imageFrom(vars.imageRepo).Tag }}.yaml
+            outputs:
+              - name: mergedTag
+                fromExpression: tag
+        - uses: git-clear
+          config:
+            path: ./out/apps/codeai/deployments/${{ ctx.stage }}/deploy
+        - uses: oci-download
+          config:
+            imageRef: ${{ vars.capsuleRepo }}:${{ imageFrom(vars.imageRepo).Tag }}
+            outPath: ./capsule.tgz
+        - uses: untar
+          config:
+            inPath: ./capsule.tgz
+            outPath: ./capsule
+        - uses: yaml-parse
+          as: capsule-release
+          config:
+            path: ./capsule/release.yaml
+            outputs:
+              - name: gitCommit
+                fromExpression: gitCommit
+              - name: imageRepo
+                fromExpression: image.repoURL
+              - name: imageTag
+                fromExpression: image.tag
+              - name: imageDigest
+                fromExpression: image.digest
+              - name: packageKind
+                fromExpression: package.kind
+              - name: packagePath
+                fromExpression: package.path
+        - uses: http
+          as: verify-release
+          config:
+            method: POST
+            url: http://codeai-release-verify.kargo-project-codeai.svc.cluster.local/verify
+            headers:
+              - name: Content-Type
+                value: application/json
+            body: |
+              ${{ quote({
+                "image": {
+                  "repoURL": imageFrom(vars.imageRepo).RepoURL,
+                  "tag": imageFrom(vars.imageRepo).Tag,
+                  "digest": imageFrom(vars.imageRepo).Digest
+                },
+                "capsule": {
+                  "repoURL": vars.capsuleRepo,
+                  "tag": imageFrom(vars.imageRepo).Tag
+                },
+                "release": {
+                  "gitCommit": outputs['capsule-release'].gitCommit,
+                  "imageRepo": outputs['capsule-release'].imageRepo,
+                  "imageTag": outputs['capsule-release'].imageTag,
+                  "imageDigest": outputs['capsule-release'].imageDigest,
+                  "packageKind": outputs['capsule-release'].packageKind,
+                  "packagePath": outputs['capsule-release'].packagePath
+                }
+              }) }}
+            successExpression: response.status == 200 && response.body.ok == true
+            failureExpression: response.status >= 400 || response.body.ok == false
+            outputs:
+              - name: verifiedGitCommit
+                fromExpression: response.body.release.gitCommit
+              - name: verifiedPackageKind
+                fromExpression: response.body.release.packageKind
+              - name: verifiedPackagePath
+                fromExpression: response.body.release.packagePath
+        - uses: set-metadata
+          config:
+            updates:
+              - kind: Stage
+                name: levelbuilder
+                values:
+                  promotedImage:
+                    repoURL: ${{ imageFrom(vars.imageRepo).RepoURL }}
+                    tag: ${{ imageFrom(vars.imageRepo).Tag }}
+                    digest: ${{ imageFrom(vars.imageRepo).Digest }}
+                  capsule:
+                    repoURL: ${{ vars.capsuleRepo }}
+                    tag: ${{ outputs['capsule-release'].imageTag }}
+                    packageKind: ${{ outputs['verify-release'].verifiedPackageKind }}
+                    packagePath: ${{ outputs['verify-release'].verifiedPackagePath }}
+                    gitCommit: ${{ outputs['verify-release'].verifiedGitCommit }}
+        - uses: copy
+          config:
+            inPath: ./capsule/package/kustomize
+            outPath: ./work/deployments/source
+        - uses: copy
+          config:
+            inPath: ./src/apps/codeai/envTypes/${{ outputs['deployment-meta'].envType }}
+            outPath: ./work/deployments/envTypes/${{ outputs['deployment-meta'].envType }}
+        - uses: copy
+          config:
+            inPath: ./src/apps/codeai/envTypes/components
+            outPath: ./work/deployments/envTypes/components
+        - uses: copy
+          config:
+            inPath: ./src/apps/codeai/kargo/templates/deploy
+            outPath: ./work/deployments/${{ ctx.stage }}/deploy
         - uses: yaml-update
           config:
-            path: ./gitops/apps/codeai/deployments/levelbuilder/values.yaml
+            path: ./work/deployments/${{ ctx.stage }}/deploy/kustomization.yaml
             updates:
-              - key: image
-                value: ghcr.io/code-dot-org/code-dot-org:${{ imageFrom("ghcr.io/code-dot-org/code-dot-org").Tag }}
+              - key: namespace
+                value: ${{ outputs['deployment-meta'].namespace }}
+              - key: resources
+                value:
+                  - ../../source/base
+              - key: components
+                value:
+                  - ../../envTypes/${{ outputs['deployment-meta'].envType }}
+        - uses: kustomize-set-image
+          config:
+            path: ./work/deployments/${{ ctx.stage }}/deploy
+            images:
+              - image: code-dot-org
+                newName: ${{ vars.imageRepo }}
+                tag: ${{ imageFrom(vars.imageRepo).Tag }}
+        - uses: kustomize-build
+          config:
+            path: ./work/deployments/${{ ctx.stage }}/deploy
+            outPath: ./out/apps/codeai/deployments/${{ ctx.stage }}/deploy
+        - uses: copy
+          config:
+            inPath: ./src/apps/codeai/kargo/templates/release-metadata.yaml
+            outPath: ./out/apps/codeai/deployments/${{ ctx.stage }}/release-metadata.yaml
+        - uses: yaml-update
+          config:
+            path: ./out/apps/codeai/deployments/${{ ctx.stage }}/release-metadata.yaml
+            updates:
+              - key: release.gitCommit
+                value: ${{ outputs['verify-release'].verifiedGitCommit }}
+              - key: release.image.repoURL
+                value: ${{ imageFrom(vars.imageRepo).RepoURL }}
+              - key: release.image.tag
+                value: ${{ imageFrom(vars.imageRepo).Tag }}
+              - key: release.image.digest
+                value: ${{ imageFrom(vars.imageRepo).Digest }}
+              - key: release.capsule.repoURL
+                value: ${{ vars.capsuleRepo }}
+              - key: release.capsule.tag
+                value: ${{ outputs['capsule-release'].imageTag }}
+              - key: release.capsule.packageKind
+                value: ${{ outputs['verify-release'].verifiedPackageKind }}
+              - key: release.capsule.packagePath
+                value: ${{ outputs['verify-release'].verifiedPackagePath }}
         - uses: git-commit
           config:
-            path: ./gitops
+            path: ./out
             message: |
-              Promote levelbuilder to ${{ imageFrom("ghcr.io/code-dot-org/code-dot-org").Tag }} [skip ci]
+              Render levelbuilder from OCI release capsule
+
+              image: ${{ imageFrom(vars.imageRepo).RepoURL }}:${{ imageFrom(vars.imageRepo).Tag }}
+              digest: ${{ imageFrom(vars.imageRepo).Digest }}
+              capsule: ${{ vars.capsuleRepo }}:${{ imageFrom(vars.imageRepo).Tag }}
         - uses: git-push
           config:
-            path: ./gitops
+            path: ./out
+            branch: ${{ vars.targetBranch }}

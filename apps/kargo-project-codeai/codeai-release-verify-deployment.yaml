@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: codeai-release-verify
+  namespace: kargo-project-codeai
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: codeai-release-verify
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: codeai-release-verify
+    spec:
+      containers:
+        - name: server
+          image: python:3.12-alpine
+          command:
+            - python
+            - /app/server.py
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          volumeMounts:
+            - name: app
+              mountPath: /app
+      volumes:
+        - name: app
+          configMap:
+            name: codeai-release-verify

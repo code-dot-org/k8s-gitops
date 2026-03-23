@@ -1,0 +1,12 @@
+schemaVersion: codeai/v1alpha1
+release:
+  gitCommit: replace-me
+  image:
+    repoURL: replace-me
+    tag: replace-me
+    digest: replace-me
+  capsule:
+    repoURL: replace-me
+    tag: replace-me
+    packageKind: replace-me
+    packagePath: replace-me
