@@ -7,33 +7,108 @@ spec:
   requestedFreight:
     - origin:
         kind: Warehouse
-        name: kargo-project-codeai
+        name: codeai-freight
       sources:
         stages:
           - staging
+  vars:
+    - name: gitopsRepo
+      value: https://github.com/code-dot-org/k8s-gitops.git
+    - name: targetBranch
+      value: stage/test
+    - name: renderDeployment
+      value: test
+    - name: renderPath
+      value: apps/codeai/deployments/test/deploy
+    - name: imageRepo
+      value: ghcr.io/code-dot-org/code-dot-org
+    - name: legacyEnv
+      value: test
   promotionTemplate:
     spec:
-      vars:
-        - name: gitopsRepo
-          value: https://github.com/code-dot-org/k8s-gitops.git
       steps:
         - uses: git-clone
           config:
             repoURL: ${{ vars.gitopsRepo }}
             checkout:
+              - commit: ${{ commitFrom(vars.gitopsRepo, warehouse('codeai-freight')).ID }}
+                path: ./freight
               - branch: main
-                path: ./gitops
+                path: ./meta
+              - branch: ${{ vars.targetBranch }}
+                create: true
+                path: ./out
+        - uses: yaml-parse
+          as: freight
+          config:
+            path: ./freight/warehouses/codeai/freight/current/freight.yaml
+            outputs:
+              - name: releaseId
+                fromExpression: tag
+        - uses: yaml-parse
+          as: legacy-merge
+          config:
+            path: ./meta/warehouses/codeai/legacy-gitflow/${{ vars.legacyEnv }}/merged/${{ outputs.freight.releaseId }}.yaml
+            outputs:
+              - name: mergedAt
+                fromExpression: mergedAt
+        - uses: yaml-parse
+          as: deployment-meta
+          config:
+            path: ./meta/apps/codeai/deployments/${{ vars.renderDeployment }}/deployment.yaml
+            outputs:
+              - name: envType
+                fromExpression: envType
+              - name: namespace
+                fromExpression: namespace
+        - uses: git-clear
+          config:
+            path: ./out
+        - uses: copy
+          config:
+            inPath: ./freight/warehouses/codeai/freight/current/kustomize
+            outPath: ./work/source
+        - uses: copy
+          config:
+            inPath: ./meta/apps/codeai/envTypes/${{ outputs['deployment-meta'].envType }}
+            outPath: ./work/envTypes/${{ outputs['deployment-meta'].envType }}
+        - uses: copy
+          config:
+            inPath: ./meta/apps/codeai/envTypes/components
+            outPath: ./work/envTypes/components
+        - uses: copy
+          config:
+            inPath: ./meta/apps/codeai/kargo/templates/deploy
+            outPath: ./work/deploy
         - uses: yaml-update
           config:
-            path: ./gitops/apps/codeai/deployments/test/values.yaml
+            path: ./work/deploy/kustomization.yaml
             updates:
-              - key: image
-                value: ghcr.io/code-dot-org/code-dot-org:${{ imageFrom("ghcr.io/code-dot-org/code-dot-org").Tag }}
+              - key: namespace
+                value: ${{ outputs['deployment-meta'].namespace }}
+              - key: resources
+                value:
+                  - ../source/base
+              - key: components
+                value:
+                  - ../envTypes/${{ outputs['deployment-meta'].envType }}
+        - uses: kustomize-set-image
+          config:
+            path: ./work/deploy
+            images:
+              - image: code-dot-org
+                newName: ${{ vars.imageRepo }}
+                tag: ${{ outputs.freight.releaseId }}
+        - uses: kustomize-build
+          config:
+            path: ./work/deploy
+            outputFormat: kustomize
+            outPath: ./out/${{ vars.renderPath }}
         - uses: git-commit
           config:
-            path: ./gitops
-            message: |
-              Promote test to ${{ imageFrom("ghcr.io/code-dot-org/code-dot-org").Tag }} [skip ci]
+            path: ./out
+            message: Render ${{ vars.renderDeployment }} from ${{ outputs.freight.releaseId }}
         - uses: git-push
           config:
-            path: ./gitops
+            path: ./out
+            branch: ${{ vars.targetBranch }}
