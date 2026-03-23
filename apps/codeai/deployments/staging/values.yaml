@@ -1,6 +1,5 @@
-image: ghcr.io/code-dot-org/code-dot-org:staging # updated by k8s-commit-image-ref-to-argocd.yml
+image: ghcr.io/code-dot-org/code-dot-org:staging
 autoscaling:
   maxReplicas: 1
 locals.yml:
   stack_name: staging
-# argocd-detect-probe: k8s-gitops run 10 at 2026-03-22T10:10:09Z

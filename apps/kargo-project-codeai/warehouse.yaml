@@ -1,13 +1,12 @@
 apiVersion: kargo.akuity.io/v1alpha1
 kind: Warehouse
 metadata:
-  name: kargo-project-codeai
+  name: codeai-builds
   namespace: kargo-project-codeai
 spec:
   subscriptions:
-    - image:
-        repoURL: ghcr.io/code-dot-org/code-dot-org
-        ignoreTagsRegexes:
-          # Ignore single-platform images when we have a multiplatform option
-          - '.*-amd64$'
-          - '.*-arm64$'
+    - git:
+        repoURL: https://github.com/code-dot-org/k8s-gitops.git
+        branch: main
+        includePaths:
+          - warehouses/codeai/builds

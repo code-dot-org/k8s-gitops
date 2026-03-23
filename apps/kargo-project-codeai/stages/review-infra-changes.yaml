@@ -1,7 +1,7 @@
 apiVersion: kargo.akuity.io/v1alpha1
 kind: Stage
 metadata:
-  name: test
+  name: review-infra-changes
   namespace: kargo-project-codeai
 spec:
   requestedFreight:
@@ -10,7 +10,7 @@ spec:
         name: codeai-builds
       sources:
         stages:
-          - staging
+          - test
   promotionTemplate:
     spec:
       vars:
@@ -45,7 +45,7 @@ spec:
         - uses: yaml-parse
           as: legacy-merge
           config:
-            path: ./gate/warehouses/codeai/legacy-gitflow/test/merged/${{ outputs['build-lock'].releaseId }}.yaml
+            path: ./gate/warehouses/codeai/legacy-gitflow/production/merged/${{ outputs['build-lock'].releaseId }}.yaml
             outputs:
               - name: revision
                 fromExpression: revision
@@ -55,13 +55,13 @@ spec:
                 fromExpression: mergedAt
         - uses: yaml-update
           config:
-            path: ./gitops/apps/codeai/deployments/test/deployment.yaml
+            path: ./gitops/apps/codeai/deployments/production/deployment.yaml
             updates:
               - key: targetRevision
                 value: ${{ outputs['build-lock'].gitCommit }}
         - uses: yaml-update
           config:
-            path: ./gitops/apps/codeai/deployments/test/values.yaml
+            path: ./gitops/apps/codeai/deployments/production/values.yaml
             updates:
               - key: image
                 value: ${{ outputs['build-lock'].imageRef }}
@@ -69,7 +69,15 @@ spec:
           config:
             path: ./gitops
             message: |
-              Promote test to ${{ outputs['build-lock'].releaseId }} [skip ci]
+              Review production update for ${{ outputs['build-lock'].releaseId }} [skip ci]
         - uses: git-push
+          as: push
           config:
             path: ./gitops
+            generateTargetBranch: true
+        - uses: git-open-pr
+          config:
+            repoURL: https://github.com/code-dot-org/k8s-gitops.git
+            sourceBranch: ${{ outputs.push.branch }}
+            targetBranch: main
+            title: Review CodeAI production release ${{ outputs['build-lock'].releaseId }}

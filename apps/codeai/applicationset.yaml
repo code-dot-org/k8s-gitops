@@ -20,7 +20,7 @@ spec:
       project: default
       sources:
         - repoURL: https://github.com/code-dot-org/code-dot-org.git
-          targetRevision: '{{sourceRevision}}'
+          targetRevision: '{{targetRevision}}'
           path: k8s/helm
           helm:
             releaseName: '{{path.basename}}'
