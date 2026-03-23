@@ -1,3 +1,12 @@
 This app's deployment definitions live under `deployments/`.
 
-Docker image tag writeback is done by the GitHub Actions workflow [`k8s-commit-image-ref-to-argocd.yml`](https://github.com/code-dot-org/code-dot-org/blob/staging/.github/workflows/k8s-commit-image-ref-to-argocd.yml).
+Staging, test, levelbuilder, and production are rendered-branch deployments:
+
+- `main` holds the environment policy and Kargo configuration.
+- `stage/<env>` holds the fully rendered manifests Argo CD syncs.
+- Kargo renders those branches from `warehouses/codeai/freight/current/helm/` plus the values files in this directory.
+
+`k8s-adhoc` remains a live-source Helm deployment so ad hoc work can keep following a source branch directly.
+
+Bootstrap note:
+- The first successful promotion to each staged environment creates its `stage/<env>` branch. Until that first render lands, the corresponding Argo CD `Application` will report a missing target revision.

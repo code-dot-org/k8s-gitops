@@ -1,0 +1,5 @@
+name: production
+sourceMode: rendered
+envType: production
+namespace: production
+renderedBranch: stage/production

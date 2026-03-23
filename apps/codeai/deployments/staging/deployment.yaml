@@ -1,3 +1,5 @@
+name: staging
+sourceMode: rendered
 envType: staging
 namespace: staging
-branch: staging
+renderedBranch: stage/staging

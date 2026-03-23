@@ -21,7 +21,7 @@ spec:
         repoURL: https://github.com/code-dot-org/k8s-gitops.git
         revision: main
         files:
-          - path: apps/*/applicationset.yaml
+          - path: apps/*/applicationset*.yaml
         # This fixed template is applied to applicationset.yaml, they do not support
         # passthrough.
         template:
@@ -36,7 +36,7 @@ spec:
               targetRevision: main
               path: 'apps/{{.path.basename}}'
               directory:
-                include: "applicationset.yaml"
+                include: "applicationset*.yaml"
             syncPolicy:
               automated:
                 prune: true

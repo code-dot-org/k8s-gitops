@@ -1,7 +1,7 @@
 apiVersion: kargo.akuity.io/v1alpha1
 kind: Stage
 metadata:
-  name: test
+  name: review-infra-changes
   namespace: kargo-project-codeai
 spec:
   requestedFreight:
@@ -10,20 +10,21 @@ spec:
         name: kargo-project-codeai
       sources:
         stages:
-          - staging
+          - levelbuilder
   promotionTemplate:
     spec:
       vars:
         - name: gitopsRepo
           value: https://github.com/code-dot-org/k8s-gitops.git
         - name: renderedBranch
-          value: stage/test
+          value: stage/production
         - name: envType
-          value: test
+          value: production
         - name: deployment
-          value: test
+          value: production
       steps:
         - uses: git-clone
+          as: gitops
           config:
             repoURL: ${{ vars.gitopsRepo }}
             checkout:
@@ -37,6 +38,7 @@ spec:
                   - apps/codeai
               - branch: ${{ vars.renderedBranch }}
                 create: true
+                as: production
                 path: ./out
         - uses: yaml-parse
           as: freight
@@ -70,15 +72,28 @@ spec:
           config:
             path: ./out
             message: |
-              Render test from ${{ outputs['freight'].releaseTag }} [skip ci]
+              Render production review from ${{ outputs['freight'].releaseTag }} [skip ci]
         - uses: git-push
+          if: ${{ outputs['rendered-commit'].commit != outputs['gitops'].commits['production'] }}
+          as: rendered-review
           config:
             path: ./out
-        - uses: argocd-update
+            generateTargetBranch: true
+        - uses: git-open-pr
+          if: ${{ outputs['rendered-commit'].commit != outputs['gitops'].commits['production'] }}
+          as: review-pr
           config:
-            apps:
-              - name: codeai-${{ vars.deployment }}
-                namespace: argocd
-                sources:
-                  - repoURL: ${{ vars.gitopsRepo }}
-                    desiredRevision: ${{ outputs['rendered-commit'].commit }}
+            repoURL: ${{ vars.gitopsRepo }}
+            provider: github
+            createTargetBranch: true
+            sourceBranch: ${{ outputs['rendered-review'].branch }}
+            targetBranch: ${{ vars.renderedBranch }}
+            title: Render production for ${{ outputs['freight'].releaseTag }}
+            description: |
+              Rendered production manifests for `${{ outputs['freight'].releaseTag }}` from `${{ outputs['freight'].revision }}`.
+        - uses: git-wait-for-pr
+          if: ${{ outputs['rendered-commit'].commit != outputs['gitops'].commits['production'] }}
+          config:
+            repoURL: ${{ vars.gitopsRepo }}
+            provider: github
+            prNumber: ${{ outputs['review-pr'].pr.id }}

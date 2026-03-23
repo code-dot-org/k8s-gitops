@@ -15,24 +15,69 @@ spec:
       vars:
         - name: gitopsRepo
           value: https://github.com/code-dot-org/k8s-gitops.git
+        - name: renderedBranch
+          value: stage/staging
+        - name: envType
+          value: staging
+        - name: deployment
+          value: staging
       steps:
         - uses: git-clone
           config:
             repoURL: ${{ vars.gitopsRepo }}
             checkout:
+              - commit: ${{ commitFrom(vars.gitopsRepo).ID }}
+                path: ./freight
+                sparse:
+                  - warehouses/codeai/freight/current
               - branch: main
-                path: ./gitops
-        - uses: yaml-update
+                path: ./meta
+                sparse:
+                  - apps/codeai
+              - branch: ${{ vars.renderedBranch }}
+                create: true
+                path: ./out
+        - uses: yaml-parse
+          as: freight
           config:
-            path: ./gitops/apps/codeai/deployments/staging/values.yaml
-            updates:
+            path: ./freight/warehouses/codeai/freight/current/freight.yaml
+            outputs:
+              - name: revision
+                fromExpression: revision
+              - name: releaseTag
+                fromExpression: tag
+              - name: packageType
+                fromExpression: packageType
+              - name: imageRef
+                fromExpression: image.ref
+        - uses: git-clear
+          config:
+            path: ./out
+        - uses: helm-template
+          config:
+            path: ./freight/warehouses/codeai/freight/current/helm
+            releaseName: ${{ vars.deployment }}
+            valuesFiles:
+              - ./meta/apps/codeai/envTypes/${{ vars.envType }}.values.yaml
+              - ./meta/apps/codeai/deployments/${{ vars.deployment }}/values.yaml
+            setValues:
               - key: image
-                value: ghcr.io/code-dot-org/code-dot-org:${{ imageFrom("ghcr.io/code-dot-org/code-dot-org").Tag }}
+                value: ${{ outputs['freight'].imageRef }}
+            outPath: ./out/manifests.yaml
         - uses: git-commit
+          as: rendered-commit
           config:
-            path: ./gitops
+            path: ./out
             message: |
-              Promote staging to ${{ imageFrom("ghcr.io/code-dot-org/code-dot-org").Tag }} [skip ci]
+              Render staging from ${{ outputs['freight'].releaseTag }} [skip ci]
         - uses: git-push
           config:
-            path: ./gitops
+            path: ./out
+        - uses: argocd-update
+          config:
+            apps:
+              - name: codeai-${{ vars.deployment }}
+                namespace: argocd
+                sources:
+                  - repoURL: ${{ vars.gitopsRepo }}
+                    desiredRevision: ${{ outputs['rendered-commit'].commit }}
