@@ -24,6 +24,7 @@ spec:
           value: production
       steps:
         - uses: git-clone
+          as: gitops
           config:
             repoURL: ${{ vars.gitopsRepo }}
             checkout:
@@ -37,6 +38,7 @@ spec:
                   - apps/codeai
               - branch: ${{ vars.renderedBranch }}
                 create: true
+                as: production
                 path: ./out
         - uses: yaml-parse
           as: freight
@@ -66,16 +68,19 @@ spec:
                 value: ${{ outputs['freight'].imageRef }}
             outPath: ./out/manifests.yaml
         - uses: git-commit
+          as: rendered-commit
           config:
             path: ./out
             message: |
               Render production review from ${{ outputs['freight'].releaseTag }} [skip ci]
         - uses: git-push
+          if: ${{ outputs['rendered-commit'].commit != outputs['gitops'].commits['production'] }}
           as: rendered-review
           config:
             path: ./out
             generateTargetBranch: true
         - uses: git-open-pr
+          if: ${{ outputs['rendered-commit'].commit != outputs['gitops'].commits['production'] }}
           as: review-pr
           config:
             repoURL: ${{ vars.gitopsRepo }}
@@ -87,6 +92,7 @@ spec:
             description: |
               Rendered production manifests for `${{ outputs['freight'].releaseTag }}` from `${{ outputs['freight'].revision }}`.
         - uses: git-wait-for-pr
+          if: ${{ outputs['rendered-commit'].commit != outputs['gitops'].commits['production'] }}
           config:
             repoURL: ${{ vars.gitopsRepo }}
             provider: github
