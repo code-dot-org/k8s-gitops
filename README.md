@@ -28,12 +28,14 @@ k8s-gitops/
 
       deployments/
         levelbuilder/             # codeai deployment levelbuilder
-          deployment.yaml         # envType=levelbuilder, branch=levelbuilder
-          values.yaml             # values.yaml for this deployment: dashboard_workers=27, RAILS_ENV=levelbuilder, etc
+          deployment.yaml         # deployment metadata: envType=levelbuilder, namespace=levelbuilder
+          deploy/
+            kustomization.yaml    # machine-owned deploy wrapper pinned to a code-dot-org commit
         ...
 
       envTypes/
-        levelbuilder.values.yaml  # base values.yaml for all envType=levelbuilder
+        levelbuilder/
+          kustomization.yaml      # envType component consumed by deployment wrappers
         ...
 
     kargo/
@@ -44,7 +46,7 @@ k8s-gitops/
       application.yaml            # argocd app for kargo project codeai
       project.yaml                # kargo project for codeai
       project-config.yaml         # kargo projectconfig for codeai
-      warehouse.yaml              # kargo warehouse for codeai
+      warehouse.yaml              # kargo warehouse watching warehouses/codeai/builds
       stages/
         levelbuilder.yaml         # kargo stage for codeai deployment levelbuilder
         ...
@@ -53,4 +55,3 @@ k8s-gitops/
 ## Bootstrap Cluster
 
 kubectl apply -f apps/app-of-apps/applicationset.yaml
-
