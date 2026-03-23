@@ -1,4 +1,4 @@
-image: ghcr.io/code-dot-org/code-dot-org:production
+image: ghcr.io/code-dot-org/code-dot-org:replace-me
 autoscaling:
   minReplicas: 1
   maxReplicas: 1

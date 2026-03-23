@@ -11,29 +11,89 @@ spec:
       sources:
         stages:
           - staging
+  verification:
+    analysisTemplates:
+      - name: codeai-test-rollout
+    args:
+      - name: namespace
+        value: test
+      - name: deployment
+        value: test-cdo-dashboard
+      - name: expected_image
+        value: ${{ imageFrom("ghcr.io/code-dot-org/code-dot-org").RepoURL }}:${{ imageFrom("ghcr.io/code-dot-org/code-dot-org").Tag }}
   promotionTemplate:
     spec:
       vars:
         - name: gitopsRepo
           value: https://github.com/code-dot-org/k8s-gitops.git
+        - name: sourceRepo
+          value: https://github.com/code-dot-org/code-dot-org.git
+        - name: imageRepo
+          value: ghcr.io/code-dot-org/code-dot-org
+        - name: deployment
+          value: test
+        - name: envType
+          value: test
+        - name: namespace
+          value: test
+        - name: releaseName
+          value: test
+        - name: targetBranch
+          value: stage/test
+        - name: renderPath
+          value: ./out/apps/codeai/deployments/test/deploy/manifests.yaml
       steps:
         - uses: git-clone
           config:
             repoURL: ${{ vars.gitopsRepo }}
             checkout:
               - branch: main
-                path: ./gitops
+                path: ./meta
+                sparse:
+                  - apps/codeai
+              - branch: ${{ vars.targetBranch }}
+                create: true
+                path: ./out
+        - uses: git-clone
+          config:
+            repoURL: ${{ vars.sourceRepo }}
+            checkout:
+              - commit: ${{ commitFrom(vars.sourceRepo).ID }}
+                path: ./src
+                sparse:
+                  - k8s/helm
+        - uses: git-clear
+          config:
+            path: ./out
         - uses: yaml-update
           config:
-            path: ./gitops/apps/codeai/deployments/test/values.yaml
+            path: ./meta/apps/codeai/deployments/${{ vars.deployment }}/values.yaml
             updates:
               - key: image
-                value: ghcr.io/code-dot-org/code-dot-org:${{ imageFrom("ghcr.io/code-dot-org/code-dot-org").Tag }}
-        - uses: git-commit
+                value: ${{ imageFrom(vars.imageRepo).RepoURL }}:${{ imageFrom(vars.imageRepo).Tag }}
+        - uses: helm-template
           config:
-            path: ./gitops
+            path: ./src/k8s/helm
+            releaseName: ${{ vars.releaseName }}
+            namespace: ${{ vars.namespace }}
+            valuesFiles:
+              - ./meta/apps/codeai/envTypes/${{ vars.envType }}.values.yaml
+              - ./meta/apps/codeai/deployments/${{ vars.deployment }}/values.yaml
+            outPath: ${{ vars.renderPath }}
+        - uses: git-commit
+          as: commit
+          config:
+            path: ./out
             message: |
-              Promote test to ${{ imageFrom("ghcr.io/code-dot-org/code-dot-org").Tag }} [skip ci]
+              Render test for ${{ commitFrom(vars.sourceRepo).ID }} with ${{ imageFrom(vars.imageRepo).Tag }}
         - uses: git-push
           config:
-            path: ./gitops
+            path: ./out
+            targetBranch: ${{ vars.targetBranch }}
+        - uses: argocd-update
+          config:
+            apps:
+              - name: codeai-test
+                sources:
+                  - repoURL: ${{ vars.gitopsRepo }}
+                    desiredRevision: ${{ outputs.commit.commit }}

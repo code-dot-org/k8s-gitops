@@ -4,10 +4,17 @@ metadata:
   name: kargo-project-codeai
   namespace: kargo-project-codeai
 spec:
+  freightCreationPolicy: Automatic
   subscriptions:
     - image:
         repoURL: ghcr.io/code-dot-org/code-dot-org
-        ignoreTagsRegexes:
-          # Ignore single-platform images when we have a multiplatform option
-          - '.*-amd64$'
-          - '.*-arm64$'
+        allowTagsRegexes:
+          - ^git-[0-9a-f]{40}$
+    - git:
+        repoURL: https://github.com/code-dot-org/code-dot-org.git
+        branch: staging
+        commitSelectionStrategy: NewestFromBranch
+  freightCreationCriteria:
+    expression: |
+      imageFrom('ghcr.io/code-dot-org/code-dot-org').Tag ==
+      'git-' + commitFrom('https://github.com/code-dot-org/code-dot-org.git').ID
