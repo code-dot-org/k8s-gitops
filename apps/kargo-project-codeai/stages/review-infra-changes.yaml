@@ -28,6 +28,7 @@ spec:
     spec:
       steps:
         - uses: git-clone
+          as: gitops
           config:
             repoURL: ${{ vars.gitopsRepo }}
             checkout:
@@ -35,7 +36,8 @@ spec:
                 path: ./freight
               - branch: main
                 path: ./meta
-              - branch: ${{ vars.targetBranch }}
+              - as: production
+                branch: ${{ vars.targetBranch }}
                 create: true
                 path: ./out
         - uses: yaml-parse
@@ -122,15 +124,18 @@ spec:
             path: ./work/deployments/${{ vars.renderDeployment }}/deploy
             outPath: ./out/${{ vars.renderPath }}
         - uses: git-commit
+          as: commit
           config:
             path: ./out
             message: Review production render for ${{ outputs['build-lock'].releaseId }}
         - uses: git-push
+          if: ${{ outputs.commit.commit != outputs.gitops.commits.production }}
           as: push
           config:
             path: ./out
             generateTargetBranch: true
         - uses: git-open-pr
+          if: ${{ outputs.commit.commit != outputs.gitops.commits.production }}
           as: open-pr
           config:
             repoURL: ${{ vars.gitopsRepo }}
@@ -138,6 +143,7 @@ spec:
             targetBranch: ${{ vars.targetBranch }}
             title: Review CodeAI production render for ${{ outputs['build-lock'].releaseId }}
         - uses: git-wait-for-pr
+          if: ${{ outputs.commit.commit != outputs.gitops.commits.production }}
           config:
             repoURL: ${{ vars.gitopsRepo }}
             prNumber: ${{ outputs['open-pr'].pr.id }}
