@@ -1,4 +1,4 @@
-image: ghcr.io/code-dot-org/code-dot-org:replace-me
+image: ghcr.io/code-dot-org/code-dot-org:git-3a221b678c8779a27165b611bfa88a8e685df745
 autoscaling:
   maxReplicas: 1
 locals.yml:

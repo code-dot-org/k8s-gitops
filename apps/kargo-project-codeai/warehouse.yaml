@@ -8,8 +8,13 @@ spec:
   subscriptions:
     - image:
         repoURL: ghcr.io/code-dot-org/code-dot-org
+        cacheByTag: true # our tags are immutable, caching is safe
         allowTagsRegexes:
-          - ^git-[0-9a-f]{40}$
+          - ^git-[0-9a-f]{40}$ # :git-<full commit sha>
+        ignoreTagsRegexes:
+          # Ignore single-platform images when we have a multiplatform option
+          - '.*-amd64$'
+          - '.*-arm64$'
     - git:
         repoURL: https://github.com/code-dot-org/code-dot-org.git
         branch: staging
