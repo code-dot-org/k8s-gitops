@@ -1,7 +1,7 @@
 apiVersion: kargo.akuity.io/v1alpha1
 kind: Stage
 metadata:
-  name: staging
+  name: review-infra-changes
   namespace: kargo-project-codeai
 spec:
   requestedFreight:
@@ -9,18 +9,21 @@ spec:
         kind: Warehouse
         name: codeai-freight
       sources:
-        direct: true
+        stages:
+          - levelbuilder
   vars:
     - name: gitopsRepo
       value: https://github.com/code-dot-org/k8s-gitops.git
     - name: targetBranch
-      value: stage/staging
+      value: stage/production
     - name: renderDeployment
-      value: staging
+      value: production
     - name: renderPath
-      value: apps/codeai/deployments/staging/deploy
+      value: apps/codeai/deployments/production/deploy
     - name: imageRepo
       value: ghcr.io/code-dot-org/code-dot-org
+    - name: legacyEnv
+      value: production
   promotionTemplate:
     spec:
       steps:
@@ -42,6 +45,13 @@ spec:
             outputs:
               - name: releaseId
                 fromExpression: tag
+        - uses: yaml-parse
+          as: legacy-merge
+          config:
+            path: ./meta/warehouses/codeai/legacy-gitflow/${{ vars.legacyEnv }}/merged/${{ outputs.freight.releaseId }}.yaml
+            outputs:
+              - name: mergedAt
+                fromExpression: mergedAt
         - uses: yaml-parse
           as: deployment-meta
           config:
@@ -97,8 +107,21 @@ spec:
         - uses: git-commit
           config:
             path: ./out
-            message: Render ${{ vars.renderDeployment }} from ${{ outputs.freight.releaseId }}
+            message: Review production render for ${{ outputs.freight.releaseId }}
         - uses: git-push
+          as: push
           config:
             path: ./out
-            branch: ${{ vars.targetBranch }}
+            generateTargetBranch: true
+        - uses: git-open-pr
+          as: open-pr
+          config:
+            repoURL: ${{ vars.gitopsRepo }}
+            createTargetBranch: true
+            sourceBranch: ${{ outputs.push.branch }}
+            targetBranch: ${{ vars.targetBranch }}
+            title: Review CodeAI production render for ${{ outputs.freight.releaseId }}
+        - uses: git-wait-for-pr
+          config:
+            repoURL: ${{ vars.gitopsRepo }}
+            prNumber: ${{ outputs['open-pr'].pr.id }}

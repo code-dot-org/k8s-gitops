@@ -18,18 +18,10 @@ spec:
         kargo.akuity.io/project: kargo-project-codeai
     spec:
       project: default
-      sources:
-        - repoURL: https://github.com/code-dot-org/code-dot-org.git
-          targetRevision: '{{sourceRevision}}'
-          path: k8s/helm
-          helm:
-            releaseName: '{{path.basename}}'
-            valueFiles:
-              - $values/apps/codeai/envTypes/{{envType}}.values.yaml
-              - $values/apps/codeai/deployments/{{path.basename}}/values.yaml
-        - repoURL: https://github.com/code-dot-org/k8s-gitops.git
-          targetRevision: main
-          ref: values
+      source:
+        repoURL: https://github.com/code-dot-org/k8s-gitops.git
+        targetRevision: '{{branch}}'
+        path: apps/codeai/deployments/{{path.basename}}/deploy
       destination:
         server: https://kubernetes.default.svc
         namespace: '{{namespace}}'

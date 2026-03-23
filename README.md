@@ -28,13 +28,22 @@ k8s-gitops/
 
       deployments/
         levelbuilder/             # codeai deployment levelbuilder
-          deployment.yaml         # envType=levelbuilder, branch=levelbuilder
-          values.yaml             # values.yaml for this deployment: dashboard_workers=27, RAILS_ENV=levelbuilder, etc
+          deployment.yaml         # envType=levelbuilder, branch=stage/levelbuilder
         ...
 
       envTypes/
-        levelbuilder.values.yaml  # base values.yaml for all envType=levelbuilder
+        levelbuilder/             # envType Kustomize Component for levelbuilder
         ...
+
+      kargo/
+        templates/
+          deploy/
+            kustomization.yaml    # temp wrapper copied into Kargo work dirs before render
+
+    warehouses/
+      codeai/
+        freight/                  # frozen source snapshots published from code-dot-org staging
+        legacy-gitflow/           # legacy branch merge metadata used as downstream Kargo gates
 
     kargo/
       application.yaml            # argocd app for kargo itself
@@ -53,4 +62,3 @@ k8s-gitops/
 ## Bootstrap Cluster
 
 kubectl apply -f apps/app-of-apps/applicationset.yaml
-

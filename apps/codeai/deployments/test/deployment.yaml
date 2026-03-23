@@ -1,5 +1,3 @@
 envType: test
 namespace: test
-# FIXME: for quicker testing, avoid waiting on DTTs and DTPs, let alone DTLs.
-# branch: test
-branch: staging
+branch: stage/test
