@@ -7,33 +7,12 @@ spec:
   requestedFreight:
     - origin:
         kind: Warehouse
-        name: kargo-project-codeai
+        name: codeai-builds
       sources:
         stages:
-          - test
+          - review-infra-changes
+  # Production deploy truth is the reviewed render merged into stage/production.
+  # This stage models the final approved hop after the PR merge updates that branch.
   promotionTemplate:
     spec:
-      vars:
-        - name: gitopsRepo
-          value: https://github.com/code-dot-org/k8s-gitops.git
-      steps:
-        - uses: git-clone
-          config:
-            repoURL: ${{ vars.gitopsRepo }}
-            checkout:
-              - branch: main
-                path: ./gitops
-        - uses: yaml-update
-          config:
-            path: ./gitops/apps/codeai/deployments/production/values.yaml
-            updates:
-              - key: image
-                value: ghcr.io/code-dot-org/code-dot-org:${{ imageFrom("ghcr.io/code-dot-org/code-dot-org").Tag }}
-        - uses: git-commit
-          config:
-            path: ./gitops
-            message: |
-              Promote production to ${{ imageFrom("ghcr.io/code-dot-org/code-dot-org").Tag }} [skip ci]
-        - uses: git-push
-          config:
-            path: ./gitops
+      steps: []

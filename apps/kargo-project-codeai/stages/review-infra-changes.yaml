@@ -1,7 +1,7 @@
 apiVersion: kargo.akuity.io/v1alpha1
 kind: Stage
 metadata:
-  name: test
+  name: review-infra-changes
   namespace: kargo-project-codeai
 spec:
   requestedFreight:
@@ -10,16 +10,20 @@ spec:
         name: codeai-builds
       sources:
         stages:
-          - staging
+          - levelbuilder
   vars:
     - name: gitopsRepo
       value: https://github.com/code-dot-org/k8s-gitops.git
     - name: imageRepo
       value: ghcr.io/code-dot-org/code-dot-org
     - name: targetBranch
-      value: stage/${{ ctx.stage }}
+      value: stage/production
+    - name: renderDeployment
+      value: production
+    - name: renderPath
+      value: apps/codeai/deployments/production/deploy
     - name: legacyEnv
-      value: test
+      value: production
   promotionTemplate:
     spec:
       steps:
@@ -61,7 +65,7 @@ spec:
         - uses: yaml-parse
           as: deployment-meta
           config:
-            path: ./meta/apps/codeai/deployments/${{ ctx.stage }}/deployment.yaml
+            path: ./meta/apps/codeai/deployments/${{ vars.renderDeployment }}/deployment.yaml
             outputs:
               - name: envType
                 fromExpression: envType
@@ -77,7 +81,7 @@ spec:
                   - ${{ outputs['build-lock'].sourcePath }}
         - uses: git-clear
           config:
-            path: ./out/apps/codeai/deployments/${{ ctx.stage }}/deploy
+            path: ./out/${{ vars.renderPath }}
         - uses: copy
           config:
             inPath: ./src/${{ outputs['build-lock'].sourcePath }}
@@ -93,10 +97,10 @@ spec:
         - uses: copy
           config:
             inPath: ./meta/apps/codeai/kargo/templates/deploy
-            outPath: ./work/deployments/${{ ctx.stage }}/deploy
+            outPath: ./work/deployments/${{ vars.renderDeployment }}/deploy
         - uses: yaml-update
           config:
-            path: ./work/deployments/${{ ctx.stage }}/deploy/kustomization.yaml
+            path: ./work/deployments/${{ vars.renderDeployment }}/deploy/kustomization.yaml
             updates:
               - key: namespace
                 value: ${{ outputs['deployment-meta'].namespace }}
@@ -108,20 +112,32 @@ spec:
                   - ../../envTypes/${{ outputs['deployment-meta'].envType }}
         - uses: kustomize-set-image
           config:
-            path: ./work/deployments/${{ ctx.stage }}/deploy
+            path: ./work/deployments/${{ vars.renderDeployment }}/deploy
             images:
               - image: code-dot-org
                 newName: ${{ vars.imageRepo }}
                 tag: ${{ outputs['build-lock'].releaseId }}
         - uses: kustomize-build
           config:
-            path: ./work/deployments/${{ ctx.stage }}/deploy
-            outPath: ./out/apps/codeai/deployments/${{ ctx.stage }}/deploy
+            path: ./work/deployments/${{ vars.renderDeployment }}/deploy
+            outPath: ./out/${{ vars.renderPath }}
         - uses: git-commit
           config:
             path: ./out
-            message: Render ${{ ctx.stage }} for ${{ outputs['build-lock'].releaseId }}
+            message: Review production render for ${{ outputs['build-lock'].releaseId }}
         - uses: git-push
+          as: push
           config:
             path: ./out
-            branch: ${{ vars.targetBranch }}
+            generateTargetBranch: true
+        - uses: git-open-pr
+          as: open-pr
+          config:
+            repoURL: ${{ vars.gitopsRepo }}
+            sourceBranch: ${{ outputs['push'].branch }}
+            targetBranch: ${{ vars.targetBranch }}
+            title: Review CodeAI production render for ${{ outputs['build-lock'].releaseId }}
+        - uses: git-wait-for-pr
+          config:
+            repoURL: ${{ vars.gitopsRepo }}
+            prNumber: ${{ outputs['open-pr'].pr.id }}

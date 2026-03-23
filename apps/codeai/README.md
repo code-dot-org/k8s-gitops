@@ -1,3 +1,8 @@
-This app's deployment definitions live under `deployments/`.
+This app's authored deployment metadata lives under `deployments/`.
 
-Docker image tag writeback is done by the GitHub Actions workflow [`k8s-commit-image-ref-to-argocd.yml`](https://github.com/code-dot-org/code-dot-org/blob/staging/.github/workflows/k8s-commit-image-ref-to-argocd.yml).
+Rendered deploy output is written by Kargo into `stage/<deployment>` branches at
+`apps/codeai/deployments/<deployment>/deploy/`, and Argo CD deploys directly from
+those rendered branches.
+
+Build publication now writes thin build-lock Freight records under
+`warehouses/codeai/builds/` instead of editing deployment `values.yaml` files.
