@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: codeai-rendered-stages
+  name: codeai-adhoc
   namespace: argocd
 spec:
   generators:
@@ -9,10 +9,7 @@ spec:
         repoURL: https://github.com/code-dot-org/k8s-gitops.git
         revision: main
         files:
-          - path: apps/codeai/deployments/staging/deployment.yaml
-          - path: apps/codeai/deployments/test/deployment.yaml
-          - path: apps/codeai/deployments/levelbuilder/deployment.yaml
-          - path: apps/codeai/deployments/production/deployment.yaml
+          - path: apps/codeai/deployments/k8s-adhoc/deployment.yaml
   template:
     metadata:
       name: codeai-{{name}}
@@ -21,12 +18,18 @@ spec:
         kargo.akuity.io/project: kargo-project-codeai
     spec:
       project: default
-      source:
-        repoURL: https://github.com/code-dot-org/k8s-gitops.git
-        targetRevision: '{{renderedBranch}}'
-        path: .
-        directory:
-          recurse: true
+      sources:
+        - repoURL: https://github.com/code-dot-org/code-dot-org.git
+          targetRevision: '{{branch}}'
+          path: k8s/helm
+          helm:
+            releaseName: '{{name}}'
+            valueFiles:
+              - $values/apps/codeai/envTypes/{{envType}}.values.yaml
+              - $values/apps/codeai/deployments/{{name}}/values.yaml
+        - repoURL: https://github.com/code-dot-org/k8s-gitops.git
+          targetRevision: main
+          ref: values
       destination:
         server: https://kubernetes.default.svc
         namespace: '{{namespace}}'

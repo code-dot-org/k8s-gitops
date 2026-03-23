@@ -1,0 +1,5 @@
+name: levelbuilder
+sourceMode: rendered
+envType: levelbuilder
+namespace: levelbuilder
+renderedBranch: stage/levelbuilder

@@ -3,3 +3,5 @@ RAILS_ENV: staging
 healthChecks:
   enabled: true
 require_external_secrets: true
+renderedBranches:
+  deterministicLocalSecrets: true

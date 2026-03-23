@@ -1,3 +1,5 @@
+name: k8s-adhoc
+sourceMode: live-source
 envType: staging
 namespace: adhoc-k8s-adhoc
 branch: k8s/adhoc

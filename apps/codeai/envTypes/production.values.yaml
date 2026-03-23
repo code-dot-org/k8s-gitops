@@ -3,6 +3,8 @@ RAILS_ENV: production
 healthChecks:
   enabled: true
 require_external_secrets: true
+renderedBranches:
+  deterministicLocalSecrets: true
 autoscaling:
   enabled: true
   minReplicas: 1
