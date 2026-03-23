@@ -20,6 +20,8 @@ spec:
           value: https://github.com/code-dot-org/code-dot-org.git
         - name: imageRepo
           value: ghcr.io/code-dot-org/code-dot-org
+        - name: legacyEnv
+          value: levelbuilder
         - name: deployment
           value: levelbuilder
         - name: envType
@@ -41,9 +43,24 @@ spec:
                 path: ./meta
                 sparse:
                   - apps/codeai
+              - branch: main
+                path: ./gate
+                sparse:
+                  - warehouses/codeai/legacy-gitflow/levelbuilder/merged
               - branch: ${{ vars.targetBranch }}
                 create: true
                 path: ./out
+        - uses: yaml-parse
+          as: legacy-gate
+          config:
+            path: ./gate/warehouses/codeai/legacy-gitflow/${{ vars.legacyEnv }}/merged/${{ imageFrom(vars.imageRepo).Tag }}.yaml
+            outputs:
+              - name: revision
+                fromExpression: revision
+              - name: tag
+                fromExpression: tag
+              - name: mergedAt
+                fromExpression: mergedAt
         - uses: git-clone
           config:
             repoURL: ${{ vars.sourceRepo }}
