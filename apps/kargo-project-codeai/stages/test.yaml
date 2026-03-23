@@ -11,6 +11,16 @@ spec:
       sources:
         stages:
           - staging
+  verification:
+    analysisTemplates:
+      - name: codeai-test-verification
+    args:
+      - name: gitCommit
+        value: ${{ freightMetadata(ctx.targetFreight.name)['code-dot-org-git-commit'] }}
+      - name: namespace
+        value: test
+      - name: deploymentName
+        value: test-cdo-dashboard
   promotionTemplate:
     spec:
       vars:
@@ -70,10 +80,10 @@ spec:
                 value: ${{ outputs['deployment-meta'].namespace }}
               - key: resources
                 value:
-                  - github.com/code-dot-org/code-dot-org//k8s/kustomize/base?ref=${{ outputs['build-lock'].gitCommit }}
+                  - github.com/code-dot-org/code-dot-org//k8s/kustomize/base?ref=${{ outputs['build-lock'].gitCommit }}&timeout=120s
               - key: components
                 value:
-                  - ../../envTypes/${{ outputs['deployment-meta'].envType }}
+                  - ../../../envTypes/${{ outputs['deployment-meta'].envType }}
         - uses: kustomize-set-image
           config:
             path: ./gitops/apps/codeai/deployments/test/deploy
@@ -81,6 +91,14 @@ spec:
               - image: code-dot-org
                 newName: ghcr.io/code-dot-org/code-dot-org
                 tag: ${{ outputs['build-lock'].releaseId }}
+        - uses: set-metadata
+          config:
+            updates:
+              - kind: Freight
+                name: ${{ ctx.targetFreight.name }}
+                values:
+                  code-dot-org-git-commit: ${{ outputs['build-lock'].gitCommit }}
+                  code-dot-org-release-id: ${{ outputs['build-lock'].releaseId }}
         - uses: git-commit
           config:
             path: ./gitops

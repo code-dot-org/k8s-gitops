@@ -54,10 +54,10 @@ spec:
                 value: ${{ outputs['deployment-meta'].namespace }}
               - key: resources
                 value:
-                  - github.com/code-dot-org/code-dot-org//k8s/kustomize/base?ref=${{ outputs['build-lock'].gitCommit }}
+                  - github.com/code-dot-org/code-dot-org//k8s/kustomize/base?ref=${{ outputs['build-lock'].gitCommit }}&timeout=120s
               - key: components
                 value:
-                  - ../../envTypes/${{ outputs['deployment-meta'].envType }}
+                  - ../../../envTypes/${{ outputs['deployment-meta'].envType }}
         - uses: kustomize-set-image
           config:
             path: ./gitops/apps/codeai/deployments/staging/deploy

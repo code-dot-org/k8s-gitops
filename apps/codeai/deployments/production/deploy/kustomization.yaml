@@ -2,10 +2,10 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: production
 resources:
-  - github.com/code-dot-org/code-dot-org//k8s/kustomize/base?ref=f33f9d20923c25a03e9e6da746f076c3ee4bb79d
+  - github.com/code-dot-org/code-dot-org//k8s/kustomize/base?ref=bcb0ae45b61e70b12b63c49f3e7b82c65d4edec0&timeout=120s
 components:
-  - ../../envTypes/production
+  - ../../../envTypes/production
 images:
   - name: code-dot-org
     newName: ghcr.io/code-dot-org/code-dot-org
-    newTag: git-f33f9d20923c25a03e9e6da746f076c3ee4bb79d
+    newTag: git-bcb0ae45b61e70b12b63c49f3e7b82c65d4edec0

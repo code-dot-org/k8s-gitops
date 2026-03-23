@@ -27,8 +27,6 @@ spec:
                 path: ./freight
               - branch: main
                 path: ./gate
-              - branch: main
-                path: ./gitops
         - uses: yaml-parse
           as: build-lock
           config:
@@ -53,38 +51,8 @@ spec:
                 fromExpression: tag
               - name: mergedAt
                 fromExpression: mergedAt
-        - uses: yaml-parse
-          as: deployment-meta
+        - uses: git-merge-pr
           config:
-            path: ./gitops/apps/codeai/deployments/production/deployment.yaml
-            outputs:
-              - name: envType
-                fromExpression: envType
-              - name: namespace
-                fromExpression: namespace
-        - uses: yaml-update
-          config:
-            path: ./gitops/apps/codeai/deployments/production/deploy/kustomization.yaml
-            updates:
-              - key: namespace
-                value: ${{ outputs['deployment-meta'].namespace }}
-              - key: resources
-                value:
-                  - github.com/code-dot-org/code-dot-org//k8s/kustomize/base?ref=${{ outputs['build-lock'].gitCommit }}
-              - key: components
-                value:
-                  - ../../envTypes/${{ outputs['deployment-meta'].envType }}
-        - uses: kustomize-set-image
-          config:
-            path: ./gitops/apps/codeai/deployments/production/deploy
-            images:
-              - image: code-dot-org
-                newName: ghcr.io/code-dot-org/code-dot-org
-                tag: ${{ outputs['build-lock'].releaseId }}
-        - uses: git-commit
-          config:
-            path: ./gitops
-            message: Promote production deploy to ${{ outputs['build-lock'].releaseId }} [skip ci]
-        - uses: git-push
-          config:
-            path: ./gitops
+            repoURL: https://github.com/code-dot-org/k8s-gitops.git
+            prNumber: ${{ freightMetadata(ctx.targetFreight.name)['production-review-pr-id'] }}
+            wait: true

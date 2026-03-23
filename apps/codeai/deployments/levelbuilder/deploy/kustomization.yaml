@@ -2,10 +2,10 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: levelbuilder
 resources:
-  - github.com/code-dot-org/code-dot-org//k8s/kustomize/base?ref=f33f9d20923c25a03e9e6da746f076c3ee4bb79d
+  - github.com/code-dot-org/code-dot-org//k8s/kustomize/base?ref=8e63b725457dee9f56342b5c6bdd0c04789c08b7&timeout=120s
 components:
-  - ../../envTypes/levelbuilder
+  - ../../../envTypes/levelbuilder
 images:
   - name: code-dot-org
     newName: ghcr.io/code-dot-org/code-dot-org
-    newTag: git-f33f9d20923c25a03e9e6da746f076c3ee4bb79d
+    newTag: git-8e63b725457dee9f56342b5c6bdd0c04789c08b7

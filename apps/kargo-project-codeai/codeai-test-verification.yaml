@@ -1,0 +1,56 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: codeai-test-verification
+  namespace: kargo-project-codeai
+spec:
+  args:
+    - name: gitCommit
+    - name: namespace
+    - name: deploymentName
+  metrics:
+    - name: drone-and-rollout-gate
+      provider:
+        job:
+          spec:
+            backoffLimit: 0
+            template:
+              spec:
+                restartPolicy: Never
+                containers:
+                  - name: verify
+                    image: alpine:3.20
+                    command:
+                      - sh
+                      - -ceu
+                    args:
+                      - |
+                        apk add --no-cache curl kubectl >/dev/null
+
+                        attempts=30
+                        while [ "$attempts" -gt 0 ]; do
+                          state="$(
+                            curl -fsSL "https://api.github.com/repos/code-dot-org/code-dot-org/commits/{{ args.gitCommit }}/status" |
+                            grep -m1 -o '"state":"[^"]*"' |
+                            cut -d'"' -f4
+                          )"
+                          case "$state" in
+                            success)
+                              break
+                              ;;
+                            failure|error)
+                              echo "Commit status failed: $state" >&2
+                              exit 1
+                              ;;
+                          esac
+
+                          attempts=$((attempts - 1))
+                          if [ "$attempts" -eq 0 ]; then
+                            echo "Timed out waiting for commit status success" >&2
+                            exit 1
+                          fi
+
+                          sleep 60
+                        done
+
+                        kubectl -n "{{ args.namespace }}" rollout status "deployment/{{ args.deploymentName }}" --timeout=10m

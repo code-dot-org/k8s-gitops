@@ -70,10 +70,10 @@ spec:
                 value: ${{ outputs['deployment-meta'].namespace }}
               - key: resources
                 value:
-                  - github.com/code-dot-org/code-dot-org//k8s/kustomize/base?ref=${{ outputs['build-lock'].gitCommit }}
+                  - github.com/code-dot-org/code-dot-org//k8s/kustomize/base?ref=${{ outputs['build-lock'].gitCommit }}&timeout=120s
               - key: components
                 value:
-                  - ../../envTypes/${{ outputs['deployment-meta'].envType }}
+                  - ../../../envTypes/${{ outputs['deployment-meta'].envType }}
         - uses: kustomize-set-image
           config:
             path: ./gitops/apps/codeai/deployments/production/deploy
@@ -91,8 +91,17 @@ spec:
             path: ./gitops
             generateTargetBranch: true
         - uses: git-open-pr
+          as: open-pr
           config:
             repoURL: https://github.com/code-dot-org/k8s-gitops.git
             sourceBranch: ${{ outputs.push.branch }}
             targetBranch: main
             title: Review CodeAI production deploy for ${{ outputs['build-lock'].releaseId }}
+        - uses: set-metadata
+          config:
+            updates:
+              - kind: Freight
+                name: ${{ ctx.targetFreight.name }}
+                values:
+                  production-review-pr-id: ${{ outputs['open-pr'].pr.id }}
+                  production-review-pr-url: ${{ outputs['open-pr'].pr.url }}
