@@ -1,0 +1,27 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: codeai-service-health
+  namespace: kargo-project-codeai
+spec:
+  args:
+    - name: namespace
+    - name: serviceName
+  metrics:
+    - name: service-health
+      provider:
+        job:
+          spec:
+            backoffLimit: 0
+            template:
+              spec:
+                restartPolicy: Never
+                containers:
+                  - name: curl
+                    image: curlimages/curl:8.12.1
+                    command:
+                      - sh
+                      - -ceu
+                      - |
+                        curl --fail --silent --show-error \
+                          "http://{{args.serviceName}}.{{args.namespace}}.svc.cluster.local:3000/health_check" >/dev/null
