@@ -1,3 +1,4 @@
-This app's deployment definitions live under `deployments/`.
+`main` keeps deployment metadata, env policy, and the Kargo temp-wrapper templates.
 
-Docker image tag writeback is done by the GitHub Actions workflow [`k8s-commit-image-ref-to-argocd.yml`](https://github.com/code-dot-org/code-dot-org/blob/staging/.github/workflows/k8s-commit-image-ref-to-argocd.yml).
+Rendered manifests live on `stage/<deployment>` branches at `apps/codeai/deployments/<deployment>/deploy/`.
+Argo CD deploys those rendered paths directly; Kargo promotion is responsible for rehydrating the OCI release capsule and writing them.

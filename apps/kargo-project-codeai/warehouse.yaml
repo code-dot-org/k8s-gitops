@@ -1,12 +1,16 @@
 apiVersion: kargo.akuity.io/v1alpha1
 kind: Warehouse
 metadata:
-  name: kargo-project-codeai
+  name: codeai-image
   namespace: kargo-project-codeai
 spec:
   subscriptions:
     - image:
         repoURL: ghcr.io/code-dot-org/code-dot-org
+        imageSelectionStrategy: NewestBuild
+        cacheByTag: true
+        allowTagsRegexes:
+          - '^git-[0-9a-f]{40}$'
         ignoreTagsRegexes:
           # Ignore single-platform images when we have a multiplatform option
           - '.*-amd64$'

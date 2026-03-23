@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: codeai-release-verify
+  namespace: kargo-project-codeai
+spec:
+  selector:
+    app.kubernetes.io/name: codeai-release-verify
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

@@ -1,7 +1,7 @@
 apiVersion: kargo.akuity.io/v1alpha1
 kind: Stage
 metadata:
-  name: test
+  name: review-infra-changes
   namespace: kargo-project-codeai
 spec:
   requestedFreight:
@@ -10,14 +10,7 @@ spec:
         name: codeai-image
       sources:
         stages:
-          - staging
-        requiredSoakTime: 30m
-  verification:
-    analysisTemplates:
-      - name: codeai-test-smoke
-    args:
-      - name: healthURL
-        value: http://test-cdo-dashboard.test.svc.cluster.local:3000/health_check
+          - test
   promotionTemplate:
     spec:
       vars:
@@ -28,7 +21,7 @@ spec:
         - name: capsuleRepo
           value: ghcr.io/code-dot-org/codeai-release-capsule
         - name: targetBranch
-          value: stage/${{ ctx.stage }}
+          value: stage/production
       steps:
         - uses: git-clone
           config:
@@ -42,7 +35,7 @@ spec:
         - uses: yaml-parse
           as: deployment-meta
           config:
-            path: ./src/apps/codeai/deployments/${{ ctx.stage }}/deployment.yaml
+            path: ./src/apps/codeai/deployments/production/deployment.yaml
             outputs:
               - name: envType
                 fromExpression: envType
@@ -51,13 +44,13 @@ spec:
         - uses: yaml-parse
           as: legacy-gate
           config:
-            path: ./src/warehouses/codeai/legacy-gitflow/test/merged/${{ imageFrom(vars.imageRepo).Tag }}.yaml
+            path: ./src/warehouses/codeai/legacy-gitflow/production/merged/${{ imageFrom(vars.imageRepo).Tag }}.yaml
             outputs:
               - name: mergedTag
                 fromExpression: tag
         - uses: git-clear
           config:
-            path: ./out/apps/codeai/deployments/${{ ctx.stage }}/deploy
+            path: ./out/apps/codeai/deployments/production/deploy
         - uses: oci-download
           config:
             imageRef: ${{ vars.capsuleRepo }}:${{ imageFrom(vars.imageRepo).Tag }}
@@ -124,7 +117,7 @@ spec:
           config:
             updates:
               - kind: Stage
-                name: test
+                name: review-infra-changes
                 values:
                   promotedImage:
                     repoURL: ${{ imageFrom(vars.imageRepo).RepoURL }}
@@ -151,10 +144,10 @@ spec:
         - uses: copy
           config:
             inPath: ./src/apps/codeai/kargo/templates/deploy
-            outPath: ./work/deployments/${{ ctx.stage }}/deploy
+            outPath: ./work/deployments/production/deploy
         - uses: yaml-update
           config:
-            path: ./work/deployments/${{ ctx.stage }}/deploy/kustomization.yaml
+            path: ./work/deployments/production/deploy/kustomization.yaml
             updates:
               - key: namespace
                 value: ${{ outputs['deployment-meta'].namespace }}
@@ -166,22 +159,22 @@ spec:
                   - ../../envTypes/${{ outputs['deployment-meta'].envType }}
         - uses: kustomize-set-image
           config:
-            path: ./work/deployments/${{ ctx.stage }}/deploy
+            path: ./work/deployments/production/deploy
             images:
               - image: code-dot-org
                 newName: ${{ vars.imageRepo }}
                 tag: ${{ imageFrom(vars.imageRepo).Tag }}
         - uses: kustomize-build
           config:
-            path: ./work/deployments/${{ ctx.stage }}/deploy
-            outPath: ./out/apps/codeai/deployments/${{ ctx.stage }}/deploy
+            path: ./work/deployments/production/deploy
+            outPath: ./out/apps/codeai/deployments/production/deploy
         - uses: copy
           config:
             inPath: ./src/apps/codeai/kargo/templates/release-metadata.yaml
-            outPath: ./out/apps/codeai/deployments/${{ ctx.stage }}/release-metadata.yaml
+            outPath: ./out/apps/codeai/deployments/production/release-metadata.yaml
         - uses: yaml-update
           config:
-            path: ./out/apps/codeai/deployments/${{ ctx.stage }}/release-metadata.yaml
+            path: ./out/apps/codeai/deployments/production/release-metadata.yaml
             updates:
               - key: release.gitCommit
                 value: ${{ outputs['verify-release'].verifiedGitCommit }}
@@ -203,12 +196,24 @@ spec:
           config:
             path: ./out
             message: |
-              Render test from OCI release capsule
+              Review production render from OCI release capsule
 
               image: ${{ imageFrom(vars.imageRepo).RepoURL }}:${{ imageFrom(vars.imageRepo).Tag }}
               digest: ${{ imageFrom(vars.imageRepo).Digest }}
               capsule: ${{ vars.capsuleRepo }}:${{ imageFrom(vars.imageRepo).Tag }}
         - uses: git-push
+          as: push
           config:
             path: ./out
-            branch: ${{ vars.targetBranch }}
+            generateTargetBranch: true
+        - uses: git-open-pr
+          as: open-pr
+          config:
+            repoURL: ${{ vars.gitopsRepo }}
+            sourceBranch: ${{ outputs.push.branch }}
+            targetBranch: ${{ vars.targetBranch }}
+            title: Review CodeAI production render for ${{ imageFrom(vars.imageRepo).Tag }}
+        - uses: git-wait-for-pr
+          config:
+            repoURL: ${{ vars.gitopsRepo }}
+            prNumber: ${{ outputs['open-pr'].pr.id }}
