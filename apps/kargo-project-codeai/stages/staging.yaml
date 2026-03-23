@@ -4,35 +4,84 @@ metadata:
   name: staging
   namespace: kargo-project-codeai
 spec:
+  vars:
+    - name: gitopsRepo
+      value: https://github.com/code-dot-org/k8s-gitops.git
+    - name: sourceRepo
+      value: https://github.com/code-dot-org/code-dot-org.git
+    - name: imageRepo
+      value: ghcr.io/code-dot-org/code-dot-org
+    - name: deployment
+      value: staging
+    - name: envType
+      value: staging
+    - name: targetBranch
+      value: stage/staging
+    - name: renderPath
+      value: apps/codeai/deployments/staging/deploy
+    - name: sourceCommit
+      value: ${{ commitFrom(vars.sourceRepo).ID }}
   requestedFreight:
     - origin:
         kind: Warehouse
-        name: kargo-project-codeai
+        name: codeai
       sources:
         direct: true
   promotionTemplate:
     spec:
-      vars:
-        - name: gitopsRepo
-          value: https://github.com/code-dot-org/k8s-gitops.git
       steps:
         - uses: git-clone
           config:
             repoURL: ${{ vars.gitopsRepo }}
             checkout:
               - branch: main
-                path: ./gitops
-        - uses: yaml-update
+                path: ./meta
+              - branch: ${{ vars.targetBranch }}
+                create: true
+                path: ./out
+        - uses: git-clone
           config:
-            path: ./gitops/apps/codeai/deployments/staging/values.yaml
-            updates:
-              - key: image
-                value: ghcr.io/code-dot-org/code-dot-org:${{ imageFrom("ghcr.io/code-dot-org/code-dot-org").Tag }}
+            repoURL: ${{ vars.sourceRepo }}
+            checkout:
+              - commit: ${{ vars.sourceCommit }}
+                path: ./src
+                sparse:
+                  - k8s/kustomize
+        - uses: git-clear
+          config:
+            path: ./out
+        - uses: copy
+          config:
+            inPath: ./meta/apps/codeai/kargo/templates/deploy
+            outPath: ./render/deploy
+        - uses: copy
+          config:
+            inPath: ./meta/apps/codeai/envTypes/${{ vars.envType }}
+            outPath: ./render/envType
+        - uses: copy
+          config:
+            inPath: ./meta/apps/codeai/envTypes/components
+            outPath: ./render/components
+        - uses: kustomize-set-image
+          config:
+            path: ./render/deploy
+            images:
+              - image: code-dot-org
+                newName: ${{ vars.imageRepo }}
+                tag: ${{ imageFrom(vars.imageRepo).Tag }}
+        - uses: kustomize-build
+          config:
+            path: ./render/deploy
+            outPath: ./out/${{ vars.renderPath }}
         - uses: git-commit
           config:
-            path: ./gitops
+            path: ./out
             message: |
-              Promote staging to ${{ imageFrom("ghcr.io/code-dot-org/code-dot-org").Tag }} [skip ci]
+              Render ${{ vars.deployment }} for ${{ vars.sourceCommit }} / ${{ imageFrom(vars.imageRepo).Tag }}
         - uses: git-push
           config:
-            path: ./gitops
+            path: ./out
+        - uses: argocd-update
+          config:
+            apps:
+              - name: codeai-staging

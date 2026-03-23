@@ -1,7 +1,7 @@
 apiVersion: kargo.akuity.io/v1alpha1
 kind: Stage
 metadata:
-  name: levelbuilder
+  name: review-infra-changes
   namespace: kargo-project-codeai
 spec:
   vars:
@@ -12,13 +12,13 @@ spec:
     - name: imageRepo
       value: ghcr.io/code-dot-org/code-dot-org
     - name: deployment
-      value: levelbuilder
+      value: production
     - name: envType
-      value: levelbuilder
+      value: production
     - name: targetBranch
-      value: stage/levelbuilder
+      value: stage/production
     - name: renderPath
-      value: apps/codeai/deployments/levelbuilder/deploy
+      value: apps/codeai/deployments/production/deploy
     - name: sourceCommit
       value: ${{ commitFrom(vars.sourceRepo).ID }}
   requestedFreight:
@@ -80,11 +80,20 @@ spec:
           config:
             path: ./out
             message: |
-              Render ${{ vars.deployment }} for ${{ vars.sourceCommit }} / ${{ imageFrom(vars.imageRepo).Tag }}
+              Review ${{ vars.deployment }} render for ${{ vars.sourceCommit }} / ${{ imageFrom(vars.imageRepo).Tag }}
         - uses: git-push
+          as: push
           config:
             path: ./out
-        - uses: argocd-update
+            generateTargetBranch: true
+        - uses: git-open-pr
+          as: open-pr
           config:
-            apps:
-              - name: codeai-levelbuilder
+            repoURL: ${{ vars.gitopsRepo }}
+            sourceBranch: ${{ outputs.push.branch }}
+            targetBranch: ${{ vars.targetBranch }}
+            title: Review ${{ vars.deployment }} render
+        - uses: git-wait-for-pr
+          config:
+            repoURL: ${{ vars.gitopsRepo }}
+            prNumber: ${{ outputs['open-pr'].pr.id }}
