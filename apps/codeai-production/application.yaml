@@ -1,0 +1,24 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: codeai-production
+  namespace: argocd
+  annotations:
+    kargo.akuity.io/authorized-stage: kargo-project-codeai:production
+  labels:
+    app.kubernetes.io/managed-by: kargo
+    kargo.akuity.io/project: kargo-project-codeai
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/code-dot-org/k8s-gitops.git
+    targetRevision: stage/production
+    path: apps/codeai/deployments/production/deploy
+    directory:
+      recurse: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: production
+  syncPolicy:
+    syncOptions:
+      - ServerSideApply=true

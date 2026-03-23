@@ -12,7 +12,6 @@ spec:
           - path: apps/codeai/deployments/staging/deployment.yaml
           - path: apps/codeai/deployments/test/deployment.yaml
           - path: apps/codeai/deployments/levelbuilder/deployment.yaml
-          - path: apps/codeai/deployments/production/deployment.yaml
   template:
     metadata:
       name: codeai-{{path.basename}}
