@@ -24,17 +24,21 @@ k8s-gitops/
       repos.yaml                  # configure application.yaml to load $app_name/*
 
     codeai/
-      applicationset.yaml         # define argocd apps for codeai deployments: deployments/*/deployment.yaml
+      applicationset.yaml         # define argocd apps for rendered CodeAI stage branches
 
       deployments/
         levelbuilder/             # codeai deployment levelbuilder
           deployment.yaml         # envType=levelbuilder, branch=levelbuilder
           values.yaml             # values.yaml for this deployment: dashboard_workers=27, RAILS_ENV=levelbuilder, etc
+          deploy/                 # rendered manifests committed to stage/levelbuilder
         ...
 
       envTypes/
         levelbuilder.values.yaml  # base values.yaml for all envType=levelbuilder
         ...
+
+    codeai-adhoc/
+      application.yaml           # adhoc deployment that still renders directly from source
 
     kargo/
       application.yaml            # argocd app for kargo itself
@@ -44,7 +48,7 @@ k8s-gitops/
       application.yaml            # argocd app for kargo project codeai
       project.yaml                # kargo project for codeai
       project-config.yaml         # kargo projectconfig for codeai
-      warehouse.yaml              # kargo warehouse for codeai
+      warehouse.yaml              # kargo warehouse for CodeAI build locks
       stages/
         levelbuilder.yaml         # kargo stage for codeai deployment levelbuilder
         ...
@@ -53,4 +57,3 @@ k8s-gitops/
 ## Bootstrap Cluster
 
 kubectl apply -f apps/app-of-apps/applicationset.yaml
-

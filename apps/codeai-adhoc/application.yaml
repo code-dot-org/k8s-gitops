@@ -1,0 +1,28 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: codeai-k8s-adhoc
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://github.com/code-dot-org/code-dot-org.git
+      targetRevision: k8s/adhoc
+      path: k8s/helm
+      helm:
+        releaseName: k8s-adhoc
+        valueFiles:
+          - $values/apps/codeai/envTypes/staging.values.yaml
+          - $values/apps/codeai/deployments/k8s-adhoc/values.yaml
+    - repoURL: https://github.com/code-dot-org/k8s-gitops.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: adhoc-k8s-adhoc
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true

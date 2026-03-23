@@ -7,33 +7,49 @@ spec:
   requestedFreight:
     - origin:
         kind: Warehouse
-        name: kargo-project-codeai
+        name: codeai-builds
       sources:
         stages:
-          - test
+          - review-infra-changes
+  vars:
+    - name: gitopsRepo
+      value: https://github.com/code-dot-org/k8s-gitops.git
+    - name: legacyEnv
+      value: production
+    - name: targetBranch
+      value: stage/production
+    - name: renderPath
+      value: apps/codeai/deployments/production/deploy
   promotionTemplate:
     spec:
-      vars:
-        - name: gitopsRepo
-          value: https://github.com/code-dot-org/k8s-gitops.git
       steps:
         - uses: git-clone
           config:
             repoURL: ${{ vars.gitopsRepo }}
             checkout:
+              - commit: ${{ commitFrom(vars.gitopsRepo, warehouse('codeai-builds')).ID }}
+                path: ./freight
+                sparse:
+                  - warehouses/codeai/builds/current.yaml
               - branch: main
-                path: ./gitops
-        - uses: yaml-update
+                path: ./gate
+                sparse:
+                  - warehouses/codeai/legacy-gitflow/production/merged
+              - branch: ${{ vars.targetBranch }}
+                path: ./out
+                sparse:
+                  - ${{ vars.renderPath }}
+        - uses: yaml-parse
+          as: build-lock
           config:
-            path: ./gitops/apps/codeai/deployments/production/values.yaml
-            updates:
-              - key: image
-                value: ghcr.io/code-dot-org/code-dot-org:${{ imageFrom("ghcr.io/code-dot-org/code-dot-org").Tag }}
-        - uses: git-commit
+            path: ./freight/warehouses/codeai/builds/current.yaml
+            outputs:
+              - name: releaseId
+                fromExpression: releaseId
+        - uses: yaml-parse
+          as: legacy-gate
           config:
-            path: ./gitops
-            message: |
-              Promote production to ${{ imageFrom("ghcr.io/code-dot-org/code-dot-org").Tag }} [skip ci]
-        - uses: git-push
-          config:
-            path: ./gitops
+            path: ./gate/warehouses/codeai/legacy-gitflow/${{ vars.legacyEnv }}/merged/${{ outputs['build-lock'].releaseId }}.yaml
+            outputs:
+              - name: mergedAt
+                fromExpression: mergedAt

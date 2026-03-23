@@ -1,7 +1,7 @@
 apiVersion: kargo.akuity.io/v1alpha1
 kind: Stage
 metadata:
-  name: test
+  name: review-infra-changes
   namespace: kargo-project-codeai
 spec:
   requestedFreight:
@@ -10,18 +10,16 @@ spec:
         name: codeai-builds
       sources:
         stages:
-          - staging
+          - levelbuilder
   vars:
     - name: gitopsRepo
       value: https://github.com/code-dot-org/k8s-gitops.git
-    - name: legacyEnv
-      value: test
     - name: renderDeployment
-      value: test
+      value: production
     - name: renderPath
-      value: apps/codeai/deployments/test/deploy
+      value: apps/codeai/deployments/production/deploy
     - name: targetBranch
-      value: stage/test
+      value: stage/production
   promotionTemplate:
     spec:
       steps:
@@ -36,12 +34,8 @@ spec:
               - branch: main
                 path: ./meta
                 sparse:
-                  - apps/codeai/deployments/test
+                  - apps/codeai/deployments/production
                   - apps/codeai/envTypes
-              - branch: main
-                path: ./gate
-                sparse:
-                  - warehouses/codeai/legacy-gitflow/test/merged
               - branch: ${{ vars.targetBranch }}
                 create: true
                 path: ./out
@@ -64,13 +58,6 @@ spec:
                 fromExpression: packaging.sourceRepo
               - name: sourcePath
                 fromExpression: packaging.sourcePath
-        - uses: yaml-parse
-          as: legacy-gate
-          config:
-            path: ./gate/warehouses/codeai/legacy-gitflow/${{ vars.legacyEnv }}/merged/${{ outputs['build-lock'].releaseId }}.yaml
-            outputs:
-              - name: mergedAt
-                fromExpression: mergedAt
         - uses: yaml-parse
           as: deployment-meta
           config:
@@ -105,8 +92,21 @@ spec:
         - uses: git-commit
           config:
             path: ./out
-            message: Render ${{ vars.renderDeployment }} for ${{ outputs['build-lock'].releaseId }}
+            message: Review ${{ vars.renderDeployment }} render for ${{ outputs['build-lock'].releaseId }}
         - uses: git-push
+          as: push
           config:
             path: ./out
+            generateTargetBranch: true
+        - uses: git-open-pr
+          as: open-pr
+          config:
+            repoURL: ${{ vars.gitopsRepo }}
+            createTargetBranch: true
+            sourceBranch: ${{ outputs.push.branch }}
             targetBranch: ${{ vars.targetBranch }}
+            title: Review CodeAI ${{ vars.renderDeployment }} render for ${{ outputs['build-lock'].releaseId }}
+        - uses: git-wait-for-pr
+          config:
+            repoURL: ${{ vars.gitopsRepo }}
+            prNumber: ${{ outputs['open-pr'].pr.id }}
