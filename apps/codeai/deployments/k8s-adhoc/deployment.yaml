@@ -1,3 +1,2 @@
 envType: staging
 namespace: adhoc-k8s-adhoc
-branch: k8s/adhoc
