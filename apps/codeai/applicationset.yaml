@@ -16,6 +16,8 @@ spec:
   template:
     metadata:
       name: codeai-{{name}}
+      annotations:
+        kargo.akuity.io/authorized-stage: 'kargo-project-codeai:{{name}}'
       labels:
         app.kubernetes.io/managed-by: kargo
         kargo.akuity.io/project: kargo-project-codeai

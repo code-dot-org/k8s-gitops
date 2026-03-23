@@ -66,6 +66,7 @@ spec:
                 value: ${{ outputs['freight'].imageRef }}
             outPath: ./out/manifests.yaml
         - uses: git-commit
+          as: rendered-commit
           config:
             path: ./out
             message: |
@@ -73,3 +74,11 @@ spec:
         - uses: git-push
           config:
             path: ./out
+        - uses: argocd-update
+          config:
+            apps:
+              - name: codeai-${{ vars.deployment }}
+                namespace: argocd
+                sources:
+                  - repoURL: ${{ vars.gitopsRepo }}
+                    desiredRevision: ${{ outputs['rendered-commit'].commit }}
