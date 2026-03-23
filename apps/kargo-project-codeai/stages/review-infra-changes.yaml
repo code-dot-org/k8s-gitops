@@ -24,6 +24,7 @@ spec:
     spec:
       steps:
         - uses: git-clone
+          as: gitops
           config:
             repoURL: ${{ vars.gitopsRepo }}
             checkout:
@@ -38,6 +39,7 @@ spec:
                   - apps/codeai/envTypes
               - branch: ${{ vars.targetBranch }}
                 create: true
+                as: production
                 path: ./out
                 sparse:
                   - ${{ vars.renderPath }}
@@ -90,15 +92,18 @@ spec:
                 value: ${{ outputs['build-lock'].imageRef }}@${{ outputs['build-lock'].imageDigest }}
                 literal: true
         - uses: git-commit
+          as: rendered-commit
           config:
             path: ./out
             message: Review ${{ vars.renderDeployment }} render for ${{ outputs['build-lock'].releaseId }}
         - uses: git-push
+          if: ${{ outputs['rendered-commit'].commit != outputs['gitops'].commits['production'] }}
           as: push
           config:
             path: ./out
             generateTargetBranch: true
         - uses: git-open-pr
+          if: ${{ outputs['rendered-commit'].commit != outputs['gitops'].commits['production'] }}
           as: open-pr
           config:
             repoURL: ${{ vars.gitopsRepo }}
@@ -107,12 +112,13 @@ spec:
             targetBranch: ${{ vars.targetBranch }}
             title: Review CodeAI ${{ vars.renderDeployment }} render for ${{ outputs['build-lock'].releaseId }}
         - uses: git-wait-for-pr
+          if: ${{ outputs['rendered-commit'].commit != outputs['gitops'].commits['production'] }}
           as: wait-for-pr
           config:
             repoURL: ${{ vars.gitopsRepo }}
             prNumber: ${{ outputs['open-pr'].pr.id }}
         - uses: yaml-parse
-          if: ${{ !outputs['wait-for-pr'].pr.merged }}
+          if: ${{ outputs['rendered-commit'].commit != outputs['gitops'].commits['production'] && !outputs['wait-for-pr'].pr.merged }}
           config:
             path: ./review-pr-must-be-merged.yaml
             outputs:
