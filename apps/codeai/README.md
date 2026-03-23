@@ -1,3 +1,8 @@
 This app's deployment definitions live under `deployments/`.
 
-Docker image tag writeback is done by the GitHub Actions workflow [`k8s-commit-image-ref-to-argocd.yml`](https://github.com/code-dot-org/code-dot-org/blob/staging/.github/workflows/k8s-commit-image-ref-to-argocd.yml).
+`main` holds deployment metadata and Helm values inputs. Argo CD deploys rendered
+output from the `stage/<deployment>` branches at
+`apps/codeai/deployments/<deployment>/deploy/`.
+
+Kargo now renders from the matching OCI release capsule instead of mutating
+`values.yaml` on `main`.
