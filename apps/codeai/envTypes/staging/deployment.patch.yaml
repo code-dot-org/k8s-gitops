@@ -13,3 +13,5 @@ spec:
               value: staging
             - name: RACK_ENV
               value: staging
+            - name: PERMIT_UNKNOWN_PROPERTIES_IN_CDO
+              value: "1"

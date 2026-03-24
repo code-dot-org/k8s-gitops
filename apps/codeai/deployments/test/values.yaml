@@ -1,4 +1,9 @@
 image: ghcr.io/code-dot-org/code-dot-org:git-744faf303270196a3f4f694eec8aa8dcc5f18994
+command: ["env", "PERMIT_UNKNOWN_PROPERTIES_IN_CDO=1", "bin/dashboard-server"]
+serviceAccountName: external-secrets-sa-test
+user:
+  uid: 0
+  gid: 0
 autoscaling:
   minReplicas: 1
   maxReplicas: 2
