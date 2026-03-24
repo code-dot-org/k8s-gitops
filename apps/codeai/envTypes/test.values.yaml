@@ -3,9 +3,6 @@ RAILS_ENV: test
 healthChecks:
   enabled: true
 require_external_secrets: true
-extraEnv:
-  - name: PERMIT_UNKNOWN_PROPERTIES_IN_CDO
-    value: "1"
 autoscaling:
   enabled: true
   minReplicas: 1

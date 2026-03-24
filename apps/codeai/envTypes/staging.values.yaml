@@ -3,6 +3,3 @@ RAILS_ENV: staging
 healthChecks:
   enabled: true
 require_external_secrets: true
-extraEnv:
-  - name: PERMIT_UNKNOWN_PROPERTIES_IN_CDO
-    value: "1"
