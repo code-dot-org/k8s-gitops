@@ -8,6 +8,7 @@ args:
     )"
     exec bin/dashboard-server
 serviceAccountName: external-secrets-sa-staging
+dnsName: studio-staging
 user:
   uid: 0
   gid: 0
