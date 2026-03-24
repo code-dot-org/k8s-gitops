@@ -1,4 +1,4 @@
-image: ghcr.io/code-dot-org/code-dot-org:git-68000b4a44f8452215270128a337effaa0605b98
+image: ghcr.io/code-dot-org/code-dot-org:git-1115c145bbf6fe9f9a934251a0f991d89dfddb90
 command: ["/bin/sh", "-lc"]
 args:
   - |
