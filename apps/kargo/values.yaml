@@ -1,9 +1,3 @@
-global:
-  systemResources:
-    namespace: kargo-system-resources
-  sharedResources:
-    namespace: kargo-shared-resources
-
 webhooks:
   # The Kargo chart otherwise expects cert-manager to mint webhook certs.
   register: false
