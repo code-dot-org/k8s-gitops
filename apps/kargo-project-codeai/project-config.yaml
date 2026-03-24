@@ -4,6 +4,12 @@ metadata:
   name: kargo-project-codeai
   namespace: kargo-project-codeai
 spec:
+  webhookReceivers:
+    - name: github-org-webhook
+      github:
+        # Synced from AWS Secrets Manager by OpenTofu + ESO.
+        secretRef:
+          name: github-org-webhook-secret
   promotionPolicies:
     - stage: staging
       autoPromotionEnabled: true
