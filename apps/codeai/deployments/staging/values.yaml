@@ -1,4 +1,5 @@
 image: ghcr.io/code-dot-org/code-dot-org:git-d8f09101014202d7868daec7d33c131f25a862c5
+command: ["env", "PERMIT_UNKNOWN_PROPERTIES_IN_CDO=1", "bin/dashboard-server"]
 autoscaling:
   maxReplicas: 1
 locals.yml:
