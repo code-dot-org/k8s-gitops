@@ -37,3 +37,8 @@ spec:
         - uses: git-push
           config:
             path: ./gitops
+        - uses: argocd-update
+          config:
+            apps:
+              - name: codeai-levelbuilder
+                namespace: argocd
