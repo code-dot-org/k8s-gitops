@@ -1,5 +1,12 @@
 image: ghcr.io/code-dot-org/code-dot-org:git-d8f09101014202d7868daec7d33c131f25a862c5
-command: ["env", "PERMIT_UNKNOWN_PROPERTIES_IN_CDO=1", "bin/dashboard-server"]
+command: ["/bin/sh", "-lc"]
+args:
+  - |
+    set -eu
+    eval "$(
+      ruby -ruri -rshellwords -e 'writer = URI(ENV.fetch("CDO_db_writer")); admin = URI(ENV.fetch("CDO_db_admin")); reader = URI(ENV.fetch("CDO_reporting_db_reader")); host = writer.host; port = (writer.port || 3306).to_s; cluster = host.split(".").first; json = ->(uri) { %({"username":"#{uri.user}","password":"#{uri.password}"}) }; vars = {"PERMIT_UNKNOWN_PROPERTIES_IN_CDO" => "1", "CDO_db_cluster_id" => cluster, "CDO_db_endpoint_writer" => host, "CDO_db_endpoint_writer_port" => port, "CDO_db_endpoint_proxy_writer" => host, "CDO_db_endpoint_proxy_writer_port" => port, "CDO_db_endpoint_proxy_reader" => host, "CDO_db_endpoint_proxy_reader_port" => port, "CDO_db_endpoint_proxy_reporting" => host, "CDO_db_endpoint_proxy_reporting_port" => port, "CDO_db_credential_admin" => json.call(admin), "CDO_db_credential_writer" => json.call(writer), "CDO_db_credential_reader" => json.call(reader)}; vars.each {|k, v| puts "export #{k}=#{Shellwords.escape(v)}"}'
+    )"
+    exec bin/dashboard-server
 serviceAccountName: external-secrets-sa-staging
 user:
   uid: 0
