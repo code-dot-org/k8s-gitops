@@ -1,5 +1,9 @@
 global:
+  systemResources:
+    namespace: kargo-system-resources
+    createNamespace: false
   sharedResources:
+    namespace: kargo-shared-resources
     createNamespace: false
 
 webhooks:
@@ -43,7 +47,11 @@ api:
       alb.ingress.kubernetes.io/ssl-redirect: "443"
       alb.ingress.kubernetes.io/backend-protocol: HTTP
 externalWebhooksServer:
-  enabled: false
+  enabled: true
+  host: kargo.k8s.code.org
+  tls:
+    enabled: false
+    terminatedUpstream: true
 
 webhooksServer:
   enabled: false
