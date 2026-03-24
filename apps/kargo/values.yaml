@@ -28,7 +28,6 @@ api:
     terminatedUpstream: true
   ingress:
     enabled: true
-    ingressClassName: alb
     pathType: Prefix
     tls:
       enabled: false
