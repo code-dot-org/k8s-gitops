@@ -1,4 +1,6 @@
 - Read README.md, it sketches the directory structure of this repo
+- Work on the branch you find unless instructed otherwise
+- If the current branch is `main`, you do not need to use a PR
 - Deployment is by ArgoCD, canonically at https://argocd.k8s.code.org
 - Promotion between codeai deployments is done by Kargo, canonically at https://kargo.k8s.code.org
 - This is the gitops repo for https://github.com/code-dot-org/code-dot-org
