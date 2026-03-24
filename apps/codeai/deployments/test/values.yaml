@@ -1,5 +1,6 @@
 image: ghcr.io/code-dot-org/code-dot-org:git-744faf303270196a3f4f694eec8aa8dcc5f18994
 autoscaling:
-  maxReplicas: 1
+  minReplicas: 1
+  maxReplicas: 2
 locals.yml:
   stack_name: test

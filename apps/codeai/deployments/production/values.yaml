@@ -1,7 +1,7 @@
 image: ghcr.io/code-dot-org/code-dot-org:git-2f8da32ddbdd305a4365ecea2fd7954fc93bd66e # updated by k8s-commit-to-kargo-warehouse.yml
 autoscaling:
   minReplicas: 1
-  maxReplicas: 1
+  maxReplicas: 2
 resources:
   requests:
     ephemeralStorage: 30Gi
