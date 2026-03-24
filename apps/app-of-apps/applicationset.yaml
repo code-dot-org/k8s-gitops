@@ -12,14 +12,14 @@ spec:
     # and passthrough almost its metadata/spec into the generated child app.
     - git:
         repoURL: https://github.com/code-dot-org/k8s-gitops.git
-        revision: main
+        revision: seth/kargo-org-webhook
         files:
           - path: apps/*/application.yaml
     # ApplicationSets cannot be passed through directly For each applicationset.yaml
     # we generate a wrapper Application that points at that directory.
     - git:
         repoURL: https://github.com/code-dot-org/k8s-gitops.git
-        revision: main
+        revision: seth/kargo-org-webhook
         files:
           - path: apps/*/applicationset.yaml
         # This fixed template is applied to applicationset.yaml, they do not support
@@ -33,7 +33,7 @@ spec:
               namespace: argocd
             source:
               repoURL: https://github.com/code-dot-org/k8s-gitops.git
-              targetRevision: main
+              targetRevision: seth/kargo-org-webhook
               path: 'apps/{{.path.basename}}'
               directory:
                 include: "applicationset.yaml"
