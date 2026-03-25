@@ -1,5 +1,4 @@
 RAILS_ENV: production
-dnsName: studio.production
 # dashboard_workers: 32
 healthChecks:
   enabled: true

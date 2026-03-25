@@ -1,5 +1,4 @@
 RAILS_ENV: levelbuilder
-dnsName: studio.levelbuilder
 # dashboard_workers: 27
 healthChecks:
   enabled: true
