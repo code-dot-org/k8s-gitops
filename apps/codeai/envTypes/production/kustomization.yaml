@@ -11,8 +11,6 @@ labels:
     includeTemplates: true
 patches:
   - path: deployment.patch.yaml
-  - path: ingress.dns-name.patch.yaml
-  - path: locals.stack_name.patch.yaml
   - path: horizontal-pod-autoscaler.patch.yaml
   # TODO: enable these when gitops envType values start setting dashboard_workers again.
   # - path: locals.yml.patch.yaml

@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  # TODO: right now we just ref the other repo, but different models of using kustomize
+  # will do different things here to get a reference to the base. In some cases it might be
+  # vendored or copied locally instead.
+  - git::https://github.com/code-dot-org/code-dot-org//k8s/kustomize/base?ref=staging
+components:
+  - ../../../envTypes/test
+patches:
+  - path: ingress.dns-name.patch.yaml
+  - path: locals.stack_name.patch.yaml
