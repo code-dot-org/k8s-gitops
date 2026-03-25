@@ -4,3 +4,4 @@ metadata:
   name: cdo-locals.yml
 data:
   stack_name: "autoscale-prod"
+  override_dashboard: "studio.production.k8s.code.org"

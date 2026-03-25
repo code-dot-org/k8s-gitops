@@ -4,3 +4,4 @@ metadata:
   name: cdo-locals.yml
 data:
   stack_name: "test"
+  override_dashboard: "studio.test.k8s.code.org"

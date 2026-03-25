@@ -1,7 +1,7 @@
 image: ghcr.io/code-dot-org/code-dot-org:git-687d6f015f963b17d8ad2a6f211fb9179fce6bfd # updated by k8s-commit-to-kargo-warehouse.yml
 command: ["env", "PERMIT_UNKNOWN_PROPERTIES_IN_CDO=1", "bin/dashboard-server"]
 serviceAccountName: external-secrets-sa-test
-dnsName: studio-test
+dnsName: studio.test
 user:
   uid: 0
   gid: 0
@@ -10,3 +10,4 @@ autoscaling:
   maxReplicas: 2
 locals.yml:
   stack_name: test
+  override_dashboard: studio.test.k8s.code.org

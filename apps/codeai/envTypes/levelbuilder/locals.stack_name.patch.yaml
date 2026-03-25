@@ -4,3 +4,4 @@ metadata:
   name: cdo-locals.yml
 data:
   stack_name: "levelbuilder"
+  override_dashboard: "studio.levelbuilder.k8s.code.org"

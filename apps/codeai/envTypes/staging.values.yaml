@@ -1,5 +1,5 @@
 RAILS_ENV: staging
-dnsName: studio-staging
+dnsName: studio.staging
 # dashboard_workers: 10
 healthChecks:
   enabled: true

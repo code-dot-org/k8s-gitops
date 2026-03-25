@@ -1,5 +1,5 @@
 RAILS_ENV: test
-dnsName: studio-test
+dnsName: studio.test
 # dashboard_workers: 65
 healthChecks:
   enabled: true
