@@ -3,4 +3,4 @@ kind: ConfigMap
 metadata:
   name: cdo-locals.yml
 data:
-  stack_name: "production"
+  stack_name: "autoscale-prod"
