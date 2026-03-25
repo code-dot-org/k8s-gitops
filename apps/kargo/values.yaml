@@ -1,3 +1,12 @@
+# We create these namespaces in kargo-external-secret-stores.tf in code-dot-org
+# because Tofu manages SecretStores and ExternalSecrets inside them and it 
+# got here first ;-)
+global:
+  systemResources:
+    createNamespace: false
+  sharedResources:
+    createNamespace: false
+
 webhooks:
   # The Kargo chart otherwise expects cert-manager to mint webhook certs.
   register: false
