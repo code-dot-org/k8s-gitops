@@ -7,7 +7,6 @@ spec:
     spec:
       containers:
         - name: dashboard
-          image: ghcr.io/code-dot-org/code-dot-org:replace-me
           env:
             - name: RAILS_ENV
               value: levelbuilder
