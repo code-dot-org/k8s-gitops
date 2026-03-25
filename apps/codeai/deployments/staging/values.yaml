@@ -8,7 +8,7 @@ args:
     )"
     exec bin/dashboard-server
 serviceAccountName: external-secrets-sa-staging
-dnsName: studio-staging
+dnsName: studio.staging
 user:
   uid: 0
   gid: 0
@@ -16,4 +16,5 @@ autoscaling:
   maxReplicas: 1
 locals.yml:
   stack_name: staging
+  override_dashboard: studio.staging.k8s.code.org
 # argocd-detect-probe: k8s-gitops run 10 at 2026-03-22T10:10:09Z

@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cdo-locals.yml
+data:
+  stack_name: "staging"
+  override_dashboard: "studio.staging.k8s.code.org"

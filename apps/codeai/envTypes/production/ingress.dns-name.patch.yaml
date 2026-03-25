@@ -3,4 +3,4 @@ kind: Ingress
 metadata:
   name: cdo-dashboard
   labels:
-    code.ai/dns-name: studio-production
+    code.ai/dns-name: studio.production
