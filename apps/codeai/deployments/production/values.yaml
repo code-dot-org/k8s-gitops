@@ -1,4 +1,4 @@
-image: ghcr.io/code-dot-org/code-dot-org:git-b081eac032e1c6df2099f0dff0711d73613ae874 # updated by k8s-commit-to-kargo-warehouse.yml
+image: ghcr.io/code-dot-org/code-dot-org:git-01518365e69877952e1505b0883eaa53511cc580 # updated by k8s-commit-to-kargo-warehouse.yml
 dnsName: studio.production
 autoscaling:
   minReplicas: 1
