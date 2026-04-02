@@ -1,4 +1,4 @@
-image: ghcr.io/code-dot-org/code-dot-org:git-87360954be06d5174da2fe20b53839e8a5d9fe5c # updated by k8s-commit-to-kargo-warehouse.yml
+image: ghcr.io/code-dot-org/code-dot-org:git-b1ff824a7652db45839eb360cbf58741edb1677f # updated by k8s-commit-to-kargo-warehouse.yml
 command: ["/bin/sh", "-lc"]
 args:
   - |
