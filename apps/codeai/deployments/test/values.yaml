@@ -1,4 +1,4 @@
-image: ghcr.io/code-dot-org/code-dot-org:git-9e855560557d7c270d128ad5492615669cee5b7b # updated by k8s-commit-to-kargo-warehouse.yml
+image: ghcr.io/code-dot-org/code-dot-org:git-6055b2fa8f86904ecc2b0e9025c0a0c8ce5202ef # updated by k8s-commit-to-kargo-warehouse.yml
 command: ["env", "PERMIT_UNKNOWN_PROPERTIES_IN_CDO=1", "bin/dashboard-server"]
 serviceAccountName: external-secrets-sa-test
 dnsName: studio.test
