@@ -407,3 +407,52 @@ on:
 The chart already supports appending extra objects. That let us keep the fix in
 Git, scoped tightly to the permission actually missing, without forking the OCI
 chart or hand-patching live RBAC.
+
+## 2026-04-03: move ESO drift suppression into the app specs
+
+### What happened
+
+The earlier fix for ESO drift rendered the defaulted fields explicitly in the
+charts. That works, but it is verbose, and it forces the charts to mirror ESO's
+current defaulting behavior in detail.
+
+The actual noisy apps were:
+
+- `dex`
+- `kargo-secrets`
+- `standard-envtypes`
+
+### What was tried
+
+- render ESO defaulted fields explicitly in every affected chart
+
+### What worked
+
+Add app-level `ignoreDifferences` using:
+
+- `managedFieldsManagers: [external-secrets]`
+
+and add:
+
+- `RespectIgnoreDifferences=true`
+
+to the same app's sync options.
+
+This was done only on the affected apps, not globally.
+
+### What did not
+
+- a global ignore in Argo config
+
+That is broader than necessary and risks hiding drift in apps that were not the
+problem here.
+
+### Why this change won
+
+It is narrower than a global config and less ugly than hard-coding every ESO
+defaulted field into every chart. The scope stays with the apps that actually
+had noisy ESO-managed resources.
+
+As part of this change, the earlier explicit ESO default-field additions were
+backed back out of the affected chart templates, since the app-level ignore is
+now carrying that job.

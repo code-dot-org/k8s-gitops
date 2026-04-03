@@ -120,6 +120,7 @@ Refresh `/Users/seth/src/k8s-gitops/apps/infra/implementation-plan.md` first if 
 - [x] Identify the residual post-bootstrap drift instead of treating it as stale status.
 - [x] Match ESO defaulted fields in the copied `dex` and `kargo-secrets` charts.
 - [x] Mirror those ESO drift fixes back into `code-dot-org` legacy charts.
+- [x] Replace the explicit ESO default-field rendering with app-level `ignoreDifferences` on the noisy apps, and back those extra fields back out of the charts.
 - [x] Match the `networking` `LoadBalancerConfiguration` defaulted `alpnPolicy`.
 - [x] Ignore diff churn for the AWS Load Balancer Controller webhook TLS Secret in the `networking` app.
 - [x] Validate the affected `k8s-gitops` charts after those drift fixes.
