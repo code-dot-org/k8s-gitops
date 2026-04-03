@@ -19,6 +19,7 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    # Wait out the first bootstrap race while Kargo is still establishing its CRDs.
     retry:
       limit: 6
     syncOptions:
