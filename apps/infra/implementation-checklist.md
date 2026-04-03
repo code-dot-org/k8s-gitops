@@ -110,5 +110,5 @@ Refresh `/Users/seth/src/k8s-gitops/apps/infra/implementation-plan.md` first if 
 - [x] Verify `kargo` and the `codeai` wrapper app both land in the second non-`infra` group.
 - [x] Verify the internal `infra` child apps still follow the existing `0/1/2/3` order.
 - [x] Verify repo secrets from the moved `repos.yaml` appear in `argocd`.
-- [ ] Verify `apps/infra/argocd/application.yaml` becomes healthy and manages the same Argo resources as the bootstrap release.
+- [x] Verify `apps/infra/argocd/application.yaml` becomes healthy and manages the same Argo resources as the bootstrap release.
 - [ ] Verify the live application controller stays `Ready` through the initial infra sync without fresh OOMs.

@@ -104,6 +104,10 @@ argo-cd:
         alb.ingress.kubernetes.io/ssl-redirect: "443"
         alb.ingress.kubernetes.io/backend-protocol: HTTP
 
+  # TODO: this request/limit was randomly set by Codex when it noticed Fargate
+  # OOM killing our pod. It just copied repoServer which WAS set via
+  # benchmarking, but its a totally different task. We should profile the
+  # correct size for this instance.
   controller:
     resources:
       requests:
