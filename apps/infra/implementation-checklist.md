@@ -123,7 +123,7 @@ Refresh `/Users/seth/src/k8s-gitops/apps/infra/implementation-plan.md` first if 
 - [x] Match the `networking` `LoadBalancerConfiguration` defaulted `alpnPolicy`.
 - [x] Ignore diff churn for the AWS Load Balancer Controller webhook TLS Secret in the `networking` app.
 - [x] Validate the affected `k8s-gitops` charts after those drift fixes.
-- [ ] Push the drift-fix `k8s-gitops` changes and refresh the affected Argo apps.
-- [ ] Reconcile `networking`, `dex`, `kargo-secrets`, and `standard-envtypes` back to `Synced`.
-- [ ] Clear the stale `kargo` sync operation and let step 2 finish converging cleanly.
-- [ ] Grant `kargo-controller` the CRD-discovery RBAC it is missing.
+- [x] Push the drift-fix `k8s-gitops` changes and refresh the affected Argo apps.
+- [x] Reconcile `networking`, `dex`, `kargo-secrets`, and `standard-envtypes` back to `Synced`.
+- [x] Clear the stale `kargo` sync operation and let step 2 finish converging cleanly.
+- [x] Grant `kargo-controller` the CRD-discovery RBAC it is missing.
