@@ -90,6 +90,8 @@ Refresh `/Users/seth/src/k8s-gitops/apps/infra/implementation-plan.md` first if 
 - [x] Refresh `apps/infra/implementation-plan.md` again if the design changes materially.
 - [x] Refresh this checklist again if the design changes materially.
 - [x] Update `README.md` so `apps/argocd` is gone and repo secrets are documented under `apps/infra/argocd/chart/templates/`.
+- [x] Add the systemic-fix documentation rule to `apps/infra/implementation-plan.md`.
+- [x] Backfill `apps/infra/implementation-notes-things-changed.md` for the systemic fixes already made during this rollout.
 
 ## Final validation and rollout
 
@@ -124,3 +126,4 @@ Refresh `/Users/seth/src/k8s-gitops/apps/infra/implementation-plan.md` first if 
 - [ ] Push the drift-fix `k8s-gitops` changes and refresh the affected Argo apps.
 - [ ] Reconcile `networking`, `dex`, `kargo-secrets`, and `standard-envtypes` back to `Synced`.
 - [ ] Clear the stale `kargo` sync operation and let step 2 finish converging cleanly.
+- [ ] Grant `kargo-controller` the CRD-discovery RBAC it is missing.

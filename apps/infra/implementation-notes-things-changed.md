@@ -360,3 +360,50 @@ in the `networking` `Application`.
 The chart is generating cert bytes during render. That is not meaningful drift
 for GitOps purposes. Ignoring only those generated fields is narrower and less
 damaging than ignoring the whole resources.
+
+## 2026-04-03: grant Kargo controller CRD discovery explicitly
+
+### What happened
+
+After the bootstrap and infra rollout were fixed, the top-level `kargo` app was
+still stuck `Progressing` because `kargo-controller` was crashing.
+
+The concrete error was:
+
+- `error initializing Kargo controller manager: unable to determine if Argo Rollouts is installed: Unauthorized`
+
+Checking the effective RBAC for
+`system:serviceaccount:kargo:kargo-controller` showed:
+
+- it could not `list customresourcedefinitions.apiextensions.k8s.io`
+
+### What was tried
+
+- chase the problem as stale rollout residue from the earlier deep clean
+- clear the stale `kargo-controller` service account wait
+- restart the Argo application controller
+
+Those steps were useful, but they only exposed the real failure more clearly.
+
+### What worked
+
+Use the Kargo chart's `extraObjects` hook to add a narrow ClusterRole and
+ClusterRoleBinding granting the controller:
+
+- `get`
+- `list`
+- `watch`
+
+on:
+
+- `customresourcedefinitions.apiextensions.k8s.io`
+
+### What did not
+
+- pretending this was still only a stale sync operation
+
+### Why this change won
+
+The chart already supports appending extra objects. That let us keep the fix in
+Git, scoped tightly to the permission actually missing, without forking the OCI
+chart or hand-patching live RBAC.
