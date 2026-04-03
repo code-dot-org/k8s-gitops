@@ -3,8 +3,6 @@ kind: Application
 metadata:
   name: kargo
   namespace: argocd
-  labels:
-    code.org/bootstrap-group: post-infra
 spec:
   project: default
   sources:

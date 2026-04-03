@@ -21,6 +21,10 @@ The legacy Helm releases in `helm.tf` remain behind `deploy_helm_charts`, which 
   - release name `argocd`
   - namespace `argocd`
   - chart path `<temp checkout>/apps/infra/argocd/chart`
+- Pass a bootstrap-only values override that disables the ESO-dependent
+  `ExternalSecret` and `Password` templates in the Argo wrapper chart.
+- Leave those templates enabled by default in Git so the Argo-managed steady
+  state still creates them after infra installs ESO and generator CRDs.
 - Keep this bootstrap release managed in Tofu after Argo self-management starts.
 - Make `argocd-app-of-apps-bootstrap.tf` depend on the bootstrap release.
 - Keep `deploy_helm_charts` controlling only the legacy `helm.tf` releases.
@@ -62,15 +66,13 @@ The legacy Helm releases in `helm.tf` remain behind `deploy_helm_charts`, which 
   - `code.org/bootstrap-group`
 - Label the top-level passthrough `Application`s directly in Git:
   - `apps/infra/application.yaml`: `code.org/bootstrap-group=infra`
-  - `apps/kargo/application.yaml`: `code.org/bootstrap-group=post-infra`
-- Update `apps/app-of-apps/applicationset.yaml` so wrapper `Application`s generated from `apps/*/applicationset.yaml` are labeled:
-  - `code.org/bootstrap-group=post-infra`
+- Do not add `post-infra` labels to `kargo` or generated wrapper apps. Everything not labeled `infra` belongs to the second step.
 - Add `spec.strategy` to `apps/app-of-apps/applicationset.yaml`:
   - `type: RollingSync`
   - `deletionOrder: Reverse`
   - steps:
     - `code.org/bootstrap-group In [infra]`
-    - `code.org/bootstrap-group In [post-infra]`
+    - `code.org/bootstrap-group NotIn [infra]`
 - Do not use top-level sync-wave annotations for `infra`, `kargo`, or wrapper apps. `RollingSync` is the top-level ordering mechanism.
 - Leave passthrough behavior for top-level `application.yaml` files unchanged apart from the new bootstrap-group label.
 
@@ -99,7 +101,7 @@ The legacy Helm releases in `helm.tf` remain behind `deploy_helm_charts`, which 
   - confirm `apps/app-of-apps/applicationset.yaml` includes:
     - Progressive Sync enablement assumptions
     - `RollingSync` strategy
-    - `code.org/bootstrap-group=post-infra` on generated wrapper apps
+    - second step expressed as `code.org/bootstrap-group NotIn [infra]`
   - confirm `apps/infra/argocd/chart/values.yaml` includes the restored:
     - `resource.customizations.health.argoproj.io_Application`
 - `code-dot-org`
@@ -110,8 +112,8 @@ The legacy Helm releases in `helm.tf` remain behind `deploy_helm_charts`, which 
     - no legacy `helm.tf` releases
 - Live ordering
   - top-level `infra` app syncs first and reaches `Healthy`
-  - only after that does the `post-infra` group proceed
-  - `kargo` and the `codeai` wrapper app are both in the `post-infra` group
+  - only after that does the non-`infra` group proceed
+  - `kargo` and the `codeai` wrapper app are both in that second group
   - inside `infra`, child apps still follow the existing `0/1/2/3` order
 - Live bootstrap
   - repo secrets from the moved `repos.yaml` appear in `argocd`
@@ -122,6 +124,6 @@ The legacy Helm releases in `helm.tf` remain behind `deploy_helm_charts`, which 
 - The bootstrap chart source comes from a shallow sparse clone of `k8s-gitops`, not the old local `infra/argocd` chart in `code-dot-org`.
 - Keeping the bootstrap `helm_release` managed in Tofu after Argo self-management starts is acceptable.
 - All top-level wrapper apps generated from `applicationset.yaml` may safely run after infra; current impact is `codeai`.
-- `kargo` and `codeai` may sync together in the `post-infra` group. No further top-level ordering between those two is required for this plan.
+- `kargo` and `codeai` may sync together in the second non-`infra` group. No further top-level ordering between those two is required for this plan.
 - The `argoproj.io/Application` health snippet should be copied from the Argo docs as-is unless there is a concrete reason to simplify it.
 - The source of truth for that snippet is the stable Argo docs `Argocd App` section, not an older local copy.

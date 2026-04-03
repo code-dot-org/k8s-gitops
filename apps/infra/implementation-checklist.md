@@ -52,12 +52,11 @@ Refresh `/Users/seth/src/k8s-gitops/apps/infra/implementation-plan.md` first if 
 ## Top-level sequencing via `RollingSync`
 
 - [x] Add `code.org/bootstrap-group=infra` to `apps/infra/application.yaml`.
-- [x] Add `code.org/bootstrap-group=post-infra` to `apps/kargo/application.yaml`.
-- [x] Update `apps/app-of-apps/applicationset.yaml` so wrapper `Application`s generated from `apps/*/applicationset.yaml` are labeled `code.org/bootstrap-group=post-infra`.
+- [x] Do not add `post-infra` labels to `apps/kargo/application.yaml` or generated wrapper apps.
 - [x] Add `spec.strategy.type: RollingSync` to `apps/app-of-apps/applicationset.yaml`.
 - [x] Add `spec.strategy.deletionOrder: Reverse` to `apps/app-of-apps/applicationset.yaml`.
 - [x] Add a first `RollingSync` step that matches `code.org/bootstrap-group In [infra]`.
-- [x] Add a second `RollingSync` step that matches `code.org/bootstrap-group In [post-infra]`.
+- [x] Add a second `RollingSync` step that matches `code.org/bootstrap-group NotIn [infra]`.
 - [x] Keep the internal `apps/infra/*` sync-wave annotations unchanged.
 - [x] Do not add top-level sync-wave annotations for `infra`, `kargo`, or generated wrapper apps.
 
@@ -67,6 +66,7 @@ Refresh `/Users/seth/src/k8s-gitops/apps/infra/implementation-plan.md` first if 
 - [x] Restore `resource.customizations.health.argoproj.io_Application` under `argo-cd.configs.cm` in the copied Argo chart values.
 - [x] Use the stable Argo docs `Argocd App` Lua snippet without changing its behavior.
 - [x] Keep the existing Kargo `Project` health customization in place.
+- [x] Add a bootstrap gate in the Argo wrapper chart so the ESO-dependent templates can be disabled for the one-time tofu bootstrap.
 
 ## `code-dot-org` bootstrap changes
 
@@ -74,6 +74,7 @@ Refresh `/Users/seth/src/k8s-gitops/apps/infra/implementation-plan.md` first if 
 - [x] Make `argocd-bootstrap.tf` fetch the `k8s-gitops` default branch with a shallow sparse clone limited to `apps/infra/argocd/`.
 - [x] Point the bootstrap `helm_release` at the sparse-cloned `apps/infra/argocd/chart`.
 - [x] Keep the bootstrap release name `argocd` and namespace `argocd`.
+- [x] Pass the bootstrap-only values override that disables the ESO-dependent Argo wrapper templates.
 - [x] Keep the bootstrap `helm_release` managed in Tofu after Argo self-management starts.
 - [x] Make `argocd-app-of-apps-bootstrap.tf` depend on the bootstrap `helm_release`.
 - [x] Keep `deploy_helm_charts` controlling only the legacy `helm.tf` releases.
@@ -82,8 +83,8 @@ Refresh `/Users/seth/src/k8s-gitops/apps/infra/implementation-plan.md` first if 
 ## Docs and tracking files
 
 - [x] Rewrite `apps/infra/implementation-plan.md` for the bootstrap-and-`RollingSync` design.
-- [ ] Refresh `apps/infra/implementation-plan.md` again if the design changes materially.
-- [ ] Refresh this checklist again if the design changes materially.
+- [x] Refresh `apps/infra/implementation-plan.md` again if the design changes materially.
+- [x] Refresh this checklist again if the design changes materially.
 - [x] Update `README.md` so `apps/argocd` is gone and repo secrets are documented under `apps/infra/argocd/chart/templates/`.
 
 ## Final validation and rollout
@@ -94,15 +95,15 @@ Refresh `/Users/seth/src/k8s-gitops/apps/infra/implementation-plan.md` first if 
 - [x] Confirm `apps/app-of-apps/applicationset.yaml` contains the `RollingSync` strategy and wrapper-app `code.org/bootstrap-group` label.
 - [x] Confirm `apps/infra/argocd/chart/values.yaml` contains `applicationsetcontroller.enable.progressive.syncs: "true"`.
 - [x] Confirm `apps/infra/argocd/chart/values.yaml` contains `resource.customizations.health.argoproj.io_Application`.
-- [ ] Commit the `k8s-gitops` changes.
-- [ ] Push the branch or `main`, as appropriate.
+- [x] Commit the `k8s-gitops` changes.
+- [x] Push the branch or `main`, as appropriate.
 - [x] Update `code-dot-org` with the bootstrap changes.
 - [x] Run `tofu validate` in `/Users/seth/src/code-dot-org/k8s/tofu/codeai-k8s/cluster-infra-argocd`.
 - [ ] Rebootstrap Argo and `app-of-apps` from `code-dot-org`.
 - [ ] Refresh the Argo `infra` application after the bootstrap apply.
 - [ ] Sync the Argo `infra` application if refresh does not move it to the new Git revision.
-- [ ] Verify top-level `infra` reaches `Healthy` before the `post-infra` group proceeds.
-- [ ] Verify `kargo` and the `codeai` wrapper app both land in the `post-infra` group.
+- [ ] Verify top-level `infra` reaches `Healthy` before the non-`infra` group proceeds.
+- [ ] Verify `kargo` and the `codeai` wrapper app both land in the second non-`infra` group.
 - [ ] Verify the internal `infra` child apps still follow the existing `0/1/2/3` order.
 - [ ] Verify repo secrets from the moved `repos.yaml` appear in `argocd`.
 - [ ] Verify `apps/infra/argocd/application.yaml` becomes healthy and manages the same Argo resources as the bootstrap release.
