@@ -25,7 +25,14 @@ spec:
         # This fixed template is applied to applicationset.yaml, they do not support
         # passthrough.
         template:
-          metadata: {}
+          metadata:
+            finalizers:
+              - >-
+                {{if eq "apps/app-of-apps/applicationset.yaml" (printf "%s/%s" .path.path .path.filename)}}
+                resources-finalizer.argocd.argoproj.io/background
+                {{else}}
+                resources-finalizer.argocd.argoproj.io
+                {{end}}
           spec:
             project: default
             destination:
