@@ -15,24 +15,19 @@ spec:
         revision: main
         files:
           - path: mimic/apps/*/application.yaml
-    # ApplicationSets cannot be passed through directly For each applicationset.yaml
+    # ApplicationSets cannot be passed through directly. For each applicationset.yaml
     # we generate a wrapper Application that points at that directory.
     - git:
         repoURL: https://github.com/code-dot-org/k8s-gitops.git
         revision: main
         files:
           - path: mimic/apps/*/applicationset.yaml
+          - path: mimic/apps/app-of-apps/applicationset.yaml
+            exclude: true
         # This fixed template is applied to applicationset.yaml, they do not support
         # passthrough.
         template:
-          metadata:
-            finalizers:
-              - |-
-                {{- if eq "mimic/apps/app-of-apps/applicationset.yaml" (printf "%s/%s" .path.path .path.filename) -}}
-                resources-finalizer.argocd.argoproj.io/background
-                {{- else -}}
-                resources-finalizer.argocd.argoproj.io
-                {{- end -}}
+          metadata: {}
           spec:
             project: default
             destination:
