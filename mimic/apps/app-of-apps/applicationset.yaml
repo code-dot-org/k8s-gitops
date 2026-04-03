@@ -61,4 +61,12 @@ spec:
     {{- if or (hasKey .spec "source") (hasKey .spec "sources") }}
     metadata: {{ .metadata | toJson }}
     spec: {{ omit .spec "project" | toJson }}
+    {{- else if eq .path.path "mimic/apps/app-of-apps/applicationset.yaml" }}
+    metadata:
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io/background
+    spec:
+      info:
+        - name: templatePatchMarker
+          value: self-appset-background-finalizer
     {{- end }}
