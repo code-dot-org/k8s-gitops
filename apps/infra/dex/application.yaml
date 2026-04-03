@@ -10,8 +10,14 @@ spec:
   ignoreDifferences:
     - group: external-secrets.io
       kind: ExternalSecret
-      managedFieldsManagers:
-        - external-secrets
+      jsonPointers:
+        - /spec/target/deletionPolicy
+        - /spec/target/template/engineVersion
+        - /spec/target/template/mergePolicy
+      jqPathExpressions:
+        - .spec.data[]?.remoteRef.conversionStrategy
+        - .spec.data[]?.remoteRef.decodingStrategy
+        - .spec.data[]?.remoteRef.metadataPolicy
   sources:
     - repoURL: https://github.com/code-dot-org/k8s-gitops.git
       targetRevision: main

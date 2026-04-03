@@ -428,9 +428,17 @@ The actual noisy apps were:
 
 ### What worked
 
-Add app-level `ignoreDifferences` using:
+The first app-level attempt used:
 
 - `managedFieldsManagers: [external-secrets]`
+
+That did not work here, because the live `ExternalSecret` objects had
+`metadata.managedFields: null`, so Argo had no manager entries to match.
+
+The working app-level variant was:
+
+- explicit `jsonPointers` for the defaulted scalar fields
+- explicit `jqPathExpressions` for the defaulted list-item fields
 
 and add:
 
@@ -451,7 +459,8 @@ problem here.
 
 It is narrower than a global config and less ugly than hard-coding every ESO
 defaulted field into every chart. The scope stays with the apps that actually
-had noisy ESO-managed resources.
+had noisy ESO-managed resources, and it does not rely on managed-fields data
+being present on the live CRs.
 
 As part of this change, the earlier explicit ESO default-field additions were
 backed back out of the affected chart templates, since the app-level ignore is
