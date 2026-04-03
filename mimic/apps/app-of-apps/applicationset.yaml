@@ -61,7 +61,7 @@ spec:
     {{- if or (hasKey .spec "source") (hasKey .spec "sources") }}
     metadata: {{ .metadata | toJson }}
     spec: {{ omit .spec "project" | toJson }}
-    {{- else if eq .path.path "mimic/apps/app-of-apps/applicationset.yaml" }}
+    {{- else if and (eq .path.path "mimic/apps/app-of-apps") (eq .path.filename "applicationset.yaml") }}
     metadata:
       finalizers:
         - resources-finalizer.argocd.argoproj.io/background
