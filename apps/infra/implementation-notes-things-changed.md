@@ -466,3 +466,46 @@ had noisy ESO-managed resources.
 As part of this change, the earlier explicit ESO default-field additions were
 backed back out of the affected chart templates, since the app-level ignore is
 now carrying that job.
+
+## 2026-04-03: wire the repo-server timeouts through the supported chart keys
+
+### What happened
+
+`codeai-staging` and `codeai-test` were still failing manifest generation with:
+
+- `git fetch origin --tags --force --prune failed timeout after 1m30s`
+
+At the same time, the chart already had:
+
+- `server.repo.server.timeout.seconds: "300"`
+- `controller.repo.server.timeout.seconds: "300"`
+
+and a local attempt to set:
+
+- `repoServer.extraEnv: ARGOCD_EXEC_TIMEOUT=10m`
+
+### What was tried
+
+- raising only the controller/server repo RPC timeouts
+- assuming `repoServer.extraEnv` would reach the repo-server pod
+
+### What worked
+
+- set `configs.params.reposerver.git.request.timeout: "300s"`
+- set `repoServer.env` rather than `repoServer.extraEnv`
+- set `ARGOCD_EXEC_TIMEOUT=600s` there
+
+### What did not
+
+- `repoServer.extraEnv`
+
+That key is not used by the `argo-cd` `9.4.11` chart for repo-server.
+
+### Why this change won
+
+For Argo CD `v3.3.4`, `git fetch` is shelled out through the generic exec path,
+and the upstream maintainer answer in discussion `#21054` confirms that
+`ARGOCD_EXEC_TIMEOUT` controls that fetch timeout path. The chart also already
+has a first-class cmd-params key for `reposerver.git.request.timeout`, so the
+clean fix is to set both through the supported wiring instead of relying on a
+dead values key.

@@ -19,13 +19,15 @@ argo-cd:
       # Progressive Syncs are alpha and must be explicitly enabled.
       applicationsetcontroller.enable.progressive.syncs: "true"
 
-      # We raised both after codeai-staging/codeai-test hit:
+      # We raised the repo-server RPC and git request timeouts after
+      # codeai-staging/codeai-test hit:
       #   ComparisonError: Failed to load target state: failed to generate
       #   manifest for source 1 of 2: rpc error: code = DeadlineExceeded
       #   desc = context deadline exceeded
-      # Default is 60s for each.
+      # The RPC defaults are 60s. The git request timeout defaults to 15s.
       server.repo.server.timeout.seconds: "300"
       controller.repo.server.timeout.seconds: "300"
+      reposerver.git.request.timeout: "300s"
     cm:
       url: https://argocd.k8s.code.org
 
@@ -118,9 +120,11 @@ argo-cd:
         memory: 4Gi
 
   repoServer:
-    extraEnv:
+    env:
+      # `git fetch` is shelled out through repo-server's exec path in Argo CD
+      # v3.3.4, so raise the 90s default exec timeout too.
       - name: ARGOCD_EXEC_TIMEOUT
-        value: 10m
+        value: 600s
     resources:
       requests:
         cpu: 1000m

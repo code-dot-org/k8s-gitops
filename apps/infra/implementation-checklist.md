@@ -114,6 +114,7 @@ Refresh `/Users/seth/src/k8s-gitops/apps/infra/implementation-plan.md` first if 
 - [x] Verify repo secrets from the moved `repos.yaml` appear in `argocd`.
 - [x] Verify `apps/infra/argocd/application.yaml` becomes healthy and manages the same Argo resources as the bootstrap release.
 - [x] Verify the live application controller stays `Ready` through the initial infra sync without fresh OOMs.
+- [x] Raise the Argo repo-server git-fetch and exec timeouts using the supported chart keys after verifying the live timeout path.
 
 ## Post-bootstrap drift cleanup
 
