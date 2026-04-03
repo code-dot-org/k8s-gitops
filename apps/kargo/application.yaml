@@ -15,6 +15,11 @@ spec:
     - repoURL: https://github.com/code-dot-org/k8s-gitops.git
       targetRevision: main
       ref: values
+    - repoURL: https://github.com/code-dot-org/k8s-gitops.git
+      targetRevision: main
+      path: apps/kargo/projects/codeai
+      directory:
+        include: application.yaml
   destination:
     server: https://kubernetes.default.svc
     namespace: kargo

@@ -39,18 +39,18 @@ k8s-gitops/
     kargo/
       application.yaml            # argocd app for kargo itself
       values.yaml                 # helm values for kargo install
-
-    kargo-project-codeai/
-      application.yaml            # argocd app for kargo project codeai
-      project.yaml                # kargo project for codeai
-      project-config.yaml         # kargo projectconfig for codeai
-      warehouse.yaml              # kargo warehouse for codeai
-      stages/
-        levelbuilder.yaml         # kargo stage for codeai deployment levelbuilder
-        ...
+      projects/
+        codeai/
+          application.yaml        # child argocd app for the codeai kargo project
+          namespace.yaml          # namespace for namespaced kargo project resources
+          project.yaml            # kargo project for codeai
+          project-config.yaml     # kargo projectconfig for codeai
+          warehouse.yaml          # kargo warehouse for codeai
+          stages/
+            levelbuilder.yaml     # kargo stage for codeai deployment levelbuilder
+            ...
 ```
 
 ## Bootstrap Cluster
 
 kubectl apply -f apps/app-of-apps/applicationset.yaml
-
