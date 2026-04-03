@@ -1,6 +1,14 @@
 # apps/infra bootstrap and progressive-sync plan
 
 ALWAYS CHECK ITEMS OFF AS YOU ACCOMPLISH THEM.
+ALWAYS ADD A SECTION TO `apps/infra/implementation-notes-things-changed.md`
+FOR EACH SYSTEMIC FIX. For each such section, record:
+
+- what happened
+- what was tried
+- what worked
+- what did not
+- why the final change was the change we kept
 
 ## Summary
 
