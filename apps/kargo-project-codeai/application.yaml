@@ -19,6 +19,8 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    retry:
+      limit: 6
     syncOptions:
       - ServerSideApply=true
       # We depend on CRDs installed by kargo, so if this is the first bootstrap
