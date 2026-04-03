@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: leaf
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: leaf
+  template:
+    metadata:
+      labels:
+        app: leaf
+    spec:
+      containers:
+        - name: echo
+          image: hashicorp/http-echo:1.0.0
+          args:
+            - -text=leaf
+          ports:
+            - containerPort: 5678
