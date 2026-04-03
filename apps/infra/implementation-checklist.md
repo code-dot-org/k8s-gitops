@@ -40,6 +40,8 @@ Refresh `/Users/seth/src/k8s-gitops/apps/infra/implementation-plan.md` first if 
 
 - [x] Destroy the old `cluster-infra-argocd` managed releases and bootstrap objects.
 - [x] Clear the finalizers that blocked that destroy.
+- [x] Deep-clean the cluster back to the pre-`cluster-infra-argocd` baseline.
+- [x] Remove the residual Argo / ESO / Kargo / gateway CRDs after that deep clean.
 
 ## Resolve the `apps/argocd` collision
 
@@ -68,6 +70,7 @@ Refresh `/Users/seth/src/k8s-gitops/apps/infra/implementation-plan.md` first if 
 - [x] Keep the existing Kargo `Project` health customization in place.
 - [x] Move the ESO-dependent Argo secret templates out of the main Argo chart and into the `dex` chart.
 - [x] Remove the bootstrap-only gate from the main Argo chart.
+- [x] Set explicit `argo-cd.controller.resources` so the application controller does not boot on the Fargate default shape.
 
 ## `code-dot-org` bootstrap changes
 
@@ -77,7 +80,7 @@ Refresh `/Users/seth/src/k8s-gitops/apps/infra/implementation-plan.md` first if 
 - [x] Keep the bootstrap release name `argocd` and namespace `argocd`.
 - [x] Remove the bootstrap-only values override for the Argo wrapper templates.
 - [x] Keep the bootstrap `helm_release` managed in Tofu after Argo self-management starts.
-- [x] Make `argocd-app-of-apps-bootstrap.tf` depend on the bootstrap `helm_release`.
+- [x] Make `app-of-apps-bootstrap.tf` depend on the bootstrap `helm_release`.
 - [x] Keep `deploy_helm_charts` controlling only the legacy `helm.tf` releases.
 - [x] Ensure default apply with `deploy_helm_charts=false` plans bootstrap only, not the legacy Helm releases.
 
@@ -104,7 +107,8 @@ Refresh `/Users/seth/src/k8s-gitops/apps/infra/implementation-plan.md` first if 
 - [x] Refresh the Argo `infra` application after the bootstrap apply.
 - [x] Sync the Argo `infra` application if refresh does not move it to the new Git revision.
 - [ ] Verify top-level `infra` reaches `Healthy` before the non-`infra` group proceeds.
-- [ ] Verify `kargo` and the `codeai` wrapper app both land in the second non-`infra` group.
-- [ ] Verify the internal `infra` child apps still follow the existing `0/1/2/3` order.
+- [x] Verify `kargo` and the `codeai` wrapper app both land in the second non-`infra` group.
+- [x] Verify the internal `infra` child apps still follow the existing `0/1/2/3` order.
 - [x] Verify repo secrets from the moved `repos.yaml` appear in `argocd`.
 - [ ] Verify `apps/infra/argocd/application.yaml` becomes healthy and manages the same Argo resources as the bootstrap release.
+- [ ] Verify the live application controller stays `Ready` through the initial infra sync without fresh OOMs.

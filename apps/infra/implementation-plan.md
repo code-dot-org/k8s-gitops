@@ -7,7 +7,7 @@ ALWAYS CHECK ITEMS OFF AS YOU ACCOMPLISH THEM.
 Bootstrap Argo in two layers:
 
 1. `argocd-bootstrap.tf` installs Argo once, from the `k8s-gitops` `apps/infra/argocd/chart` tree fetched into a temp checkout.
-2. `argocd-app-of-apps-bootstrap.tf` then bootstraps `apps/app-of-apps/applicationset.yaml`, which creates the top-level `infra`, `kargo`, and `codeai` apps using `RollingSync`.
+2. `app-of-apps-bootstrap.tf` then bootstraps `apps/app-of-apps/applicationset.yaml`, which creates the top-level `infra`, `kargo`, and `codeai` apps using `RollingSync`.
 
 The legacy Helm releases in `helm.tf` remain behind `deploy_helm_charts`, which stays default `false`. Argo then manages the real infra chart set from `apps/infra`.
 
@@ -22,7 +22,7 @@ The legacy Helm releases in `helm.tf` remain behind `deploy_helm_charts`, which 
   - namespace `argocd`
   - chart path `<temp checkout>/apps/infra/argocd/chart`
 - Keep this bootstrap release managed in Tofu after Argo self-management starts.
-- Make `argocd-app-of-apps-bootstrap.tf` depend on the bootstrap release.
+- Make `app-of-apps-bootstrap.tf` depend on the bootstrap release.
 - Keep `deploy_helm_charts` controlling only the legacy `helm.tf` releases.
 
 ### Keep the Argo chart bootstrap-safe
@@ -34,6 +34,9 @@ The legacy Helm releases in `helm.tf` remain behind `deploy_helm_charts`, which 
 - Render them in namespace `argocd` from the `dex` app.
 - This keeps the main Argo chart bootstrap-safe without any bootstrap-only
   values override.
+- Set explicit `argo-cd.controller.resources` in the copied Argo chart so the
+  application controller does not come up on the Fargate default shape during
+  the initial full-cluster sync.
 
 ### Resolve the `argocd` app collision in `k8s-gitops`
 
@@ -120,6 +123,12 @@ The legacy Helm releases in `helm.tf` remain behind `deploy_helm_charts`, which 
     - bootstrap Argo
     - bootstrap `app-of-apps`
     - no legacy `helm.tf` releases
+  - after any failed rollout, it must be possible to deep-clean the cluster back to
+    the pre-`cluster-infra-argocd` baseline:
+    - no Argo namespace
+    - no app-generated namespaces
+    - no Helm releases
+    - no Argo / ESO / Kargo / gateway CRDs from this stack
 - Live ordering
   - top-level `infra` app syncs first and reaches `Healthy`
   - only after that does the non-`infra` group proceed

@@ -104,6 +104,15 @@ argo-cd:
         alb.ingress.kubernetes.io/ssl-redirect: "443"
         alb.ingress.kubernetes.io/backend-protocol: HTTP
 
+  controller:
+    resources:
+      requests:
+        cpu: 1000m
+        memory: 4Gi
+      limits:
+        cpu: 1000m
+        memory: 4Gi
+
   repoServer:
     extraEnv:
       - name: ARGOCD_EXEC_TIMEOUT
