@@ -27,12 +27,7 @@ spec:
         template:
           metadata:
             finalizers:
-              - >-
-                {{if eq "apps/app-of-apps/applicationset.yaml" (printf "%s/%s" .path.path .path.filename)}}
-                resources-finalizer.argocd.argoproj.io/background
-                {{else}}
-                resources-finalizer.argocd.argoproj.io
-                {{end}}
+              - '{{if eq "apps/app-of-apps/applicationset.yaml" (printf "%s/%s" .path.path .path.filename)}}resources-finalizer.argocd.argoproj.io/background{{else}}resources-finalizer.argocd.argoproj.io{{end}}'
           spec:
             project: default
             destination:
