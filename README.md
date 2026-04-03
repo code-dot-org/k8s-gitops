@@ -23,6 +23,12 @@ k8s-gitops/
       application.yaml            # argocd will automatically find this application.yaml
       repos.yaml                  # configure application.yaml to load $app_name/*
 
+    infra/                        # infrastructure / cluster apps live here
+      argocd/                     # e.g. argocd itself is defined right here
+        application.yaml
+        chart/
+      ...
+
     codeai/
       applicationset.yaml         # define argocd apps for codeai deployments: deployments/*/deployment.yaml
 

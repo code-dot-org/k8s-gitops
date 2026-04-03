@@ -1,0 +1,30 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dex
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  project: default
+  sources:
+    - repoURL: https://github.com/code-dot-org/k8s-gitops.git
+      targetRevision: main
+      path: apps/infra/dex/chart
+      helm:
+        releaseName: dex
+        valueFiles:
+          - $values/apps/infra/codeai-cluster-config.values.yaml
+    - repoURL: https://github.com/code-dot-org/k8s-gitops.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dex
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - CreateNamespace=true

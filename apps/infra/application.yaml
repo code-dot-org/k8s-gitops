@@ -1,0 +1,52 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: infra
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://github.com/code-dot-org/k8s-gitops.git
+      targetRevision: main
+      path: apps/infra/argocd
+      directory:
+        include: application.yaml
+    - repoURL: https://github.com/code-dot-org/k8s-gitops.git
+      targetRevision: main
+      path: apps/infra/dex
+      directory:
+        include: application.yaml
+    - repoURL: https://github.com/code-dot-org/k8s-gitops.git
+      targetRevision: main
+      path: apps/infra/external-dns
+      directory:
+        include: application.yaml
+    - repoURL: https://github.com/code-dot-org/k8s-gitops.git
+      targetRevision: main
+      path: apps/infra/external-secrets-operator
+      directory:
+        include: application.yaml
+    - repoURL: https://github.com/code-dot-org/k8s-gitops.git
+      targetRevision: main
+      path: apps/infra/kargo-secrets
+      directory:
+        include: application.yaml
+    - repoURL: https://github.com/code-dot-org/k8s-gitops.git
+      targetRevision: main
+      path: apps/infra/networking
+      directory:
+        include: application.yaml
+    - repoURL: https://github.com/code-dot-org/k8s-gitops.git
+      targetRevision: main
+      path: apps/infra/standard-envtypes
+      directory:
+        include: application.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true

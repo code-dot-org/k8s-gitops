@@ -1,0 +1,10 @@
+apiVersion: v2
+name: dex-wrapper
+description: Local wrapper chart for Dex
+type: application
+version: 0.1.0
+
+dependencies:
+  - name: dex
+    repository: https://charts.dexidp.io
+    version: 0.24.0
