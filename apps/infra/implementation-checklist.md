@@ -106,9 +106,21 @@ Refresh `/Users/seth/src/k8s-gitops/apps/infra/implementation-plan.md` first if 
 - [x] Rebootstrap Argo and `app-of-apps` from `code-dot-org`.
 - [x] Refresh the Argo `infra` application after the bootstrap apply.
 - [x] Sync the Argo `infra` application if refresh does not move it to the new Git revision.
-- [ ] Verify top-level `infra` reaches `Healthy` before the non-`infra` group proceeds.
+- [x] Verify top-level `infra` reaches `Healthy` before the non-`infra` group proceeds.
 - [x] Verify `kargo` and the `codeai` wrapper app both land in the second non-`infra` group.
 - [x] Verify the internal `infra` child apps still follow the existing `0/1/2/3` order.
 - [x] Verify repo secrets from the moved `repos.yaml` appear in `argocd`.
 - [x] Verify `apps/infra/argocd/application.yaml` becomes healthy and manages the same Argo resources as the bootstrap release.
-- [ ] Verify the live application controller stays `Ready` through the initial infra sync without fresh OOMs.
+- [x] Verify the live application controller stays `Ready` through the initial infra sync without fresh OOMs.
+
+## Post-bootstrap drift cleanup
+
+- [x] Identify the residual post-bootstrap drift instead of treating it as stale status.
+- [x] Match ESO defaulted fields in the copied `dex` and `kargo-secrets` charts.
+- [x] Mirror those ESO drift fixes back into `code-dot-org` legacy charts.
+- [x] Match the `networking` `LoadBalancerConfiguration` defaulted `alpnPolicy`.
+- [x] Ignore diff churn for the AWS Load Balancer Controller webhook TLS Secret in the `networking` app.
+- [x] Validate the affected `k8s-gitops` charts after those drift fixes.
+- [ ] Push the drift-fix `k8s-gitops` changes and refresh the affected Argo apps.
+- [ ] Reconcile `networking`, `dex`, `kargo-secrets`, and `standard-envtypes` back to `Synced`.
+- [ ] Clear the stale `kargo` sync operation and let step 2 finish converging cleanly.

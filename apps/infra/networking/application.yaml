@@ -7,6 +7,13 @@ metadata:
     argocd.argoproj.io/sync-wave: "0"
 spec:
   project: default
+  ignoreDifferences:
+    - kind: Secret
+      group: ""
+      name: aws-load-balancer-tls
+      namespace: kube-system
+      jsonPointers:
+        - /data
   sources:
     - repoURL: https://github.com/code-dot-org/k8s-gitops.git
       targetRevision: main
