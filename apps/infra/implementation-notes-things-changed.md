@@ -428,17 +428,19 @@ The actual noisy apps were:
 
 ### What worked
 
-The first app-level attempt used:
+The app-level approach uses:
 
 - `managedFieldsManagers: [external-secrets]`
 
-That did not work here, because the live `ExternalSecret` objects had
-`metadata.managedFields: null`, so Argo had no manager entries to match.
+I briefly misread the live objects because `kubectl get -o json` hides managed
+fields unless `--show-managed-fields` is set. The CRs do have managed fields
+from:
 
-The working app-level variant was:
+- `external-secrets`
 
-- explicit `jsonPointers` for the defaulted scalar fields
-- explicit `jqPathExpressions` for the defaulted list-item fields
+The first failed rollout was not because ESO omitted managed fields. It was
+because I refreshed the child apps directly instead of refreshing the parent
+`infra` app that owns the child `Application` specs.
 
 and add:
 
@@ -446,7 +448,7 @@ and add:
 
 to the same app's sync options.
 
-This was done only on the affected apps, not globally.
+This is done only on the affected apps, not globally.
 
 ### What did not
 
@@ -459,8 +461,7 @@ problem here.
 
 It is narrower than a global config and less ugly than hard-coding every ESO
 defaulted field into every chart. The scope stays with the apps that actually
-had noisy ESO-managed resources, and it does not rely on managed-fields data
-being present on the live CRs.
+had noisy ESO-managed resources.
 
 As part of this change, the earlier explicit ESO default-field additions were
 backed back out of the affected chart templates, since the app-level ignore is

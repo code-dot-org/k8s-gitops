@@ -10,28 +10,12 @@ spec:
   ignoreDifferences:
     - group: external-secrets.io
       kind: ExternalSecret
-      jsonPointers:
-        - /spec/target/deletionPolicy
-        - /spec/target/template/engineVersion
-        - /spec/target/template/mergePolicy
-      jqPathExpressions:
-        - .spec.data[]?.remoteRef.conversionStrategy
-        - .spec.data[]?.remoteRef.decodingStrategy
-        - .spec.data[]?.remoteRef.metadataPolicy
-        - .spec.dataFrom[]?.find.conversionStrategy
-        - .spec.dataFrom[]?.find.decodingStrategy
+      managedFieldsManagers:
+        - external-secrets
     - group: external-secrets.io
       kind: ClusterExternalSecret
-      jsonPointers:
-        - /spec/externalSecretSpec/target/deletionPolicy
-        - /spec/externalSecretSpec/target/template/engineVersion
-        - /spec/externalSecretSpec/target/template/mergePolicy
-      jqPathExpressions:
-        - .spec.externalSecretSpec.data[]?.remoteRef.conversionStrategy
-        - .spec.externalSecretSpec.data[]?.remoteRef.decodingStrategy
-        - .spec.externalSecretSpec.data[]?.remoteRef.metadataPolicy
-        - .spec.externalSecretSpec.dataFrom[]?.find.conversionStrategy
-        - .spec.externalSecretSpec.dataFrom[]?.find.decodingStrategy
+      managedFieldsManagers:
+        - external-secrets
   sources:
     - repoURL: https://github.com/code-dot-org/k8s-gitops.git
       targetRevision: main
