@@ -21,13 +21,19 @@ The legacy Helm releases in `helm.tf` remain behind `deploy_helm_charts`, which 
   - release name `argocd`
   - namespace `argocd`
   - chart path `<temp checkout>/apps/infra/argocd/chart`
-- Pass a bootstrap-only values override that disables the ESO-dependent
-  `ExternalSecret` and `Password` templates in the Argo wrapper chart.
-- Leave those templates enabled by default in Git so the Argo-managed steady
-  state still creates them after infra installs ESO and generator CRDs.
 - Keep this bootstrap release managed in Tofu after Argo self-management starts.
 - Make `argocd-app-of-apps-bootstrap.tf` depend on the bootstrap release.
 - Keep `deploy_helm_charts` controlling only the legacy `helm.tf` releases.
+
+### Keep the Argo chart bootstrap-safe
+
+- Do not keep ESO-dependent resources in `apps/infra/argocd/chart`.
+- Move these templates into `apps/infra/dex/chart/templates/`:
+  - `argocd-secret-external-secret.yaml`
+  - `argocd-dex-client-secret-generator.yaml`
+- Render them in namespace `argocd` from the `dex` app.
+- This keeps the main Argo chart bootstrap-safe without any bootstrap-only
+  values override.
 
 ### Resolve the `argocd` app collision in `k8s-gitops`
 
@@ -82,6 +88,8 @@ The legacy Helm releases in `helm.tf` remain behind `deploy_helm_charts`, which 
 - Restoring `argoproj.io/Application` health is therefore required, not optional, for this plan.
 - The ApplicationSet controller will disable autosync on the generated top-level apps. That is expected and acceptable.
 - The child apps inside `infra`, `kargo`, and `codeai` keep their own normal sync policies.
+- The `dex` child app owns the ESO-dependent Argo secret resources, so those
+  resources do not appear until after ESO is in place.
 
 ### Docs and tracking files
 
@@ -98,6 +106,8 @@ The legacy Helm releases in `helm.tf` remain behind `deploy_helm_charts`, which 
   - `git diff --check`
   - confirm only one `Application` named `argocd` remains
   - `helm template` succeeds for `apps/infra/argocd/chart` after moving `repos.yaml`
+  - `helm template` succeeds for `apps/infra/dex/chart` after moving the
+    ESO-dependent Argo secret resources there
   - confirm `apps/app-of-apps/applicationset.yaml` includes:
     - Progressive Sync enablement assumptions
     - `RollingSync` strategy
@@ -127,3 +137,5 @@ The legacy Helm releases in `helm.tf` remain behind `deploy_helm_charts`, which 
 - `kargo` and `codeai` may sync together in the second non-`infra` group. No further top-level ordering between those two is required for this plan.
 - The `argoproj.io/Application` health snippet should be copied from the Argo docs as-is unless there is a concrete reason to simplify it.
 - The source of truth for that snippet is the stable Argo docs `Argocd App` section, not an older local copy.
+- The ESO-dependent Argo secret resources belong with `dex`, not with the main
+  Argo bootstrap chart.

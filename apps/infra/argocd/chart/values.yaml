@@ -1,9 +1,3 @@
-bootstrap:
-  # Tofu bootstraps Argo CD before infra installs ESO and generator CRDs.
-  # Leave this on for the Argo-managed steady state, but turn it off for the
-  # one-time tofu bootstrap release.
-  installExternalSecretResources: true
-
 argo-cd:
   crds:
     install: true
