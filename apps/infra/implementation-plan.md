@@ -1,142 +1,127 @@
-# apps/infra implementation plan
+# apps/infra bootstrap and progressive-sync plan
 
-This directory ports the Helm releases currently declared in [helm.tf](/Users/seth/src/code-dot-org/k8s/tofu/codeai-k8s/cluster-infra-argocd/helm.tf) into Argo child applications.
+ALWAYS CHECK ITEMS OFF AS YOU ACCOMPLISH THEM.
 
-The port preserves chart content by copy. Rewrite is avoided. The single intentional chart edit is the local dependency path in `standard-envtypes`, because `eso-per-env` is kept as a shared chart under `apps/infra/charts/`.
+## Summary
 
-## Scope
+Bootstrap Argo in two layers:
 
-The managed applications are:
+1. `argocd-bootstrap.tf` installs Argo once, from the `k8s-gitops` `apps/infra/argocd/chart` tree fetched into a temp checkout.
+2. `argocd-app-of-apps-bootstrap.tf` then bootstraps `apps/app-of-apps/applicationset.yaml`, which creates the top-level `infra`, `kargo`, and `codeai` apps using `RollingSync`.
 
-- `networking`
-- `external-secrets-operator`
-- `external-dns`
-- `argocd`
-- `kargo-secrets`
-- `standard-envtypes`
-- `dex`
+The legacy Helm releases in `helm.tf` remain behind `deploy_helm_charts`, which stays default `false`. Argo then manages the real infra chart set from `apps/infra`.
 
-`eso-per-env` is a chart only. It is not an Argo application.
+## Key changes
 
-## Layout
+### Argo bootstrap in `code-dot-org`
 
-The directory layout is:
+- Add `argocd-bootstrap.tf` in `cluster-infra-argocd`.
+- Fetch the `k8s-gitops` default branch with a shallow sparse clone into an untracked temp dir, limited to `apps/infra/argocd/`.
+- Use a bootstrap `helm_release` with:
+  - release name `argocd`
+  - namespace `argocd`
+  - chart path `<temp checkout>/apps/infra/argocd/chart`
+- Keep this bootstrap release managed in Tofu after Argo self-management starts.
+- Make `argocd-app-of-apps-bootstrap.tf` depend on the bootstrap release.
+- Keep `deploy_helm_charts` controlling only the legacy `helm.tf` releases.
 
-- `apps/infra/application.yaml`
-- `apps/infra/codeai-cluster-config.values.yaml`
-- `apps/infra/charts/eso-per-env/`
-- `apps/infra/<app>/application.yaml`
-- `apps/infra/<app>/chart/`
+### Resolve the `argocd` app collision in `k8s-gitops`
 
-Each `apps/infra/<app>/chart/` directory is copied from the corresponding source chart under `code-dot-org/k8s/tofu/codeai-k8s/cluster-infra-argocd/infra/`.
+- Move `apps/argocd/repos.yaml` verbatim into:
+  - `apps/infra/argocd/chart/templates/repos.yaml`
+- Delete:
+  - `apps/argocd/application.yaml`
+  - `apps/argocd/repos.yaml`
+  - `apps/argocd/` if empty
+- Do not rename the infra child app. The only `Application` named `argocd` should be `apps/infra/argocd/application.yaml`.
 
-The parent application points only at child `application.yaml` files. It does not recurse through chart content.
+### Top-level sequencing via `RollingSync`
 
-## Values policy
+- Enable Progressive Syncs in the Argo chart by adding:
+  - `applicationsetcontroller.enable.progressive.syncs: "true"`
+  - under `argo-cd.configs.params`
+- Restore health assessment for `argoproj.io/Application` in the Argo chart under `argo-cd.configs.cm`:
+  - `resource.customizations.health.argoproj.io_Application`
+  - use the current stable Argo docs `Argocd App` Lua snippet as-is:
+    - `hs = {}`
+    - `hs.status = "Progressing"`
+    - `hs.message = ""`
+    - if `obj.status.health` exists, copy through its `status` and optional `message`
+    - return `hs`
+  - source: [Argo CD Resource Health: Argocd App](https://argo-cd.readthedocs.io/en/stable/operator-manual/health/#argocd-app)
+  - do not simplify or rewrite it unless there is a concrete behavior change we want
+- Keep the existing internal infra child waves unchanged:
+  - `networking` `0`
+  - `external-secrets-operator` `1`
+  - `external-dns` `1`
+  - `argocd` `2`
+  - `kargo-secrets` `2`
+  - `standard-envtypes` `2`
+  - `dex` `3`
+- Add a top-level label key on generated apps:
+  - `code.org/bootstrap-group`
+- Label the top-level passthrough `Application`s directly in Git:
+  - `apps/infra/application.yaml`: `code.org/bootstrap-group=infra`
+  - `apps/kargo/application.yaml`: `code.org/bootstrap-group=post-infra`
+- Update `apps/app-of-apps/applicationset.yaml` so wrapper `Application`s generated from `apps/*/applicationset.yaml` are labeled:
+  - `code.org/bootstrap-group=post-infra`
+- Add `spec.strategy` to `apps/app-of-apps/applicationset.yaml`:
+  - `type: RollingSync`
+  - `deletionOrder: Reverse`
+  - steps:
+    - `code.org/bootstrap-group In [infra]`
+    - `code.org/bootstrap-group In [post-infra]`
+- Do not use top-level sync-wave annotations for `infra`, `kargo`, or wrapper apps. `RollingSync` is the top-level ordering mechanism.
+- Leave passthrough behavior for top-level `application.yaml` files unchanged apart from the new bootstrap-group label.
 
-All child applications load the same generated values file:
+### `RollingSync` behavior notes
 
-- [codeai-cluster-config.values.yaml](/Users/seth/src/k8s-gitops/apps/infra/codeai-cluster-config.values.yaml)
+- `RollingSync` gates on managed `Application` health, which is what we want at the top level.
+- Restoring `argoproj.io/Application` health is therefore required, not optional, for this plan.
+- The ApplicationSet controller will disable autosync on the generated top-level apps. That is expected and acceptable.
+- The child apps inside `infra`, `kargo`, and `codeai` keep their own normal sync policies.
 
-This keeps the child application manifests structurally uniform.
+### Docs and tracking files
 
-The generated values file contains:
+- Refresh `apps/infra/implementation-checklist.md` to match:
+  - `apps/argocd` removal
+  - repo-secret move into the infra argocd chart
+  - bootstrap via `argocd-bootstrap.tf`
+  - top-level `RollingSync` plan
+- Update `README.md` so `apps/argocd` is gone and repo secrets live under `apps/infra/argocd/chart/templates/`.
 
-- `codeai_cluster_config`
-- specially shaped values for `networking`
-- specially shaped values for `dex`
-- specially shaped values for `kargo-secrets`
+## Test plan
 
-Actual consumers are:
+- `k8s-gitops`
+  - `git diff --check`
+  - confirm only one `Application` named `argocd` remains
+  - `helm template` succeeds for `apps/infra/argocd/chart` after moving `repos.yaml`
+  - confirm `apps/app-of-apps/applicationset.yaml` includes:
+    - Progressive Sync enablement assumptions
+    - `RollingSync` strategy
+    - `code.org/bootstrap-group=post-infra` on generated wrapper apps
+  - confirm `apps/infra/argocd/chart/values.yaml` includes the restored:
+    - `resource.customizations.health.argoproj.io_Application`
+- `code-dot-org`
+  - `tofu validate` in `cluster-infra-argocd`
+  - default apply with `deploy_helm_charts=false` plans:
+    - bootstrap Argo
+    - bootstrap `app-of-apps`
+    - no legacy `helm.tf` releases
+- Live ordering
+  - top-level `infra` app syncs first and reaches `Healthy`
+  - only after that does the `post-infra` group proceed
+  - `kargo` and the `codeai` wrapper app are both in the `post-infra` group
+  - inside `infra`, child apps still follow the existing `0/1/2/3` order
+- Live bootstrap
+  - repo secrets from the moved `repos.yaml` appear in `argocd`
+  - `apps/infra/argocd/application.yaml` becomes healthy and manages the same Argo resources as the bootstrap release
 
-- `standard-envtypes`
-- `networking`
-- `dex`
-- `kargo-secrets`
+## Assumptions
 
-The remaining charts load the file and ignore unused keys.
-
-## Sync waves and namespaces
-
-The ordering matches the existing `helm.tf` dependency order with the minimum wave count needed to preserve it.
-
-| application | wave | destination namespace | notes |
-| --- | ---: | --- | --- |
-| `networking` | `0` | `kube-system` | also creates cluster-scoped resources |
-| `external-secrets-operator` | `1` | `external-secrets` | also installs CRDs and cluster-scoped resources |
-| `external-dns` | `1` | `external-dns` | namespaced release |
-| `argocd` | `2` | `argocd` | also installs CRDs and cluster-scoped resources |
-| `kargo-secrets` | `2` | `kargo-system-resources` | also creates resources in `kargo-shared-resources` |
-| `standard-envtypes` | `2` | `external-secrets` | also creates env namespace resources and cluster-scoped ESO resources |
-| `dex` | `3` | `dex` | also creates a `Role` and `RoleBinding` in `argocd` |
-
-## Child application shape
-
-Each child application uses two sources:
-
-1. chart source
-   - repo: `https://github.com/code-dot-org/k8s-gitops.git`
-   - revision: `main`
-   - path: `apps/infra/<app>/chart`
-   - values file: `$values/apps/infra/codeai-cluster-config.values.yaml`
-2. values source
-   - same repo
-   - same revision
-   - `ref: values`
-
-Each child application also sets:
-
-- `project: default`
-- `metadata.namespace: argocd`
-- `destination.server: https://kubernetes.default.svc`
-- explicit `destination.namespace`
-- `syncPolicy.automated.prune: true`
-- `syncPolicy.automated.selfHeal: true`
-- `syncOptions`
-  - `ServerSideApply=true`
-  - `CreateNamespace=true`
-- `argocd.argoproj.io/sync-wave`
-
-## Verbatim copy policy
-
-The copied charts preserve:
-
-- `Chart.yaml`
-- `Chart.lock`
-- `values.yaml`
-- templates
-- helper content
-- comments
-
-The allowed edit set is intentionally small:
-
-- adjust the `standard-envtypes` local dependency path from `file://../eso-per-envtype` to `file://../../charts/eso-per-env`
-
-No other chart comments or prose should be rewritten merely to satisfy the port.
-
-## Validation
-
-The local validation standard is:
-
-- `git diff --check` clean
-- `helm template` succeeds for all seven copied charts when rendered against `apps/infra/codeai-cluster-config.values.yaml`
-
-The live validation standard is:
-
-- parent `infra` application discovers only child applications
-- no standalone `eso-per-env` application exists
-- all seven child applications become `Synced` and `Healthy`
-
-## Handoff
-
-Adoption order matters.
-
-The sequence is:
-
-1. commit and push the `apps/infra` structure
-2. let Argo adopt the seven child applications
-3. verify the applications are healthy
-4. remove OpenTofu ownership of the seven corresponding `helm_release` resources without uninstalling them
-5. remove the obsolete `helm_release` blocks from `cluster-infra-argocd`
-
-OpenTofu must not be used to uninstall the releases during handoff.
+- The bootstrap chart source comes from a shallow sparse clone of `k8s-gitops`, not the old local `infra/argocd` chart in `code-dot-org`.
+- Keeping the bootstrap `helm_release` managed in Tofu after Argo self-management starts is acceptable.
+- All top-level wrapper apps generated from `applicationset.yaml` may safely run after infra; current impact is `codeai`.
+- `kargo` and `codeai` may sync together in the `post-infra` group. No further top-level ordering between those two is required for this plan.
+- The `argoproj.io/Application` health snippet should be copied from the Argo docs as-is unless there is a concrete reason to simplify it.
+- The source of truth for that snippet is the stable Argo docs `Argocd App` section, not an older local copy.

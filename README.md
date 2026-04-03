@@ -20,13 +20,15 @@ k8s-gitops/
       applicationset.yaml         # points argocd at apps/*/application.yaml and applicationset.yaml
 
     $app_name/
-      application.yaml            # argocd will automatically find this application.yaml
-      repos.yaml                  # configure application.yaml to load $app_name/*
+      application.yaml            # top-level Argo application discovered by app-of-apps
+      applicationset.yaml         # or a top-level Argo applicationset wrapped by app-of-apps
 
     infra/                        # infrastructure / cluster apps live here
       argocd/                     # e.g. argocd itself is defined right here
         application.yaml
         chart/
+          templates/
+            repos.yaml            # Argo repository Secret objects now live here
       ...
 
     codeai/

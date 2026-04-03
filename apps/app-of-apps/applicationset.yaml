@@ -7,6 +7,21 @@ spec:
   goTemplate: true
   goTemplateOptions:
     - missingkey=error
+  strategy:
+    type: RollingSync
+    deletionOrder: Reverse
+    rollingSync:
+      steps:
+        - matchExpressions:
+            - key: code.org/bootstrap-group
+              operator: In
+              values:
+                - infra
+        - matchExpressions:
+            - key: code.org/bootstrap-group
+              operator: In
+              values:
+                - post-infra
   generators:
     # For Applications, we treat the file itself as the source of truth
     # and passthrough almost its metadata/spec into the generated child app.
@@ -28,6 +43,8 @@ spec:
           metadata:
             finalizers:
               - resources-finalizer.argocd.argoproj.io
+            labels:
+              code.org/bootstrap-group: post-infra
           spec:
             project: default
             destination:

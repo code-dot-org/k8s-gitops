@@ -16,6 +16,9 @@ argo-cd:
       # New globs differentiate * and ** in paths, etc, very useful and we require it
       applicationsetcontroller.enable.new.git.file.globbing: true
 
+      # Progressive Syncs are alpha and must be explicitly enabled.
+      applicationsetcontroller.enable.progressive.syncs: "true"
+
       # We raised both after codeai-staging/codeai-test hit:
       #   ComparisonError: Failed to load target state: failed to generate
       #   manifest for source 1 of 2: rpc error: code = DeadlineExceeded
@@ -36,6 +39,20 @@ argo-cd:
               hs.message = c.message or ""
               hs.status = ({ True = "Healthy", False = "Degraded" })[c.status] or "Progressing"
               break
+            end
+          end
+        end
+        return hs
+
+      resource.customizations.health.argoproj.io_Application: |
+        hs = {}
+        hs.status = "Progressing"
+        hs.message = ""
+        if obj.status ~= nil then
+          if obj.status.health ~= nil then
+            hs.status = obj.status.health.status
+            if obj.status.health.message ~= nil then
+              hs.message = obj.status.health.message
             end
           end
         end
