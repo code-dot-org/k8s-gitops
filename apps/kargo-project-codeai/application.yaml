@@ -19,7 +19,11 @@ spec:
     automated:
       prune: true
       selfHeal: true
-    # Wait out the first bootstrap race while Kargo is still establishing its CRDs.
+    # When we first bootstrap, Kargo installs its CRDs. We'll fail to load this project
+    # (which uses them) until they are present. Thus, we'll retry 6 times, which will
+    # give us about 2 minutes 30 seconds (exponential backoff starting at 5s) for Kargo
+    # to get its CRDs full installed. ArgoCD sync waves would be a better way to handle
+    # this, but they require both of us and kargo to be under the same parent application.yaml.
     retry:
       limit: 6
     syncOptions:
