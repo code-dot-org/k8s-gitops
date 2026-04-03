@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: boo-leaf
+  name: mimic-boo-leaf
   namespace: argocd
 spec:
   project: default

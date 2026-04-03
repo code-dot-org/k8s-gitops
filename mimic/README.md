@@ -12,3 +12,6 @@ shapes we care about:
 
 Nothing under `mimic/` is meant to be part of the real cluster topology.
 Use it only for experiments.
+
+Argo `Application` and `ApplicationSet` names under this tree should start with
+`mimic-`.
