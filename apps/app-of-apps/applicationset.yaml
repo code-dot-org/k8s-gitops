@@ -54,11 +54,6 @@ spec:
       destination:
         server: https://kubernetes.default.svc
         namespace: argocd
-      # We retry syncing our top-level apps in case one app creates CRDs
-      # that another app depends on.
-      syncPolicy:
-        retry:
-          limit: 2
   # We check if its an Application (passthru values from application.yaml) or an ApplicationSet (ignore):
   # - Application -> requires either spec.source or spec.sources
   # - ApplicationSet -> allows neither
