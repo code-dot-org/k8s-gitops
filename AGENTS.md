@@ -1,4 +1,4 @@
-- Read README.md, it sketches the directory structure of this repo
+- Read README.md immediately upon reading this, it sketches the directory structure of this repo
 - Work on the branch you find unless instructed otherwise
 - If the current branch is `main`, you do not need to use a PR
 - Deployment is by ArgoCD, canonically at https://argocd.k8s.code.org
@@ -9,3 +9,4 @@
     - k8s/tofu : eks cluster bootstrap, dex, argocd, oidc, aws load balancer controller, ESO, etc
     - k8s/helm: helm chart for the codeai app
     - k8s/kustomize: kustomize base/ for the codeai app
+- If you change the structure of `apps/app-of-apps/*`, make a parallel edit under `mimic/` when relevant, so the test tree does not bitrot.
