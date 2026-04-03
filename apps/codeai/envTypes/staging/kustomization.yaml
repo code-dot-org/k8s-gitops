@@ -9,6 +9,7 @@ labels:
     includeTemplates: true
 patches:
   - path: deployment.patch.yaml
+  - path: ingress.patch.yaml
   # TODO: enable these when gitops envType values start setting dashboard_workers again.
   # - path: locals.yml.patch.yaml
   # - path: deployment.resources.patch.yaml
