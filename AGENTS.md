@@ -9,4 +9,5 @@
     - k8s/tofu : eks cluster bootstrap, dex, argocd, oidc, aws load balancer controller, ESO, etc
     - k8s/helm: helm chart for the codeai app
     - k8s/kustomize: kustomize base/ for the codeai app
+- If you push changes in this repo, then for Argo-managed changes immediately trigger a normal refresh on the affected Application, and if it still has not moved to the new Git revision, trigger a sync to save time.
 - If you change the structure of `apps/app-of-apps/*`, make a parallel edit under `mimic/apps/app-of-apps/*` when relevant, so the test tree does not bitrot.
