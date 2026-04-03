@@ -9,4 +9,4 @@
     - k8s/tofu : eks cluster bootstrap, dex, argocd, oidc, aws load balancer controller, ESO, etc
     - k8s/helm: helm chart for the codeai app
     - k8s/kustomize: kustomize base/ for the codeai app
-- If you change the structure of `apps/app-of-apps/*`, make a parallel edit under `mimic/` when relevant, so the test tree does not bitrot.
+- If you change the structure of `apps/app-of-apps/*`, make a parallel edit under `mimic/apps/app-of-apps/*` when relevant, so the test tree does not bitrot.
