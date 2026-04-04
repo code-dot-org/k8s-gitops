@@ -258,6 +258,79 @@ See also:
 
 ## 2026-04-03: remove the stale vendored `eso-per-envtype` package and rebuild it
 
+## 2026-04-04: special-case the recursive `app-of-apps` wrapper in Application health
+
+### What happened
+
+After the infra-first rollout succeeded, the generated top-level
+`Application/app-of-apps` stayed:
+
+- `Synced`
+- `Progressing`
+
+Its only child resource was `ApplicationSet/app-of-apps`. That child was still
+`RolloutProgressing` because `RollingSync` step 2 included the generated
+wrapper app itself:
+
+- `kargo`
+- `app-of-apps`
+- `codeai`
+
+This created a self-reference. The wrapper app was blue because its child
+ApplicationSet was still progressing, and the ApplicationSet was still
+progressing because it was waiting on the wrapper app to become healthy.
+
+### What was tried
+
+- treat this as an `ApplicationSet`-health problem and sketch a custom
+  `argoproj.io/ApplicationSet` health script
+- look for a richer tree under `Application.status.resources` so the existing
+  `Application` health check could detect the exact recursive shape without a
+  special case
+
+### What worked
+
+Keep the existing `Application` health behavior, but special-case:
+
+- `Application/app-of-apps`
+- only when current health is `Progressing`
+
+The kept Lua is:
+
+```lua
+health = obj.status and obj.status.health or {status = "Progressing", message = ""}
+
+if obj.metadata.name == "app-of-apps"
+  and health.status == "Progressing" then
+  health.status = "Healthy"
+end
+
+return health
+```
+
+### What did not
+
+- expecting the generic restored `Application` health passthrough to be enough
+  once `RollingSync` and recursive self-management were combined
+- a generic same-name wrapper heuristic in `Application` health; it was broad
+  enough to catch `codeai` too
+
+### Why this change won
+
+This is a one-off loop. The smallest correct fix is to say so plainly.
+
+The `ApplicationSet`-health version was more principled, but heavier. The
+`Application`-health version is explicit, tiny, and only overrides:
+
+- `app-of-apps`
+- while `Progressing`
+
+It does not mask:
+
+- `Degraded`
+- `Missing`
+- `Unknown`
+
 ### What happened
 
 `standard-envtypes` had been changed to use the shared local dependency:

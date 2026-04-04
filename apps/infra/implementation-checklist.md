@@ -124,6 +124,7 @@ Refresh `/Users/seth/src/k8s-gitops/apps/infra/implementation-plan.md` first if 
 - [x] Replace the explicit ESO default-field rendering with app-level `ignoreDifferences` on the noisy apps, and back those extra fields back out of the charts.
 - [x] Match the `networking` `LoadBalancerConfiguration` defaulted `alpnPolicy`.
 - [x] Ignore diff churn for the AWS Load Balancer Controller webhook TLS Secret in the `networking` app.
+- [x] Special-case the recursive `app-of-apps` wrapper in Argo `Application` health so top-level `RollingSync` can finish.
 - [x] Validate the affected `k8s-gitops` charts after those drift fixes.
 - [x] Push the drift-fix `k8s-gitops` changes and refresh the affected Argo apps.
 - [x] Reconcile `networking`, `dex`, `kargo-secrets`, and `standard-envtypes` back to `Synced`.

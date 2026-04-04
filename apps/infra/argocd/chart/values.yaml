@@ -47,18 +47,14 @@ argo-cd:
         return hs
 
       resource.customizations.health.argoproj.io_Application: |
-        hs = {}
-        hs.status = "Progressing"
-        hs.message = ""
-        if obj.status ~= nil then
-          if obj.status.health ~= nil then
-            hs.status = obj.status.health.status
-            if obj.status.health.message ~= nil then
-              hs.message = obj.status.health.message
-            end
-          end
+        health = obj.status and obj.status.health or {status = "Progressing", message = ""}
+
+        if obj.metadata.name == "app-of-apps"
+          and health.status == "Progressing" then
+          health.status = "Healthy"
         end
-        return hs
+
+        return health
 
       # BREAK GLASS FOR EMERGENCY ARGOCD ADMIN LOGIN (if Google SSO has failed):
       # 1. set `admin.enabled: true` below
