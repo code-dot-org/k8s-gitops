@@ -55,8 +55,8 @@ Refresh `/Users/seth/src/k8s-gitops/apps/infra/implementation-plan.md` first if 
 
 - [x] Add `code.org/bootstrap-group=infra` to `apps/infra/application.yaml`.
 - [x] Do not add `post-infra` labels to `apps/kargo/application.yaml` or generated wrapper apps.
-- [x] Add `spec.strategy.type: RollingSync` to `apps/app-of-apps/applicationset.yaml`.
-- [x] Add `spec.strategy.deletionOrder: Reverse` to `apps/app-of-apps/applicationset.yaml`.
+- [x] Add `spec.strategy.type: RollingSync` to `apps/app-of-apps/app-of-apps.yaml`.
+- [x] Add `spec.strategy.deletionOrder: Reverse` to `apps/app-of-apps/app-of-apps.yaml`.
 - [x] Add a first `RollingSync` step that matches `code.org/bootstrap-group In [infra]`.
 - [x] Add a second `RollingSync` step that matches `code.org/bootstrap-group NotIn [infra]`.
 - [x] Keep the internal `apps/infra/*` sync-wave annotations unchanged.
@@ -98,7 +98,7 @@ Refresh `/Users/seth/src/k8s-gitops/apps/infra/implementation-plan.md` first if 
 - [x] Review the diffs one more time for accidental non-verbatim chart edits.
 - [x] Run `git diff --check` again after the collision, `RollingSync`, and health changes land.
 - [x] Re-run `helm template` for `apps/infra/argocd/chart` after moving `repos.yaml`.
-- [x] Confirm `apps/app-of-apps/applicationset.yaml` contains the `RollingSync` strategy and wrapper-app `code.org/bootstrap-group` label.
+- [x] Confirm `apps/app-of-apps/app-of-apps.yaml` contains the `RollingSync` strategy and wrapper-app `code.org/bootstrap-group` label.
 - [x] Confirm `apps/infra/argocd/chart/values.yaml` contains `applicationsetcontroller.enable.progressive.syncs: "true"`.
 - [x] Confirm `apps/infra/argocd/chart/values.yaml` contains `resource.customizations.health.argoproj.io_Application`.
 - [x] Commit the `k8s-gitops` changes.
@@ -124,7 +124,7 @@ Refresh `/Users/seth/src/k8s-gitops/apps/infra/implementation-plan.md` first if 
 - [x] Replace the explicit ESO default-field rendering with app-level `ignoreDifferences` on the noisy apps, and back those extra fields back out of the charts.
 - [x] Match the `networking` `LoadBalancerConfiguration` defaulted `alpnPolicy`.
 - [x] Ignore diff churn for the AWS Load Balancer Controller webhook TLS Secret in the `networking` app.
-- [x] Special-case the recursive `app-of-apps` wrapper in Argo `Application` health so top-level `RollingSync` can finish.
+- [x] Break recursive `app-of-apps` self-management by bootstrapping a dedicated wrapper `Application` in `apps/app-of-apps/bootstrap.yaml` and renaming the managed `ApplicationSet` file to `apps/app-of-apps/app-of-apps.yaml`.
 - [x] Validate the affected `k8s-gitops` charts after those drift fixes.
 - [x] Push the drift-fix `k8s-gitops` changes and refresh the affected Argo apps.
 - [x] Reconcile `networking`, `dex`, `kargo-secrets`, and `standard-envtypes` back to `Synced`.

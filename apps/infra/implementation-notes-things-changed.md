@@ -258,79 +258,6 @@ See also:
 
 ## 2026-04-03: remove the stale vendored `eso-per-envtype` package and rebuild it
 
-## 2026-04-04: special-case the recursive `app-of-apps` wrapper in Application health
-
-### What happened
-
-After the infra-first rollout succeeded, the generated top-level
-`Application/app-of-apps` stayed:
-
-- `Synced`
-- `Progressing`
-
-Its only child resource was `ApplicationSet/app-of-apps`. That child was still
-`RolloutProgressing` because `RollingSync` step 2 included the generated
-wrapper app itself:
-
-- `kargo`
-- `app-of-apps`
-- `codeai`
-
-This created a self-reference. The wrapper app was blue because its child
-ApplicationSet was still progressing, and the ApplicationSet was still
-progressing because it was waiting on the wrapper app to become healthy.
-
-### What was tried
-
-- treat this as an `ApplicationSet`-health problem and sketch a custom
-  `argoproj.io/ApplicationSet` health script
-- look for a richer tree under `Application.status.resources` so the existing
-  `Application` health check could detect the exact recursive shape without a
-  special case
-
-### What worked
-
-Keep the existing `Application` health behavior, but special-case:
-
-- `Application/app-of-apps`
-- only when current health is `Progressing`
-
-The kept Lua is:
-
-```lua
-health = obj.status and obj.status.health or {status = "Progressing", message = ""}
-
-if obj.metadata.name == "app-of-apps"
-  and health.status == "Progressing" then
-  health.status = "Healthy"
-end
-
-return health
-```
-
-### What did not
-
-- expecting the generic restored `Application` health passthrough to be enough
-  once `RollingSync` and recursive self-management were combined
-- a generic same-name wrapper heuristic in `Application` health; it was broad
-  enough to catch `codeai` too
-
-### Why this change won
-
-This is a one-off loop. The smallest correct fix is to say so plainly.
-
-The `ApplicationSet`-health version was more principled, but heavier. The
-`Application`-health version is explicit, tiny, and only overrides:
-
-- `app-of-apps`
-- while `Progressing`
-
-It does not mask:
-
-- `Degraded`
-- `Missing`
-- `Unknown`
-
 ### What happened
 
 `standard-envtypes` had been changed to use the shared local dependency:
@@ -361,6 +288,75 @@ Helm was rendering that stale package, not the shared chart we had edited.
 
 It made Helm render the chart we actually meant it to render, without relying
 on guesswork about dependency precedence.
+
+## 2026-04-04: break recursive `app-of-apps` self-management with an explicit wrapper `Application`
+
+### What happened
+
+After the infra-first rollout succeeded, the generated top-level
+`Application/app-of-apps` stayed:
+
+- `Synced`
+- `Progressing`
+
+Its only child resource was `ApplicationSet/app-of-apps`. That child was still
+`RolloutProgressing` because `RollingSync` step 2 included the generated
+wrapper app itself:
+
+- `kargo`
+- `app-of-apps`
+- `codeai`
+
+This created a self-reference. The wrapper app was blue because its child
+ApplicationSet was still progressing, and the ApplicationSet was still
+progressing because it was waiting on the wrapper app to become healthy.
+
+### What was tried
+
+- sketch a custom `argoproj.io/ApplicationSet` health script
+- try to break the loop from the `argoproj.io/Application` health check instead
+- verify in Argo `v3.3.4` source which field `RollingSync` actually reads
+
+### What worked
+
+Move the `app-of-apps` wrapper out of recursive generation.
+
+- add `apps/app-of-apps/bootstrap.yaml` as the explicit wrapper `Application`
+- keep `apps/app-of-apps/app-of-apps.yaml` as the managed child
+- rename the managed child away from `applicationset.yaml`, so it no longer
+  matches the `apps/*/applicationset.yaml` wrapper generator
+- remove the bootstrap-side finalizer-stripping helper that only existed to
+  break the recursive delete chain
+
+### What did not
+
+- changing `argoproj.io/Application` health in `argocd-cm`
+
+That change went live, but it still did not fix `app-of-apps`.
+
+The reason is exact in Argo source: `RollingSync` reads:
+
+- `app.Status.Health.Status`
+
+from the generated `Application` object itself. The custom
+`resource.customizations.health.argoproj.io_Application` Lua does not rewrite
+that stored field, so it was the wrong layer.
+
+### Why this change won
+
+The health-script approaches were both awkward:
+
+- overriding upstream `ApplicationSet` health would require replacing the full
+  built-in script just to tweak one branch
+- overriding `Application` health was smaller, but was acting on the wrong code
+  path
+
+An explicit wrapper `Application` is mechanically simpler. It keeps:
+
+- `apps/app-of-apps/app-of-apps.yaml` under Argo management
+- the `RollingSync` topology
+
+while removing the self-loop and the destroy-time finalizer hack entirely.
 
 ## 2026-04-03: make `LoadBalancerConfiguration` match the AWS gateway controller default
 

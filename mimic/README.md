@@ -28,11 +28,11 @@ practical:
 Bootstrap:
 
 ```sh
-kubectl apply --server-side --field-manager=terraform -f <(curl -fsSL https://raw.githubusercontent.com/code-dot-org/k8s-gitops/main/mimic/apps/app-of-apps/applicationset.yaml)
+kubectl apply --server-side --field-manager=terraform -f <(curl -fsSL https://raw.githubusercontent.com/code-dot-org/k8s-gitops/main/mimic/apps/app-of-apps/bootstrap.yaml)
 ```
 
 Destroy:
 
 ```sh
-kubectl delete --cascade=foreground --wait=true -f <(curl -fsSL https://raw.githubusercontent.com/code-dot-org/k8s-gitops/main/mimic/apps/app-of-apps/applicationset.yaml)
+kubectl delete --cascade=foreground --wait=true -f <(curl -fsSL https://raw.githubusercontent.com/code-dot-org/k8s-gitops/main/mimic/apps/app-of-apps/bootstrap.yaml)
 ```

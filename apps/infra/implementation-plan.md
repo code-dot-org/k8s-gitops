@@ -15,7 +15,7 @@ FOR EACH SYSTEMIC FIX. For each such section, record:
 Bootstrap Argo in two layers:
 
 1. `argocd-bootstrap.tf` installs Argo once, from the `k8s-gitops` `apps/infra/argocd/chart` tree fetched into a temp checkout.
-2. `app-of-apps-bootstrap.tf` then bootstraps `apps/app-of-apps/applicationset.yaml`, which creates the top-level `infra`, `kargo`, and `codeai` apps using `RollingSync`.
+2. `app-of-apps-bootstrap.tf` then bootstraps `apps/app-of-apps/bootstrap.yaml`, which manages `apps/app-of-apps/app-of-apps.yaml`. That `ApplicationSet` creates the top-level `infra`, `kargo`, and `codeai` apps using `RollingSync`.
 
 The legacy Helm releases in `helm.tf` remain behind `deploy_helm_charts`, which stays default `false`. Argo then manages the real infra chart set from `apps/infra`.
 
@@ -83,8 +83,15 @@ The legacy Helm releases in `helm.tf` remain behind `deploy_helm_charts`, which 
   - `code.org/bootstrap-group`
 - Label the top-level passthrough `Application`s directly in Git:
   - `apps/infra/application.yaml`: `code.org/bootstrap-group=infra`
+- Bootstrap `app-of-apps` from a dedicated wrapper `Application` file:
+  - `apps/app-of-apps/bootstrap.yaml`
+- Name the managed `ApplicationSet` file:
+  - `apps/app-of-apps/app-of-apps.yaml`
+- Keep the wrapper generator on `apps/*/applicationset.yaml`. `app-of-apps`
+  no longer matches it because its managed `ApplicationSet` no longer uses that
+  filename.
 - Do not add `post-infra` labels to `kargo` or generated wrapper apps. Everything not labeled `infra` belongs to the second step.
-- Add `spec.strategy` to `apps/app-of-apps/applicationset.yaml`:
+- Add `spec.strategy` to `apps/app-of-apps/app-of-apps.yaml`:
   - `type: RollingSync`
   - `deletionOrder: Reverse`
   - steps:
@@ -119,7 +126,7 @@ The legacy Helm releases in `helm.tf` remain behind `deploy_helm_charts`, which 
   - `helm template` succeeds for `apps/infra/argocd/chart` after moving `repos.yaml`
   - `helm template` succeeds for `apps/infra/dex/chart` after moving the
     ESO-dependent Argo secret resources there
-  - confirm `apps/app-of-apps/applicationset.yaml` includes:
+  - confirm `apps/app-of-apps/app-of-apps.yaml` includes:
     - Progressive Sync enablement assumptions
     - `RollingSync` strategy
     - second step expressed as `code.org/bootstrap-group NotIn [infra]`
@@ -145,12 +152,13 @@ The legacy Helm releases in `helm.tf` remain behind `deploy_helm_charts`, which 
 - Live bootstrap
   - repo secrets from the moved `repos.yaml` appear in `argocd`
   - `apps/infra/argocd/application.yaml` becomes healthy and manages the same Argo resources as the bootstrap release
+  - `apps/app-of-apps/bootstrap.yaml` manages `apps/app-of-apps/app-of-apps.yaml` without recursive self-generation
 
 ## Assumptions
 
 - The bootstrap chart source comes from a shallow sparse clone of `k8s-gitops`, not the old local `infra/argocd` chart in `code-dot-org`.
 - Keeping the bootstrap `helm_release` managed in Tofu after Argo self-management starts is acceptable.
-- All top-level wrapper apps generated from `applicationset.yaml` may safely run after infra; current impact is `codeai`.
+- All top-level wrapper apps generated from `applicationset.yaml` may safely run after infra; current impact is `codeai`. `app-of-apps` is bootstrapped separately and is not recursively generated.
 - `kargo` and `codeai` may sync together in the second non-`infra` group. No further top-level ordering between those two is required for this plan.
 - The `argoproj.io/Application` health snippet should be copied from the Argo docs as-is unless there is a concrete reason to simplify it.
 - The source of truth for that snippet is the stable Argo docs `Argocd App` section, not an older local copy.

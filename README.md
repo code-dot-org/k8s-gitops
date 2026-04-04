@@ -61,4 +61,4 @@ k8s-gitops/
 
 ## Bootstrap Cluster
 
-kubectl apply -f apps/app-of-apps/applicationset.yaml
+kubectl apply -f apps/app-of-apps/bootstrap.yaml

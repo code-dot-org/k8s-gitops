@@ -17,6 +17,9 @@ spec:
           - path: mimic/apps/*/application.yaml
     # ApplicationSets cannot be passed through directly For each applicationset.yaml
     # we generate a wrapper Application that points at that directory.
+    # `mimic-app-of-apps` itself now uses `bootstrap.yaml` as its wrapper file
+    # and `app-of-apps.yaml` as its managed ApplicationSet file, so it no longer
+    # matches this generator.
     - git:
         repoURL: https://github.com/code-dot-org/k8s-gitops.git
         revision: main
