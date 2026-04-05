@@ -1,4 +1,4 @@
-# Override the upstream chart's controller RBAC objects so Argo can prune them
+# Override the upstream chart's controller cluster RBAC so Argo can prune it
 # after the rest of the self-managed Argo subtree.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -43,85 +43,6 @@ metadata:
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: argocd-application-controller
-subjects:
-  - kind: ServiceAccount
-    name: argocd-application-controller
-    namespace: argocd
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: argocd-application-controller
-  namespace: argocd
-  annotations:
-    argocd.argoproj.io/sync-wave: "-1"
-  labels:
-    helm.sh/chart: argo-cd-9.4.11
-    app.kubernetes.io/name: argocd-application-controller
-    app.kubernetes.io/instance: argocd
-    app.kubernetes.io/component: application-controller
-    app.kubernetes.io/managed-by: Helm
-    app.kubernetes.io/part-of: argocd
-    app.kubernetes.io/version: "v3.3.4"
-rules:
-  - apiGroups:
-      - ""
-    resources:
-      - secrets
-      - configmaps
-    verbs:
-      - get
-      - list
-      - watch
-  - apiGroups:
-      - argoproj.io
-    resources:
-      - applications
-      - applicationsets
-      - appprojects
-    verbs:
-      - create
-      - get
-      - list
-      - watch
-      - update
-      - patch
-      - delete
-  - apiGroups:
-      - ""
-    resources:
-      - events
-    verbs:
-      - create
-      - list
-  - apiGroups:
-      - apps
-    resources:
-      - deployments
-    verbs:
-      - get
-      - list
-      - watch
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: argocd-application-controller
-  namespace: argocd
-  annotations:
-    argocd.argoproj.io/sync-wave: "-1"
-  labels:
-    helm.sh/chart: argo-cd-9.4.11
-    app.kubernetes.io/name: argocd-application-controller
-    app.kubernetes.io/instance: argocd
-    app.kubernetes.io/component: application-controller
-    app.kubernetes.io/managed-by: Helm
-    app.kubernetes.io/part-of: argocd
-    app.kubernetes.io/version: "v3.3.4"
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
   name: argocd-application-controller
 subjects:
   - kind: ServiceAccount

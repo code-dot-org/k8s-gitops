@@ -17,11 +17,12 @@ spec:
         releaseName: argocd
         valueFiles:
           - $values/apps/infra/codeai-cluster-config.values.yaml
-    # Keep the controller RBAC alive through the rest of the self-delete.
-    # The upstream chart exposes wave annotations for the controller StatefulSet
-    # and ServiceAccount through values, but not for the controller Role or
-    # ClusterRole bindings. This later source intentionally overrides just
-    # those RBAC objects so Argo prunes them after the rest of the Argo app.
+    # Keep the controller's cluster-scoped authority alive through the rest of
+    # the self-delete. The upstream chart exposes wave annotations for the
+    # controller StatefulSet and ServiceAccount through values, but not for the
+    # controller ClusterRole or ClusterRoleBinding. This later source
+    # intentionally overrides just those cluster-scoped RBAC objects so Argo
+    # prunes them after the rest of the Argo app.
     - repoURL: https://github.com/code-dot-org/k8s-gitops.git
       targetRevision: main
       path: apps/infra/argocd/controller-rbac-overrides
