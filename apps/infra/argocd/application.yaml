@@ -3,11 +3,14 @@ kind: Application
 metadata:
   name: argocd
   namespace: argocd
-  # Intentionally no resources finalizer here.
-  # We want this child Application CR to disappear from the app-of-apps tree
-  # without Argo trying to cascade-delete its own control plane.
+  # Intentionally no resources finalizer here to cascade delete k8s parts of Argo,
+  # because ArgoCD can't safely delete itself live without shit going crazy and
+  # wedging. We have it delete its Application but leave Argo pods etc running.
+  #
   # Final teardown of the Argo install is owned by the bootstrap Helm release in
-  # code-dot-org/k8s/tofu/codeai-k8s/cluster-infra-argocd/argocd-bootstrap.tf.
+  # code-dot-org/k8s/tofu/codeai-k8s/cluster-infra-argocd/argocd-bootstrap.tf
+  #
+  # This gives us symmetry in bootstrap and destroy! (PS: and it works)
 spec:
   project: default
   sources:
