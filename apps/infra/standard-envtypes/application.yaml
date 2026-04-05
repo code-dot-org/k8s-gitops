@@ -7,15 +7,6 @@ metadata:
     argocd.argoproj.io/sync-wave: "2"
 spec:
   project: default
-  ignoreDifferences:
-    - group: external-secrets.io
-      kind: ExternalSecret
-      managedFieldsManagers:
-        - external-secrets
-    - group: external-secrets.io
-      kind: ClusterExternalSecret
-      managedFieldsManagers:
-        - external-secrets
   sources:
     - repoURL: https://github.com/code-dot-org/k8s-gitops.git
       targetRevision: main
@@ -35,6 +26,5 @@ spec:
       prune: true
       selfHeal: true
     syncOptions:
-      - RespectIgnoreDifferences=true
       - ServerSideApply=true
       - CreateNamespace=true

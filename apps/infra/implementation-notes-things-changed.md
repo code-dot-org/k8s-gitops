@@ -578,3 +578,66 @@ and the upstream maintainer answer in discussion `#21054` confirms that
 has a first-class cmd-params key for `reposerver.git.request.timeout`, so the
 clean fix is to set both through the supported wiring instead of relying on a
 dead values key.
+
+## 2026-04-04: stop using SSA plus manager-based diff ignores for the noisy ESO apps
+
+### What happened
+
+The kept ESO drift suppression on:
+
+- `dex`
+- `kargo-secrets`
+- `standard-envtypes`
+
+used:
+
+- `managedFieldsManagers: [external-secrets]`
+- `RespectIgnoreDifferences=true`
+
+The problem apps stayed `OutOfSync` anyway.
+
+### What was tried
+
+- trust the manager-based ignore rule
+- re-sync the apps repeatedly
+- assume the remaining drift was stale compare state
+
+### What worked
+
+Diagnose the actual ownership on the live objects.
+
+For the noisy `ExternalSecret` resources in `dex` and `kargo-secrets`, the
+drifting `spec` fields are owned by:
+
+- `argocd-controller`
+
+not by:
+
+- `external-secrets`
+
+So the manager-based ignore rule was matching the wrong writer. The kept change
+is:
+
+- remove the `managedFieldsManagers` workaround
+- remove `RespectIgnoreDifferences=true`
+- disable `ServerSideApply=true` on the actually noisy apps:
+  - `dex`
+  - `kargo-secrets`
+
+`standard-envtypes` keeps running without the manager-based ignore, but does
+not lose SSA because it was not one of the apps still stuck on this failure.
+
+### What did not
+
+- `managedFieldsManagers: [external-secrets]`
+
+That rule only helps if the drifting fields are actually owned by
+`external-secrets`. Here they were not.
+
+### Why this change won
+
+The previous fix was aimed at the wrong field manager. Under SSA, Argo applied
+the sparse desired object, the CRD defaulting expanded it, and those expanded
+fields were then tracked under Argo's own manager. Disabling SSA on the two
+affected apps is smaller and more honest than keeping an ignore rule that does
+not match the real diff.
