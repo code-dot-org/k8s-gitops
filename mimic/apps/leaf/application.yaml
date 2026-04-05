@@ -13,7 +13,7 @@ spec:
       recurse: true
   destination:
     server: https://kubernetes.default.svc
-    namespace: leaf
+    namespace: leaf-generated
   syncPolicy:
     automated:
       prune: true
