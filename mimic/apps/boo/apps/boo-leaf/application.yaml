@@ -15,6 +15,9 @@ spec:
     server: https://kubernetes.default.svc
     namespace: boo-leaf-generated
   syncPolicy:
+    managedNamespaceMetadata:
+      annotations:
+        argocd.argoproj.io/tracking-id: "mimic-boo-leaf:/Namespace:boo-leaf-generated"
     automated:
       prune: true
       selfHeal: true
