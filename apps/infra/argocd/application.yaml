@@ -3,6 +3,11 @@ kind: Application
 metadata:
   name: argocd
   namespace: argocd
+  # Intentionally no resources finalizer here.
+  # We want this child Application CR to disappear from the app-of-apps tree
+  # without Argo trying to cascade-delete its own control plane.
+  # Final teardown of the Argo install is owned by the bootstrap Helm release in
+  # code-dot-org/k8s/tofu/codeai-k8s/cluster-infra-argocd/argocd-bootstrap.tf.
 spec:
   project: default
   sources:
@@ -20,9 +25,6 @@ spec:
     server: https://kubernetes.default.svc
     namespace: argocd
   syncPolicy:
-    # Let the bootstrap Helm release own final teardown of the Argo install.
-    # This child Application should disappear from the app-of-apps tree without
-    # cascading deletion of the Argo control plane itself.
     automated:
       prune: true
       selfHeal: true
