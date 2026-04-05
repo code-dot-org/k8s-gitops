@@ -8,6 +8,8 @@ kind: LoadBalancerConfiguration
 metadata:
   name: {{ .Values.gateway.loadBalancerConfig.name }}
   namespace: {{ .Values.gateway.loadBalancerConfig.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
 spec:
   scheme: {{ .Values.gateway.loadBalancerConfig.scheme | quote }}
   listenerConfigurations:
