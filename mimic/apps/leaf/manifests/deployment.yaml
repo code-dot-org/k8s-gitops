@@ -32,4 +32,4 @@ spec:
                 command:
                   - sh
                   - -c
-                  - sleep 120
+                  - sleep 60
