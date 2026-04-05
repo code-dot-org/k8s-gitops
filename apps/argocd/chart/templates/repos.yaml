@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: repo-code-dot-org
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: repository
+type: Opaque
+stringData:
+  name: code-dot-org
+  type: git
+  url: https://github.com/code-dot-org/code-dot-org.git
+  # TODO: evaluate if enabling this slows down k8s/helm checkout even more.
+  # enableLfs: "true"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: repo-k8s-gitops
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: repository
+type: Opaque
+stringData:
+  name: k8s-gitops
+  type: git
+  url: https://github.com/code-dot-org/k8s-gitops.git
+  enableLfs: "true"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: repo-kargo-charts
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: repository
+type: Opaque
+stringData:
+  name: kargo-charts
+  type: helm
+  url: ghcr.io/akuity/kargo-charts
+  enableOCI: "true"
