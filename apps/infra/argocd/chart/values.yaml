@@ -99,13 +99,6 @@ argo-cd:
   # benchmarking, but its a totally different task. We should profile the
   # correct size for this instance.
   controller:
-    statefulsetAnnotations:
-      argocd.argoproj.io/sync-wave: "-1"
-
-    serviceAccount:
-      annotations:
-        argocd.argoproj.io/sync-wave: "-1"
-
     resources:
       requests:
         cpu: 1000m
