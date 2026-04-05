@@ -66,7 +66,7 @@ Refresh `/Users/seth/src/k8s-gitops/apps/infra/implementation-plan.md` first if 
 
 - [x] Add `applicationsetcontroller.enable.progressive.syncs: "true"` under `argo-cd.configs.params` in the copied Argo chart values.
 - [x] Restore `resource.customizations.health.argoproj.io_Application` under `argo-cd.configs.cm` in the copied Argo chart values.
-- [x] Use the stable Argo docs `Argocd App` Lua snippet without changing its behavior.
+- [x] Restore `argoproj.io/Application` health passthrough without changing the docs behavior for `status` and `message`.
 - [x] Keep the existing Kargo `Project` health customization in place.
 - [x] Move the ESO-dependent Argo secret templates out of the main Argo chart and into the `dex` chart.
 - [x] Remove the bootstrap-only gate from the main Argo chart.
@@ -121,7 +121,7 @@ Refresh `/Users/seth/src/k8s-gitops/apps/infra/implementation-plan.md` first if 
 - [x] Identify the residual post-bootstrap drift instead of treating it as stale status.
 - [x] Match ESO defaulted fields in the copied `dex` and `kargo-secrets` charts.
 - [x] Mirror those ESO drift fixes back into `code-dot-org` legacy charts.
-- [x] Replace the explicit ESO default-field rendering with app-level `ignoreDifferences` on the noisy apps, and back those extra fields back out of the charts.
+- [x] Remove the dead manager-based ESO drift workaround and disable SSA on the actually noisy apps: `dex` and `kargo-secrets`.
 - [x] Match the `networking` `LoadBalancerConfiguration` defaulted `alpnPolicy`.
 - [x] Ignore diff churn for the AWS Load Balancer Controller webhook TLS Secret in the `networking` app.
 - [x] Break recursive `app-of-apps` self-management by bootstrapping a dedicated wrapper `Application` in `apps/app-of-apps/bootstrap.yaml` and renaming the managed `ApplicationSet` file to `apps/app-of-apps/app-of-apps.yaml`.

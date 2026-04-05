@@ -63,14 +63,14 @@ The legacy Helm releases in `helm.tf` remain behind `deploy_helm_charts`, which 
   - under `argo-cd.configs.params`
 - Restore health assessment for `argoproj.io/Application` in the Argo chart under `argo-cd.configs.cm`:
   - `resource.customizations.health.argoproj.io_Application`
-  - use the current stable Argo docs `Argocd App` Lua snippet as-is:
-    - `hs = {}`
-    - `hs.status = "Progressing"`
-    - `hs.message = ""`
-    - if `obj.status.health` exists, copy through its `status` and optional `message`
-    - return `hs`
+  - keep the docs behavior:
+    - default `status = "Progressing"`
+    - default `message = ""`
+    - if `obj.status.health` exists, pass it through
+  - the kept form is:
+    - `return obj.status and obj.status.health or {status = "Progressing", message = ""}`
   - source: [Argo CD Resource Health: Argocd App](https://argo-cd.readthedocs.io/en/stable/operator-manual/health/#argocd-app)
-  - do not simplify or rewrite it unless there is a concrete behavior change we want
+  - keep the docs behavior exact even if the Lua is simplified
 - Keep the existing internal infra child waves unchanged:
   - `networking` `0`
   - `external-secrets-operator` `1`
@@ -160,7 +160,7 @@ The legacy Helm releases in `helm.tf` remain behind `deploy_helm_charts`, which 
 - Keeping the bootstrap `helm_release` managed in Tofu after Argo self-management starts is acceptable.
 - All top-level wrapper apps generated from `applicationset.yaml` may safely run after infra; current impact is `codeai`. `app-of-apps` is bootstrapped separately and is not recursively generated.
 - `kargo` and `codeai` may sync together in the second non-`infra` group. No further top-level ordering between those two is required for this plan.
-- The `argoproj.io/Application` health snippet should be copied from the Argo docs as-is unless there is a concrete reason to simplify it.
+- The `argoproj.io/Application` health snippet should preserve the Argo docs behavior exactly. The current kept form is the equivalent one-line passthrough.
 - The source of truth for that snippet is the stable Argo docs `Argocd App` section, not an older local copy.
 - The ESO-dependent Argo secret resources belong with `dex`, not with the main
   Argo bootstrap chart.
