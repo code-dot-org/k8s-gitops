@@ -17,7 +17,7 @@ spec:
   syncPolicy:
     managedNamespaceMetadata:
       annotations:
-        argocd.argoproj.io/tracking-id: "mimic-boo-leaf:/Namespace:boo-leaf-generated"
+        argocd.argoproj.io/tracking-id: "mimic-boo-leaf:/Namespace:/boo-leaf-generated"
     automated:
       prune: true
       selfHeal: true
