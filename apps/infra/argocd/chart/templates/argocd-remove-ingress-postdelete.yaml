@@ -1,3 +1,4 @@
+{{- if not (hasKey .Values "_bootstrap") }}
 # This is an ArgoCD post-delete hook, it runs when Argo tries to delete it's own
 # app during destroy. This hook deletes the ingress from ArgoCD to prevent
 # a stuck situation later in argocd-bootstrap.tf.
@@ -44,3 +45,4 @@ spec:
               kubectl -n {{ $namespace }} delete ingress/{{ $fullname }}
               kubectl -n {{ $namespace }} wait --for=delete ingress/{{ $fullname }} --timeout=300s
               echo "argocd-remove-ingress-postdelete: deleted ingress/{{ $fullname }} in namespace {{ $namespace }}"
+{{- end }}
