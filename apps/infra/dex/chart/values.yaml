@@ -39,6 +39,7 @@ dexSecretStore:
   name: aws-secrets-manager-store-dex
   serviceAccountName: external-secrets-sa-dex
   awsRegion: us-east-1
+  iamRoleArn:
 
 dexGoogleServiceAccount:
   name: dex-google-service-account
