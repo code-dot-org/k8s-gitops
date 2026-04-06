@@ -1,4 +1,7 @@
 RAILS_ENV: production
+dnsName: studio.production
+locals.yml:
+  override_dashboard: studio.production.k8s.code.org
 # dashboard_workers: 32
 healthChecks:
   enabled: true

@@ -1,4 +1,7 @@
 RAILS_ENV: staging
+dnsName: studio.staging
+locals.yml:
+  override_dashboard: studio.staging.k8s.code.org
 # dashboard_workers: 10
 healthChecks:
   enabled: true

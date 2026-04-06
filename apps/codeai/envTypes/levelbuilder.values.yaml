@@ -1,4 +1,7 @@
 RAILS_ENV: levelbuilder
+dnsName: studio.levelbuilder
+locals.yml:
+  override_dashboard: studio.levelbuilder.k8s.code.org
 # dashboard_workers: 27
 healthChecks:
   enabled: true
