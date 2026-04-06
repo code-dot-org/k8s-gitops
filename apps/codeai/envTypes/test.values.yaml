@@ -1,7 +1,4 @@
 RAILS_ENV: test
-dnsName: studio.test
-locals.yml:
-  override_dashboard: studio.test.k8s.code.org
 # dashboard_workers: 65
 healthChecks:
   enabled: true
