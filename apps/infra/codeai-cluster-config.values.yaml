@@ -10,6 +10,7 @@
   "cluster_region": "us-east-1"
   "cluster_subdomain": "k8s.code.org"
   "cluster_subdomain_wildcard_certificate_arn": "arn:aws:acm:us-east-1:475661607190:certificate/a006e19f-917f-42fd-8181-2c40b98dd7cc"
+  "crossplane_route53_provider_iam_role_arn": "arn:aws:iam::475661607190:role/codeai-k8s-crossplane-provider-aws-route53"
   "dex_external_secrets_iam_role_arn": "arn:aws:iam::475661607190:role/codeai-k8s-eso-dex"
   "dex_google_client_id": "254945981659-9p8ctpobals7gmah0ptlt70t29eflira.apps.googleusercontent.com"
   "eso_iam_role_arns":
@@ -73,3 +74,12 @@
   "secretStore":
     "awsRegion": "us-east-1"
     "iamRoleArn": "arn:aws:iam::475661607190:role/codeai-k8s-eso-kargo-external-secret-stores"
+
+
+
+# Specially shaped values for the crossplane chart:
+"crossplane":
+  "providers":
+    "awsRoute53":
+      "runtimeConfig":
+        "iamRoleArn": "arn:aws:iam::475661607190:role/codeai-k8s-crossplane-provider-aws-route53"
