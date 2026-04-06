@@ -40,7 +40,7 @@ spec:
             - /bin/sh
             - -c
             - |
-              echo "deleting ingress/{{ $fullname }} in namespace {{ $namespace }}"
+              echo "argocd-remove-ingress-postdelete: deleting ingress/{{ $fullname }} in namespace {{ $namespace }}"
               kubectl -n {{ $namespace }} delete ingress/{{ $fullname }}
               kubectl -n {{ $namespace }} wait --for=delete ingress/{{ $fullname }} --timeout=300s
-              echo "deleted ingress/{{ $fullname }} in namespace {{ $namespace }}"
+              echo "argocd-remove-ingress-postdelete: deleted ingress/{{ $fullname }} in namespace {{ $namespace }}"
