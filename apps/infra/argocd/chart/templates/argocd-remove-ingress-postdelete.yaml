@@ -35,7 +35,7 @@ spec:
       serviceAccountName: {{ include "argo-cd.controller.serviceAccountName" $argocd }}
       containers:
         - name: kubectl
-          image: registry.k8s.io/kubectl:v1.35.3
+          image: bitnami/kubectl:latest
           command:
             - /bin/sh
             - -c
