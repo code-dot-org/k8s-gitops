@@ -3,6 +3,8 @@ kind: Application
 metadata:
   name: argocd
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
   # Intentionally no resources finalizer here to cascade delete k8s parts of Argo,
   # because ArgoCD can't safely delete itself live without shit going crazy and
   # wedging. We have it delete its Application but leave Argo pods etc running.
