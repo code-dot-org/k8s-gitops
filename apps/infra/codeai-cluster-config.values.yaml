@@ -36,15 +36,28 @@
     "spec":
       "certificateArn":
       - "arn:aws:acm:us-east-1:475661607190:certificate/a006e19f-917f-42fd-8181-2c40b98dd7cc"
+  "serviceAccount":
+    "annotations":
+      "eks.amazonaws.com/role-arn": "arn:aws:iam::475661607190:role/alb-controller-2026040302143541420000000e"
 "gateway":
   "loadBalancerConfig":
     "defaultCertificateArn": "arn:aws:acm:us-east-1:475661607190:certificate/a006e19f-917f-42fd-8181-2c40b98dd7cc"
 
 
 
+# Specially shaped values for the external-dns chart:
+"external-dns":
+  "serviceAccount":
+    "annotations":
+      "eks.amazonaws.com/role-arn": "arn:aws:iam::475661607190:role/external-dns-2026040302144078330000000f"
+
+
+
 # Specially shaped values for the dex chart:
 "dexGoogleClient":
   "clientID": "254945981659-9p8ctpobals7gmah0ptlt70t29eflira.apps.googleusercontent.com"
+"dexSecretStore":
+  "iamRoleArn": "arn:aws:iam::475661607190:role/codeai-k8s-eso-dex"
 
 
 
@@ -56,3 +69,4 @@
 "systemResources":
   "secretStore":
     "awsRegion": "us-east-1"
+    "iamRoleArn": "arn:aws:iam::475661607190:role/codeai-k8s-eso-kargo-external-secret-stores"
