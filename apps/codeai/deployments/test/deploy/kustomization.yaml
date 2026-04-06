@@ -8,5 +8,6 @@ resources:
 components:
   - ../../../envTypes/test
 patches:
+  - path: deployment-root.patch.yaml
   - path: ingress.dns-name.patch.yaml
   - path: locals.stack_name.patch.yaml
