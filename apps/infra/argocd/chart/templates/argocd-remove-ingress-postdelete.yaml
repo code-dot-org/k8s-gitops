@@ -1,0 +1,44 @@
+# This is an ArgoCD post-delete hook, it runs when Argo tries to delete it's own
+# app during destroy. This hook deletes the ingress from ArgoCD to prevent
+# a stuck situation later in argocd-bootstrap.tf.
+#
+# ISSUE: argo-bootstrap.tf wedges upon deleting ingress/argocd-server and times out
+# 1. when we install argo initially via `helm_release`, it doesn't require networking for Argo core itself
+# 2. but then we later install networking, and that brings in the AWS load balancer controller / ingress machinery, including a default ingress class, `aws-alb`
+# 3. then we restart Argo at the end of the Tofu install
+# 4. the exact Argo k8s object is `Ingress/argocd-server` in namespace `argocd`
+# 5. that ingress is what makes `https://argocd.k8s.code.org` work, and it leads to the derived `TargetGroupBinding/k8s-argocd-argocdse-817b2865e4`
+# 6. the observed live `Ingress/argocd-server` manifest now has `spec.ingressClassName: aws-alb`
+# 7. when we go to delete, we tear down `networking` as part of the app-of-apps uninstall, leaving `Ingress/argocd-server` stuck with finalizer `ingress.k8s.aws/resources`
+# 8. this leaves that Argo ingress path with finalizers that can no longer complete:
+#    `TargetGroupBinding/k8s-argocd-argocdse-817b2865e4` still carries finalizer `elbv2.k8s.aws/resources` and likely needs the AWS load balancer controller alive to finish its AWS cleanup
+# 9. therefore when we get to `argocd-bootstrap.tf`, Helm hangs on removing the `helm_release.argocd_bootstrap` and times out
+#
+# Conclusion: to be deleted, Argo must not have the networking ingress class `aws-alb` on it at time of delete.
+
+{{ $argocd := dict "Values" (index .Values "argo-cd") "Release" .Release "Chart" (dict "Name" "argo-cd") }}
+{{ $namespace := include "argo-cd.namespace" $argocd }}
+{{ $fullname := include "argo-cd.server.fullname" $argocd }}
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $fullname }}-remove-ingress-postdelete
+  namespace: {{ $namespace }}
+  annotations:
+    argocd.argoproj.io/hook: PostDelete
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "argo-cd.controller.serviceAccountName" $argocd }}
+      containers:
+        - name: kubectl
+          image: registry.k8s.io/kubectl:v1.35.3
+          command:
+            - /bin/sh
+            - -c
+            - |
+              kubectl -n {{ $namespace }} delete ingress/{{ $fullname }}
+              kubectl -n {{ $namespace }} wait --for=delete ingress/{{ $fullname }} --timeout=300s
