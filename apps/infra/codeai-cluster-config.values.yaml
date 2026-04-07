@@ -30,27 +30,16 @@
 
 
 
-# Specially shaped values for the networking chart:
-"aws-load-balancer-controller":
-  "serviceAccount":
-    "annotations":
-      "eks.amazonaws.com/role-arn": "arn:aws:iam::475661607190:role/codeai-k8s-aws-load-balancer-controller"
-
-
-
-# Specially shaped values for the external-dns chart:
-"external-dns":
-  "serviceAccount":
-    "annotations":
-      "eks.amazonaws.com/role-arn": "arn:aws:iam::475661607190:role/codeai-k8s-external-dns"
+# Shared deterministic IAM inputs for charts that derive role ARNs locally.
+"global":
+  "clusterName": "codeai-k8s"
+  "iamArnPrefix": "arn:aws:iam::475661607190"
 
 
 
 # Specially shaped values for the dex chart:
 "dexGoogleClient":
   "clientID": "254945981659-9p8ctpobals7gmah0ptlt70t29eflira.apps.googleusercontent.com"
-"dexSecretStore":
-  "iamRoleArn": "arn:aws:iam::475661607190:role/codeai-k8s-eso-dex"
 
 
 
@@ -58,16 +47,6 @@
 "sharedResources":
   "clusterName": "codeai-k8s"
   "clusterRegion": "us-east-1"
-  "iamRoleArn": "arn:aws:iam::475661607190:role/codeai-k8s-eso-kargo-external-secret-stores"
 "systemResources":
   "secretStore":
     "awsRegion": "us-east-1"
-    "iamRoleArn": "arn:aws:iam::475661607190:role/codeai-k8s-eso-kargo-external-secret-stores"
-
-
-
-# Specially shaped values for the crossplane chart:
-"crossplane":
-  "providers":
-    "aws":
-      "iamRoleArn": "arn:aws:iam::475661607190:role/codeai-k8s-crossplane-aws"
