@@ -10,7 +10,6 @@
   "cluster_primary_security_group_id": "sg-01e49babda6a779a0"
   "cluster_region": "us-east-1"
   "cluster_subdomain": "k8s.code.org"
-  "cluster_subdomain_wildcard_certificate_arn": "arn:aws:acm:us-east-1:475661607190:certificate/a006e19f-917f-42fd-8181-2c40b98dd7cc"
   "crossplane_aws_iam_role_arn": "arn:aws:iam::475661607190:role/codeai-k8s-crossplane-aws"
   "dex_external_secrets_iam_role_arn": "arn:aws:iam::475661607190:role/codeai-k8s-eso-dex"
   "dex_google_client_id": "254945981659-9p8ctpobals7gmah0ptlt70t29eflira.apps.googleusercontent.com"
@@ -39,16 +38,9 @@
 
 # Specially shaped values for the networking chart:
 "aws-load-balancer-controller":
-  "ingressClassParams":
-    "spec":
-      "certificateArn":
-      - "arn:aws:acm:us-east-1:475661607190:certificate/a006e19f-917f-42fd-8181-2c40b98dd7cc"
   "serviceAccount":
     "annotations":
       "eks.amazonaws.com/role-arn": "arn:aws:iam::475661607190:role/codeai-k8s-aws-load-balancer-controller"
-"gateway":
-  "loadBalancerConfig":
-    "defaultCertificateArn": "arn:aws:acm:us-east-1:475661607190:certificate/a006e19f-917f-42fd-8181-2c40b98dd7cc"
 
 
 
