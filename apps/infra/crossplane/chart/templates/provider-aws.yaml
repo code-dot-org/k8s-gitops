@@ -5,6 +5,20 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "10"
 spec:
+  deploymentTemplate:
+    spec:
+      selector: {}
+      template:
+        spec:
+          containers:
+            - name: package-runtime
+              resources:
+                requests:
+                  cpu: 500m
+                  memory: 768Mi
+                limits:
+                  cpu: 500m
+                  memory: 768Mi
   serviceAccountTemplate:
     metadata:
       name: "provider-aws"
