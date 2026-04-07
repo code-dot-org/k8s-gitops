@@ -2,30 +2,24 @@
 # Do not edit by hand.
 
 
-# General codeai_cluster_config values, for use by any chart
+# General codeai_cluster_config values, for use by charts that still consume them directly.
 "codeai_cluster_config":
-  "aws_load_balancer_controller_iam_role_arn": "arn:aws:iam::475661607190:role/codeai-k8s-aws-load-balancer-controller"
   "cluster_name": "codeai-k8s"
   "cluster_oidc_issuer_url": "https://oidc.eks.us-east-1.amazonaws.com/id/91C0A419CB3F0C5AF51E1BE555ADA0F5"
   "cluster_primary_security_group_id": "sg-01e49babda6a779a0"
   "cluster_region": "us-east-1"
   "cluster_subdomain": "k8s.code.org"
-  "crossplane_aws_iam_role_arn": "arn:aws:iam::475661607190:role/codeai-k8s-crossplane-aws"
-  "dex_external_secrets_iam_role_arn": "arn:aws:iam::475661607190:role/codeai-k8s-eso-dex"
-  "dex_google_client_id": "254945981659-9p8ctpobals7gmah0ptlt70t29eflira.apps.googleusercontent.com"
   "eso_iam_role_arns":
     "adhoc": "arn:aws:iam::475661607190:role/codeai-k8s-eso-adhoc"
     "levelbuilder": "arn:aws:iam::475661607190:role/codeai-k8s-eso-levelbuilder"
     "production": "arn:aws:iam::475661607190:role/codeai-k8s-eso-production"
     "staging": "arn:aws:iam::475661607190:role/codeai-k8s-eso-staging"
     "test": "arn:aws:iam::475661607190:role/codeai-k8s-eso-test"
-  "external_dns_iam_role_arn": "arn:aws:iam::475661607190:role/codeai-k8s-external-dns"
   "frontend_security_group_id": "sg-663a031e"
   "frontend_security_group_namespaces":
   - "levelbuilder"
   - "production"
   - "test"
-  "kargo_external_secret_stores_iam_role_arn": "arn:aws:iam::475661607190:role/codeai-k8s-eso-kargo-external-secret-stores"
   "oidc_provider_arn": "arn:aws:iam::475661607190:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/91C0A419CB3F0C5AF51E1BE555ADA0F5"
   "parent_domain_zone_id": "Z2LCOI49SCXUGU"
   "single_namespace_environment_types":
