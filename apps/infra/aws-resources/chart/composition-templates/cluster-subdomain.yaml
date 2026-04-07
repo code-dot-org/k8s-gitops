@@ -76,6 +76,25 @@ apiVersion: route53.aws.m.upbound.io/v1beta1
 kind: Record
 metadata:
   annotations:
+    crossplane.io/external-name: {{ printf "%s_%s_SOA" $zone.resource.status.atProvider.zoneId $xr.spec.clusterSubdomain }}
+    gotemplating.fn.crossplane.io/composition-resource-name: soa-record
+spec:
+  providerConfigRef:
+    name: default
+    kind: ClusterProviderConfig
+  forProvider:
+    allowOverwrite: true
+    name: {{ $xr.spec.clusterSubdomain }}
+    ttl: 60
+    type: SOA
+    zoneId: {{ $zone.resource.status.atProvider.zoneId }}
+    records:
+      - {{ printf "%s. awsdns-hostmaster.amazon.com. 1 7200 900 1209600 86400" (index $zone.resource.status.atProvider.nameServers 0) | quote }}
+---
+apiVersion: route53.aws.m.upbound.io/v1beta1
+kind: Record
+metadata:
+  annotations:
     gotemplating.fn.crossplane.io/composition-resource-name: parent-ns-record
 spec:
   providerConfigRef:
