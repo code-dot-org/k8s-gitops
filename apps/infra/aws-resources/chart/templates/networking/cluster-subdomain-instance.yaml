@@ -1,0 +1,16 @@
+apiVersion: infra.code.org/v1alpha1
+kind: XClusterDNSCertificate
+metadata:
+  name: codeai-k8s-cluster-dns-certificate
+  namespace: {{ include "aws-resources.namespace" . }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  clusterName: {{ .Values.codeai_cluster_config.cluster_name | quote }}
+  clusterRegion: {{ .Values.codeai_cluster_config.cluster_region | quote }}
+  clusterOidcIssuerUrl: {{ .Values.codeai_cluster_config.cluster_oidc_issuer_url | quote }}
+  clusterSubdomain: {{ .Values.codeai_cluster_config.cluster_subdomain | quote }}
+  oidcProviderArn: {{ .Values.codeai_cluster_config.oidc_provider_arn | quote }}
+  parentDomainZoneId: {{ .Values.codeai_cluster_config.parent_domain_zone_id | quote }}
+  singleNamespaceEnvironmentTypes:
+{{ toYaml .Values.codeai_cluster_config.single_namespace_environment_types | indent 4 }}

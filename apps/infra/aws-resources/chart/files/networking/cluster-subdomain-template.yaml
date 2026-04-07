@@ -1,0 +1,186 @@
+{{ $xr := .observed.composite.resource }}
+{{ $oidcHost := trimPrefix "https://" $xr.spec.clusterOidcIssuerUrl }}
+{{ $zone := index .observed.resources "cluster-zone" }}
+{{ $cert := index .observed.resources "wildcard-certificate" }}
+---
+apiVersion: route53.aws.m.upbound.io/v1beta1
+kind: Zone
+metadata:
+  annotations:
+    gotemplating.fn.crossplane.io/composition-resource-name: cluster-zone
+spec:
+  providerConfigRef:
+    name: default
+    kind: ClusterProviderConfig
+  forProvider:
+    name: {{ $xr.spec.clusterSubdomain }}
+    comment: Cluster subdomain hosted zone for {{ $xr.spec.clusterSubdomain }}
+---
+apiVersion: iam.aws.m.upbound.io/v1beta1
+kind: Role
+metadata:
+  name: external-dns
+  annotations:
+    crossplane.io/external-name: {{ printf "%s-external-dns" $xr.spec.clusterName }}
+    gotemplating.fn.crossplane.io/composition-resource-name: external-dns-role
+spec:
+  providerConfigRef:
+    name: default
+    kind: ClusterProviderConfig
+  forProvider:
+    assumeRolePolicy: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": "sts:AssumeRoleWithWebIdentity",
+            "Principal": {
+              "Federated": {{ $xr.spec.oidcProviderArn | quote }}
+            },
+            "Condition": {
+              "StringEquals": {
+                "{{ $oidcHost }}:sub": "system:serviceaccount:external-dns:external-dns-sa",
+                "{{ $oidcHost }}:aud": "sts.amazonaws.com"
+              }
+            }
+          }
+        ]
+      }
+    description: IRSA for external-dns operator
+    forceDetachPolicies: true
+    path: /
+---
+apiVersion: acm.aws.m.upbound.io/v1beta1
+kind: Certificate
+metadata:
+  annotations:
+    gotemplating.fn.crossplane.io/composition-resource-name: wildcard-certificate
+spec:
+  providerConfigRef:
+    name: default
+    kind: ClusterProviderConfig
+  forProvider:
+    region: {{ $xr.spec.clusterRegion }}
+    domainName: "*.{{ $xr.spec.clusterSubdomain }}"
+    validationMethod: DNS
+    subjectAlternativeNames:
+{{ range $env := $xr.spec.singleNamespaceEnvironmentTypes }}
+      - "*.{{ $env }}.{{ $xr.spec.clusterSubdomain }}"
+{{ end }}
+      - "*.adhoc.{{ $xr.spec.clusterSubdomain }}"
+{{ if and $zone $zone.resource $zone.resource.status $zone.resource.status.atProvider (gt (len $zone.resource.status.atProvider.nameServers) 0) }}
+---
+apiVersion: route53.aws.m.upbound.io/v1beta1
+kind: Record
+metadata:
+  annotations:
+    gotemplating.fn.crossplane.io/composition-resource-name: parent-ns-record
+spec:
+  providerConfigRef:
+    name: default
+    kind: ClusterProviderConfig
+  forProvider:
+    allowOverwrite: false
+    name: {{ $xr.spec.clusterSubdomain }}
+    ttl: 300
+    type: NS
+    zoneId: {{ $xr.spec.parentDomainZoneId }}
+    records:
+{{ range $ns := $zone.resource.status.atProvider.nameServers }}
+      - {{ $ns }}
+{{ end }}
+---
+apiVersion: iam.aws.m.upbound.io/v1beta1
+kind: Policy
+metadata:
+  name: external-dns
+  annotations:
+    crossplane.io/external-name: {{ printf "%s-external-dns" $xr.spec.clusterName }}
+    gotemplating.fn.crossplane.io/composition-resource-name: external-dns-policy
+spec:
+  providerConfigRef:
+    name: default
+    kind: ClusterProviderConfig
+  forProvider:
+    description: IAM Policy for external-dns operator
+    path: /
+    policy: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": "route53:ChangeResourceRecordSets",
+            "Resource": "arn:aws:route53:::hostedzone/{{ $zone.resource.status.atProvider.zoneId }}"
+          },
+          {
+            "Effect": "Allow",
+            "Action": "route53:ListTagsForResource",
+            "Resource": "arn:aws:route53:::hostedzone/{{ $zone.resource.status.atProvider.zoneId }}"
+          },
+          {
+            "Effect": "Allow",
+            "Action": [
+              "route53:ListHostedZones",
+              "route53:ListResourceRecordSets"
+            ],
+            "Resource": "*"
+          }
+        ]
+      }
+---
+apiVersion: iam.aws.m.upbound.io/v1beta1
+kind: RolePolicyAttachment
+metadata:
+  name: external-dns
+  annotations:
+    gotemplating.fn.crossplane.io/composition-resource-name: external-dns-attachment
+spec:
+  providerConfigRef:
+    name: default
+    kind: ClusterProviderConfig
+  forProvider:
+    policyArnRef:
+      name: external-dns
+    roleRef:
+      name: external-dns
+{{ end }}
+{{ if and $zone $zone.resource $zone.resource.status $zone.resource.status.atProvider $cert $cert.resource $cert.resource.status $cert.resource.status.atProvider }}
+{{ range $idx, $dvo := $cert.resource.status.atProvider.domainValidationOptions }}
+---
+apiVersion: route53.aws.m.upbound.io/v1beta1
+kind: Record
+metadata:
+  annotations:
+    gotemplating.fn.crossplane.io/composition-resource-name: validation-record-{{ $idx }}
+spec:
+  providerConfigRef:
+    name: default
+    kind: ClusterProviderConfig
+  forProvider:
+    name: {{ $dvo.resourceRecordName }}
+    records:
+      - {{ $dvo.resourceRecordValue }}
+    ttl: 60
+    type: {{ $dvo.resourceRecordType }}
+    zoneId: {{ $zone.resource.status.atProvider.zoneId }}
+{{ end }}
+---
+apiVersion: acm.aws.m.upbound.io/v1beta1
+kind: CertificateValidation
+metadata:
+  annotations:
+    gotemplating.fn.crossplane.io/composition-resource-name: wildcard-certificate-validation
+spec:
+  providerConfigRef:
+    name: default
+    kind: ClusterProviderConfig
+  forProvider:
+    certificateArn: {{ $cert.resource.status.atProvider.arn }}
+    region: {{ $xr.spec.clusterRegion }}
+    validationRecordFqdns:
+{{ range $dvo := $cert.resource.status.atProvider.domainValidationOptions }}
+      - {{ $dvo.resourceRecordName }}
+{{ end }}
+{{ end }}
