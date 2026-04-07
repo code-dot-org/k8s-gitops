@@ -1,7 +1,8 @@
 {{ $xr := .observed.composite.resource }}
 {{ $oidcHost := trimPrefix "https://" $xr.spec.clusterOidcIssuerUrl }}
-{{ $zone := index .observed.resources "cluster-zone" }}
-{{ $cert := index .observed.resources "wildcard-certificate" }}
+{{ $resources := .observed.resources | default (dict) }}
+{{ $zone := get $resources "cluster-zone" }}
+{{ $cert := get $resources "wildcard-certificate" }}
 ---
 apiVersion: route53.aws.m.upbound.io/v1beta1
 kind: Zone
