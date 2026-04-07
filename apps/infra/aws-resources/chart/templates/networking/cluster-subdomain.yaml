@@ -71,7 +71,7 @@ spec:
           options:
             - missingkey=error
           template: |
-{{ .Files.Get "files/networking/cluster-subdomain-template.yaml" | indent 12 }}
+{{ .Files.Get "composition-templates/cluster-subdomain.yaml" | indent 12 }}
     - step: auto-ready
       functionRef:
         name: function-auto-ready

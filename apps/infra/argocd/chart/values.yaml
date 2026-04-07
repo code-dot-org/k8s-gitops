@@ -30,6 +30,133 @@ argo-cd:
       reposerver.git.request.timeout: "300s"
     cm:
       url: https://argocd.k8s.code.org
+      application.resourceTrackingMethod: annotation
+
+      resource.customizations: |
+        "*.upbound.io/*":
+          health.lua: |
+            health_status = {
+              status = "Progressing",
+              message = "Provisioning ..."
+            }
+
+            local function contains(table, val)
+              for _, v in ipairs(table) do
+                if v == val then
+                  return true
+                end
+              end
+              return false
+            end
+
+            local has_no_status = {
+              "ClusterProviderConfig",
+              "ProviderConfig",
+              "ProviderConfigUsage"
+            }
+
+            if obj.status == nil or next(obj.status) == nil and contains(has_no_status, obj.kind) then
+              health_status.status = "Healthy"
+              health_status.message = "Resource is up-to-date."
+              return health_status
+            end
+
+            if obj.status == nil or next(obj.status) == nil or obj.status.conditions == nil then
+              if obj.status ~= nil and (obj.kind == "ProviderConfig" or obj.kind == "ClusterProviderConfig") and obj.status.users ~= nil then
+                health_status.status = "Healthy"
+                health_status.message = "Resource is in use."
+                return health_status
+              end
+              return health_status
+            end
+
+            for _, condition in ipairs(obj.status.conditions) do
+              if condition.type == "LastAsyncOperation" and condition.status == "False" then
+                health_status.status = "Degraded"
+                health_status.message = condition.message
+                return health_status
+              end
+
+              if condition.type == "Synced" and condition.status == "False" then
+                health_status.status = "Degraded"
+                health_status.message = condition.message
+                return health_status
+              end
+
+              if condition.type == "Ready" and condition.status == "True" then
+                health_status.status = "Healthy"
+                health_status.message = "Resource is up-to-date."
+              end
+            end
+
+            return health_status
+
+        "*.crossplane.io/*":
+          health.lua: |
+            health_status = {
+              status = "Progressing",
+              message = "Provisioning ..."
+            }
+
+            local function contains(table, val)
+              for _, v in ipairs(table) do
+                if v == val then
+                  return true
+                end
+              end
+              return false
+            end
+
+            local has_no_status = {
+              "Composition",
+              "CompositionRevision",
+              "DeploymentRuntimeConfig",
+              "ClusterProviderConfig",
+              "ProviderConfig",
+              "ProviderConfigUsage"
+            }
+
+            if obj.status == nil or next(obj.status) == nil and contains(has_no_status, obj.kind) then
+              health_status.status = "Healthy"
+              health_status.message = "Resource is up-to-date."
+              return health_status
+            end
+
+            if obj.status == nil or next(obj.status) == nil or obj.status.conditions == nil then
+              if obj.status ~= nil and (obj.kind == "ProviderConfig" or obj.kind == "ClusterProviderConfig") and obj.status.users ~= nil then
+                health_status.status = "Healthy"
+                health_status.message = "Resource is in use."
+                return health_status
+              end
+              return health_status
+            end
+
+            for _, condition in ipairs(obj.status.conditions) do
+              if condition.type == "LastAsyncOperation" and condition.status == "False" then
+                health_status.status = "Degraded"
+                health_status.message = condition.message
+                return health_status
+              end
+
+              if condition.type == "Synced" and condition.status == "False" then
+                health_status.status = "Degraded"
+                health_status.message = condition.message
+                return health_status
+              end
+
+              if contains({"Ready", "Healthy", "Offered", "Established", "ValidPipeline", "RevisionHealthy"}, condition.type) and condition.status == "True" then
+                health_status.status = "Healthy"
+                health_status.message = "Resource is up-to-date."
+              end
+            end
+
+            return health_status
+
+      resource.exclusions: |
+        - apiGroups:
+          - "*"
+          kinds:
+          - ProviderConfigUsage
 
       # Argo has no built-in health for Kargo Project, so without this it shows
       # Healthy even when Ready=False and the Kargo UI errors out.
@@ -94,12 +221,19 @@ argo-cd:
         alb.ingress.kubernetes.io/ssl-redirect: "443"
         alb.ingress.kubernetes.io/backend-protocol: HTTP
 
-  # TODO: this request/limit was randomly set by Codex when it noticed Fargate
-  # OOM killing our pod. It just copied repoServer which WAS set via
-  # benchmarking, but its a totally different task. We should profile the
-  # correct size for this instance.
   controller:
+    env:
+      # crossplane docs recommend bumping client qps to 300 for ArgoCD to avoid
+      # sluggishness on clusters with lots of CRDs (which crossplane brings)
+      #
+      # see: https://docs.crossplane.io/latest/guides/crossplane-with-argo-cd/
+      - name: ARGOCD_K8S_CLIENT_QPS
+        value: "300"
     resources:
+      # TODO: this request/limit was randomly set by Codex when it noticed Fargate
+      # OOM killing our pod. It just copied repoServer which WAS set via
+      # benchmarking, but its a totally different task. We should profile the
+      # correct size for this instance.
       requests:
         cpu: 1000m
         memory: 4Gi

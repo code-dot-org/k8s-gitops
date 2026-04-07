@@ -15,6 +15,16 @@ spec:
         include: application.yaml
     - repoURL: https://github.com/code-dot-org/k8s-gitops.git
       targetRevision: main
+      path: apps/infra/crossplane
+      directory:
+        include: application.yaml
+    - repoURL: https://github.com/code-dot-org/k8s-gitops.git
+      targetRevision: main
+      path: apps/infra/aws-resources
+      directory:
+        include: application.yaml
+    - repoURL: https://github.com/code-dot-org/k8s-gitops.git
+      targetRevision: main
       path: apps/infra/dex
       directory:
         include: application.yaml

@@ -15,4 +15,6 @@ spec:
   listenerConfigurations:
     - alpnPolicy: None
       protocolPort: "HTTPS:443"
-      defaultCertificate: {{ .Values.gateway.loadBalancerConfig.defaultCertificateArn | quote }}
+{{- with .Values.gateway.loadBalancerConfig.defaultCertificateArn }}
+      defaultCertificate: {{ . | quote }}
+{{- end }}

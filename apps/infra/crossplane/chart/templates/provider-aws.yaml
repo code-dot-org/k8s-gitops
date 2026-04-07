@@ -1,0 +1,12 @@
+apiVersion: pkg.crossplane.io/v1beta1
+kind: DeploymentRuntimeConfig
+metadata:
+  name: "provider-aws"
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+spec:
+  serviceAccountTemplate:
+    metadata:
+      name: "provider-aws"
+      annotations:
+        eks.amazonaws.com/role-arn: {{ required "crossplane.providers.aws.iamRoleArn is required" .Values.crossplane.providers.aws.iamRoleArn | quote }}

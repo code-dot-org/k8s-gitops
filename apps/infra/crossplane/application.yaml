@@ -1,37 +1,29 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: networking
+  name: crossplane
   namespace: argocd
   finalizers:
     - resources-finalizer.argocd.argoproj.io
   annotations:
-    argocd.argoproj.io/sync-wave: "3"
+    argocd.argoproj.io/sync-wave: "0"
 spec:
   project: default
   ignoreDifferences:
-    - kind: Secret
-      group: ""
-      name: aws-load-balancer-tls
-      namespace: kube-system
-      jsonPointers:
-        - /data
     - kind: MutatingWebhookConfiguration
       group: admissionregistration.k8s.io
-      name: aws-load-balancer-webhook
       jqPathExpressions:
         - .webhooks[]?.clientConfig.caBundle
     - kind: ValidatingWebhookConfiguration
       group: admissionregistration.k8s.io
-      name: aws-load-balancer-webhook
       jqPathExpressions:
         - .webhooks[]?.clientConfig.caBundle
   sources:
     - repoURL: https://github.com/code-dot-org/k8s-gitops.git
       targetRevision: main
-      path: apps/infra/networking/chart
+      path: apps/infra/crossplane/chart
       helm:
-        releaseName: networking
+        releaseName: crossplane
         valueFiles:
           - $values/apps/infra/codeai-cluster-config.values.yaml
     - repoURL: https://github.com/code-dot-org/k8s-gitops.git
@@ -39,7 +31,7 @@ spec:
       ref: values
   destination:
     server: https://kubernetes.default.svc
-    namespace: kube-system
+    namespace: crossplane-system
   syncPolicy:
     automated:
       prune: true
