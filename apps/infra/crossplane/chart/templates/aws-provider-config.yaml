@@ -3,7 +3,7 @@ kind: ClusterProviderConfig
 metadata:
   name: "default"
   annotations:
-    argocd.argoproj.io/sync-options: Delete=false
+    argocd.argoproj.io/sync-options: Delete=false,SkipDryRunOnMissingResource=true
     argocd.argoproj.io/sync-wave: "30"
 spec:
   credentials:
