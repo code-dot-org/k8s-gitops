@@ -9,12 +9,6 @@
   "cluster_primary_security_group_id": "sg-01e49babda6a779a0"
   "cluster_region": "us-east-1"
   "cluster_subdomain": "k8s.code.org"
-  "eso_iam_role_arns":
-    "adhoc": "arn:aws:iam::475661607190:role/codeai-k8s-eso-adhoc"
-    "levelbuilder": "arn:aws:iam::475661607190:role/codeai-k8s-eso-levelbuilder"
-    "production": "arn:aws:iam::475661607190:role/codeai-k8s-eso-production"
-    "staging": "arn:aws:iam::475661607190:role/codeai-k8s-eso-staging"
-    "test": "arn:aws:iam::475661607190:role/codeai-k8s-eso-test"
   "frontend_security_group_id": "sg-663a031e"
   "frontend_security_group_namespaces":
   - "levelbuilder"
@@ -28,19 +22,3 @@
   - "production"
   - "staging"
   - "test"
-
-
-
-# Specially shaped values for the dex chart:
-"dexGoogleClient":
-  "clientID": "254945981659-9p8ctpobals7gmah0ptlt70t29eflira.apps.googleusercontent.com"
-
-
-
-# Specially shaped values for the kargo-secrets chart:
-"sharedResources":
-  "clusterName": "codeai-k8s"
-  "clusterRegion": "us-east-1"
-"systemResources":
-  "secretStore":
-    "awsRegion": "us-east-1"
