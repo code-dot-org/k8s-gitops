@@ -20,6 +20,7 @@
   - "levelbuilder"
   - "production"
   - "test"
+  "iam_arn_prefix": "arn:aws:iam::475661607190"
   "oidc_provider_arn": "arn:aws:iam::475661607190:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/91C0A419CB3F0C5AF51E1BE555ADA0F5"
   "parent_domain_zone_id": "Z2LCOI49SCXUGU"
   "single_namespace_environment_types":
@@ -27,13 +28,6 @@
   - "production"
   - "staging"
   - "test"
-
-
-
-# Shared deterministic IAM inputs for charts that derive role ARNs locally.
-"global":
-  "clusterName": "codeai-k8s"
-  "iamArnPrefix": "arn:aws:iam::475661607190"
 
 
 
