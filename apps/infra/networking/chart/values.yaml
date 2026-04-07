@@ -4,7 +4,7 @@ aws-load-balancer-controller:
   vpcId: vpc-6e98810a
 
   serviceAccount:
-    create: true
+    create: false
     name: aws-load-balancer-controller-sa
 
   ingressClass: aws-alb

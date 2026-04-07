@@ -15,7 +15,7 @@ external-dns:
     - k8s.code.org
 
   serviceAccount:
-    create: true
+    create: false
     name: external-dns-sa
 
   extraArgs:

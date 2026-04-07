@@ -1,3 +1,5 @@
+{{- $config := required "codeai_cluster_config is required" (index .Values "codeai_cluster_config") -}}
+{{- $iamRoleArn := .Values.crossplane.providers.aws.iamRoleArn | default (printf "%s:role/%s-crossplane-aws" (required "codeai_cluster_config.iam_arn_prefix is required" (index $config "iam_arn_prefix")) (required "codeai_cluster_config.cluster_name is required" (index $config "cluster_name"))) -}}
 apiVersion: pkg.crossplane.io/v1beta1
 kind: DeploymentRuntimeConfig
 metadata:
@@ -15,12 +17,12 @@ spec:
               resources:
                 requests:
                   cpu: 500m
-                  memory: 768Mi
+                  memory: 1Gi
                 limits:
                   cpu: 500m
-                  memory: 768Mi
+                  memory: 1Gi
   serviceAccountTemplate:
     metadata:
       name: "provider-aws"
       annotations:
-        eks.amazonaws.com/role-arn: {{ required "crossplane.providers.aws.iamRoleArn is required" .Values.crossplane.providers.aws.iamRoleArn | quote }}
+        eks.amazonaws.com/role-arn: {{ $iamRoleArn | quote }}
