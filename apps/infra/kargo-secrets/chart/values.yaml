@@ -1,7 +1,10 @@
+codeai_cluster_config:
+  cluster_name:
+  cluster_region:
+  iam_arn_prefix:
+
 sharedResources:
   namespace: kargo-shared-resources
-  clusterName: codeai-k8s
-  clusterRegion: us-east-1
   iamRoleArn: ""
 
 systemResources:
@@ -9,7 +12,6 @@ systemResources:
   secretStore:
     name: aws-secrets-manager-store-kargo-system-resources
     serviceAccountName: external-secrets-sa-kargo-system-resources
-    awsRegion: us-east-1
     iamRoleArn:
 
   externalSecret:

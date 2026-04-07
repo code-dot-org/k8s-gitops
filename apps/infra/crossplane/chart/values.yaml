@@ -1,3 +1,7 @@
+codeai_cluster_config:
+  cluster_name:
+  iam_arn_prefix:
+
 crossplane:
   replicas: 1
 

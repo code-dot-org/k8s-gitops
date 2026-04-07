@@ -1,7 +1,8 @@
 codeai_cluster_config:
+  cluster_name:
+  iam_arn_prefix:
   single_namespace_environment_types: []
   cluster_region: us-east-1
-  eso_iam_role_arns: {}
   frontend_security_group_namespaces: []
   cluster_primary_security_group_id: ""
   frontend_security_group_id: ""

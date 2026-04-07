@@ -1,3 +1,6 @@
+{{- $config := required "codeai_cluster_config is required" (index .Values "codeai_cluster_config") -}}
+{{- $iamArnPrefix := required "codeai_cluster_config.iam_arn_prefix is required" (index $config "iam_arn_prefix") -}}
+{{- $clusterName := required "codeai_cluster_config.cluster_name is required" (index $config "cluster_name") -}}
 {{- range $index, $env := .Values.codeai_cluster_config.single_namespace_environment_types }}
 {{- if gt $index 0 }}
 ---
@@ -6,7 +9,7 @@
   "environment_type" $env
   "single_namespace_environment_type" true
   "multi_namespace_regexes" nil
-  "iam_role_arn" (index $.Values.codeai_cluster_config.eso_iam_role_arns $env)
+  "iam_role_arn" (printf "%s:role/%s-eso-%s" $iamArnPrefix $clusterName $env)
   "region" $.Values.codeai_cluster_config.cluster_region
 ) | trim }}
 {{- end }}
