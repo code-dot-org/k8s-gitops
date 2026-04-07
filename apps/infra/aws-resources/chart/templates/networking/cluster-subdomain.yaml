@@ -68,8 +68,6 @@ spec:
         kind: GoTemplate
         source: Inline
         inline:
-          options:
-            - missingkey=error
           template: |
 {{ .Files.Get "composition-templates/cluster-subdomain.yaml" | indent 12 }}
     - step: auto-ready
