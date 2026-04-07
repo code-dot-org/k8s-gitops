@@ -4,8 +4,9 @@
 
 # General codeai_cluster_config values, for use by any chart
 "codeai_cluster_config":
-  "aws_load_balancer_controller_iam_role_arn": "arn:aws:iam::475661607190:role/alb-controller-2026040302143541420000000e"
+  "aws_load_balancer_controller_iam_role_arn": "arn:aws:iam::475661607190:role/codeai-k8s-aws-load-balancer-controller"
   "cluster_name": "codeai-k8s"
+  "cluster_oidc_issuer_url": "https://oidc.eks.us-east-1.amazonaws.com/id/91C0A419CB3F0C5AF51E1BE555ADA0F5"
   "cluster_primary_security_group_id": "sg-01e49babda6a779a0"
   "cluster_region": "us-east-1"
   "cluster_subdomain": "k8s.code.org"
@@ -19,13 +20,15 @@
     "production": "arn:aws:iam::475661607190:role/codeai-k8s-eso-production"
     "staging": "arn:aws:iam::475661607190:role/codeai-k8s-eso-staging"
     "test": "arn:aws:iam::475661607190:role/codeai-k8s-eso-test"
-  "external_dns_iam_role_arn": "arn:aws:iam::475661607190:role/external-dns-2026040302144078330000000f"
+  "external_dns_iam_role_arn": "arn:aws:iam::475661607190:role/codeai-k8s-external-dns"
   "frontend_security_group_id": "sg-663a031e"
   "frontend_security_group_namespaces":
   - "levelbuilder"
   - "production"
   - "test"
   "kargo_external_secret_stores_iam_role_arn": "arn:aws:iam::475661607190:role/codeai-k8s-eso-kargo-external-secret-stores"
+  "oidc_provider_arn": "arn:aws:iam::475661607190:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/91C0A419CB3F0C5AF51E1BE555ADA0F5"
+  "parent_domain_zone_id": "Z2LCOI49SCXUGU"
   "single_namespace_environment_types":
   - "levelbuilder"
   - "production"
@@ -42,7 +45,7 @@
       - "arn:aws:acm:us-east-1:475661607190:certificate/a006e19f-917f-42fd-8181-2c40b98dd7cc"
   "serviceAccount":
     "annotations":
-      "eks.amazonaws.com/role-arn": "arn:aws:iam::475661607190:role/alb-controller-2026040302143541420000000e"
+      "eks.amazonaws.com/role-arn": "arn:aws:iam::475661607190:role/codeai-k8s-aws-load-balancer-controller"
 "gateway":
   "loadBalancerConfig":
     "defaultCertificateArn": "arn:aws:acm:us-east-1:475661607190:certificate/a006e19f-917f-42fd-8181-2c40b98dd7cc"
@@ -53,7 +56,7 @@
 "external-dns":
   "serviceAccount":
     "annotations":
-      "eks.amazonaws.com/role-arn": "arn:aws:iam::475661607190:role/external-dns-2026040302144078330000000f"
+      "eks.amazonaws.com/role-arn": "arn:aws:iam::475661607190:role/codeai-k8s-external-dns"
 
 
 
