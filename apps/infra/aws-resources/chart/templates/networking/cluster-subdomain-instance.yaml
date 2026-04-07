@@ -5,6 +5,7 @@ metadata:
   namespace: {{ include "aws-resources.namespace" . }}
   annotations:
     argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
   clusterName: {{ .Values.codeai_cluster_config.cluster_name | quote }}
   clusterRegion: {{ .Values.codeai_cluster_config.cluster_region | quote }}
