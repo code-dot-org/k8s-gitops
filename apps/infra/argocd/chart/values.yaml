@@ -8,15 +8,6 @@ argo-cd:
   dex:
     enabled: false
 
-  # Self-managed Argo can repeatedly resume argocd-redis-secret-init even
-  # after the Job completed. The bootstrap helm_release in
-  # cluster-infra-argocd/argocd-bootstrap.tf forces this on once for blank
-  # clusters; keep it off here for steady-state self-management.
-  #
-  # See upstream issue: https://github.com/argoproj/argo-helm/issues/2887
-  redisSecretInit:
-    enabled: false
-
   configs:
     params:
       # TLS terminates at the ALB, so argocd-server should speak plain HTTP to the ingress backend.
@@ -363,3 +354,12 @@ argo-cd:
         cpu: 1000m
         memory: 4Gi
         ephemeral-storage: 100Gi
+
+  # Self-managed Argo can repeatedly resume argocd-redis-secret-init even
+  # after the Job completed. The bootstrap helm_release in
+  # cluster-infra-argocd/argocd-bootstrap.tf forces this on once for blank
+  # clusters; keep it off here for steady-state self-management.
+  #
+  # See upstream issue: https://github.com/argoproj/argo-helm/issues/2887
+  redisSecretInit:
+    enabled: false
