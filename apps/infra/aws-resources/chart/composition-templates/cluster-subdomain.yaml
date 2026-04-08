@@ -7,6 +7,8 @@
 apiVersion: route53.aws.m.upbound.io/v1beta1
 kind: Zone
 metadata:
+  labels:
+    infra.code.org/usage-id: cluster-zone
   annotations:
     gotemplating.fn.crossplane.io/composition-resource-name: cluster-zone
 spec:
@@ -75,6 +77,8 @@ spec:
 apiVersion: route53.aws.m.upbound.io/v1beta1
 kind: Record
 metadata:
+  labels:
+    infra.code.org/usage-id: soa-record
   annotations:
     crossplane.io/external-name: {{ printf "%s_%s_SOA" $zone.resource.status.atProvider.zoneId $xr.spec.clusterSubdomain }}
     gotemplating.fn.crossplane.io/composition-resource-name: soa-record
@@ -90,6 +94,28 @@ spec:
     zoneId: {{ $zone.resource.status.atProvider.zoneId }}
     records:
       - {{ printf "%s. awsdns-hostmaster.amazon.com. 1 7200 900 1209600 86400" (index $zone.resource.status.atProvider.nameServers 0) | quote }}
+---
+apiVersion: protection.crossplane.io/v1beta1
+kind: Usage
+metadata:
+  annotations:
+    gotemplating.fn.crossplane.io/composition-resource-name: cluster-zone-used-by-soa-record
+spec:
+  reason: Block cluster-zone deletion until soa-record is deleted.
+  of:
+    apiVersion: route53.aws.m.upbound.io/v1beta1
+    kind: Zone
+    resourceSelector:
+      matchControllerRef: true
+      matchLabels:
+        infra.code.org/usage-id: cluster-zone
+  by:
+    apiVersion: route53.aws.m.upbound.io/v1beta1
+    kind: Record
+    resourceSelector:
+      matchControllerRef: true
+      matchLabels:
+        infra.code.org/usage-id: soa-record
 ---
 apiVersion: route53.aws.m.upbound.io/v1beta1
 kind: Record
@@ -172,6 +198,8 @@ spec:
 apiVersion: route53.aws.m.upbound.io/v1beta1
 kind: Record
 metadata:
+  labels:
+    infra.code.org/usage-id: validation-record-{{ $idx }}
   annotations:
     gotemplating.fn.crossplane.io/composition-resource-name: validation-record-{{ $idx }}
 spec:
@@ -185,6 +213,28 @@ spec:
     ttl: 60
     type: {{ $dvo.resourceRecordType }}
     zoneId: {{ $zone.resource.status.atProvider.zoneId }}
+---
+apiVersion: protection.crossplane.io/v1beta1
+kind: Usage
+metadata:
+  annotations:
+    gotemplating.fn.crossplane.io/composition-resource-name: cluster-zone-used-by-validation-record-{{ $idx }}
+spec:
+  reason: Block cluster-zone deletion until validation-record-{{ $idx }} is deleted.
+  of:
+    apiVersion: route53.aws.m.upbound.io/v1beta1
+    kind: Zone
+    resourceSelector:
+      matchControllerRef: true
+      matchLabels:
+        infra.code.org/usage-id: cluster-zone
+  by:
+    apiVersion: route53.aws.m.upbound.io/v1beta1
+    kind: Record
+    resourceSelector:
+      matchControllerRef: true
+      matchLabels:
+        infra.code.org/usage-id: validation-record-{{ $idx }}
 {{ end }}
 ---
 apiVersion: acm.aws.m.upbound.io/v1beta1
