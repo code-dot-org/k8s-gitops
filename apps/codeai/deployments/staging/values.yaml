@@ -1,4 +1,4 @@
-image: ghcr.io/code-dot-org/code-dot-org:git-cd39d815f5283db46d9d67378008e49ada4dd1c4
+image: ghcr.io/code-dot-org/code-dot-org:git-6c6181369322e1787522dba02f524982108da7ab
 dnsName: studio.staging
 user:
   uid: 0
