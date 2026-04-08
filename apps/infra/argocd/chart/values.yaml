@@ -196,7 +196,55 @@ argo-cd:
         return health_status
 
       resource.customizations.health.argoproj.io_Application: |
-        return obj.status and obj.status.health or {status = "Progressing", message = ""}
+        local hs = {
+          status = "Progressing",
+          message = "",
+        }
+
+        local status = obj.status or {}
+        local health = status.health or {}
+        local history = status.history or {}
+        local resources = status.resources or {}
+        local conditions = status.conditions or {}
+
+        if health.status ~= nil then
+          hs.status = health.status
+        end
+        if health.message ~= nil then
+          hs.message = health.message
+        end
+
+        local has_history = #history > 0
+        local has_resources = #resources > 0
+
+        -- Treat an app that has never completed an initial sync and has no live
+        -- resource tree as Missing, even if Argo reports a comparison/sync error.
+        if not has_history and not has_resources then
+          for _, condition in ipairs(conditions) do
+            if condition.type == "ComparisonError" then
+              return {
+                status = "Missing",
+                message = condition.message or "",
+              }
+            end
+          end
+
+          if status.operationState ~= nil and status.operationState.phase == "Error" then
+            return {
+              status = "Missing",
+              message = status.operationState.message or "",
+            }
+          end
+
+          if status.sync ~= nil and status.sync.status == "Unknown" then
+            return {
+              status = "Missing",
+              message = hs.message ~= "" and hs.message or "Application has never completed an initial sync",
+            }
+          end
+        end
+
+        return hs
 
       # BREAK GLASS FOR EMERGENCY ARGOCD ADMIN LOGIN (if Google SSO has failed):
       # 1. set `admin.enabled: true` below
