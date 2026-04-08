@@ -33,6 +33,7 @@ argo-cd:
       application.resourceTrackingMethod: annotation
 
       resource.customizations: |
+        # Source: https://docs.crossplane.io/latest/guides/crossplane-with-argo-cd/#set-health-status
         "*.upbound.io/*":
           health.lua: |
             health_status = {
@@ -40,8 +41,8 @@ argo-cd:
               message = "Provisioning ..."
             }
 
-            local function contains(table, val)
-              for _, v in ipairs(table) do
+            local function contains (table, val)
+              for i, v in ipairs(table) do
                 if v == val then
                   return true
                 end
@@ -62,7 +63,7 @@ argo-cd:
             end
 
             if obj.status == nil or next(obj.status) == nil or obj.status.conditions == nil then
-              if obj.status ~= nil and (obj.kind == "ProviderConfig" or obj.kind == "ClusterProviderConfig") and obj.status.users ~= nil then
+              if (obj.kind == "ProviderConfig" or obj.kind == "ClusterProviderConfig") and obj.status.users ~= nil then
                 health_status.status = "Healthy"
                 health_status.message = "Resource is in use."
                 return health_status
@@ -70,27 +71,34 @@ argo-cd:
               return health_status
             end
 
-            for _, condition in ipairs(obj.status.conditions) do
-              if condition.type == "LastAsyncOperation" and condition.status == "False" then
-                health_status.status = "Degraded"
-                health_status.message = condition.message
-                return health_status
+            for i, condition in ipairs(obj.status.conditions) do
+              if condition.type == "LastAsyncOperation" then
+                if condition.status == "False" then
+                  health_status.status = "Degraded"
+                  health_status.message = condition.message
+                  return health_status
+                end
               end
 
-              if condition.type == "Synced" and condition.status == "False" then
-                health_status.status = "Degraded"
-                health_status.message = condition.message
-                return health_status
+              if condition.type == "Synced" then
+                if condition.status == "False" then
+                  health_status.status = "Degraded"
+                  health_status.message = condition.message
+                  return health_status
+                end
               end
 
-              if condition.type == "Ready" and condition.status == "True" then
-                health_status.status = "Healthy"
-                health_status.message = "Resource is up-to-date."
+              if condition.type == "Ready" then
+                if condition.status == "True" then
+                  health_status.status = "Healthy"
+                  health_status.message = "Resource is up-to-date."
+                end
               end
             end
 
             return health_status
 
+        # Source: https://docs.crossplane.io/latest/guides/crossplane-with-argo-cd/#set-health-status
         "*.crossplane.io/*":
           health.lua: |
             health_status = {
@@ -98,8 +106,8 @@ argo-cd:
               message = "Provisioning ..."
             }
 
-            local function contains(table, val)
-              for _, v in ipairs(table) do
+            local function contains (table, val)
+              for i, v in ipairs(table) do
                 if v == val then
                   return true
                 end
@@ -115,15 +123,14 @@ argo-cd:
               "ProviderConfig",
               "ProviderConfigUsage"
             }
-
             if obj.status == nil or next(obj.status) == nil and contains(has_no_status, obj.kind) then
-              health_status.status = "Healthy"
-              health_status.message = "Resource is up-to-date."
+                health_status.status = "Healthy"
+                health_status.message = "Resource is up-to-date."
               return health_status
             end
 
             if obj.status == nil or next(obj.status) == nil or obj.status.conditions == nil then
-              if obj.status ~= nil and (obj.kind == "ProviderConfig" or obj.kind == "ClusterProviderConfig") and obj.status.users ~= nil then
+              if (obj.kind == "ProviderConfig" or obj.kind == "ClusterProviderConfig") and obj.status.users ~= nil then
                 health_status.status = "Healthy"
                 health_status.message = "Resource is in use."
                 return health_status
@@ -131,27 +138,35 @@ argo-cd:
               return health_status
             end
 
-            for _, condition in ipairs(obj.status.conditions) do
-              if condition.type == "LastAsyncOperation" and condition.status == "False" then
-                health_status.status = "Degraded"
-                health_status.message = condition.message
-                return health_status
+            for i, condition in ipairs(obj.status.conditions) do
+              if condition.type == "LastAsyncOperation" then
+                if condition.status == "False" then
+                  health_status.status = "Degraded"
+                  health_status.message = condition.message
+                  return health_status
+                end
               end
 
-              if condition.type == "Synced" and condition.status == "False" then
-                health_status.status = "Degraded"
-                health_status.message = condition.message
-                return health_status
+              if condition.type == "Synced" then
+                if condition.status == "False" then
+                  health_status.status = "Degraded"
+                  health_status.message = condition.message
+                  return health_status
+                end
               end
 
-              if contains({"Ready", "Healthy", "Offered", "Established", "ValidPipeline", "RevisionHealthy"}, condition.type) and condition.status == "True" then
-                health_status.status = "Healthy"
-                health_status.message = "Resource is up-to-date."
+              if contains({"Ready", "Healthy", "Offered", "Established", "ValidPipeline", "RevisionHealthy"}, condition.type) then
+                if condition.status == "True" then
+                  health_status.status = "Healthy"
+                  health_status.message = "Resource is up-to-date."
+                end
               end
             end
 
             return health_status
 
+        # For our own custom XRs under *.code.org/* to show Health properly
+        # Distilled from: https://docs.crossplane.io/latest/guides/crossplane-with-argo-cd/#set-health-status
         "*.code.org/*":
           health.lua: |
             health_status = {
@@ -189,9 +204,28 @@ argo-cd:
           kinds:
           - ProviderConfigUsage
 
-      # Argo has no built-in health for Kargo Project, so without this it shows
-      # Healthy even when Ready=False and the Kargo UI errors out.
+      # Distilled from Kargo Project condition semantics:
+      # https://github.com/akuity/kargo/blob/main/api/v1alpha1/conditions.go#L8-L40
+      # https://github.com/akuity/kargo/blob/main/pkg/controller/management/projects/projects.go#L470-L574
       resource.customizations.health.kargo.akuity.io_Project: |
+        for _, condition in ipairs(obj.status and obj.status.conditions or {}) do
+          if condition.type == "Stalled" and condition.status == "True" then
+            return {
+              status = "Degraded",
+              message = condition.message or "",
+            }
+          end
+        end
+
+        for _, condition in ipairs(obj.status and obj.status.conditions or {}) do
+          if condition.type == "Reconciling" and condition.status == "True" then
+            return {
+              status = "Progressing",
+              message = condition.message or "",
+            }
+          end
+        end
+
         for _, condition in ipairs(obj.status and obj.status.conditions or {}) do
           if condition.type == "Ready" then
             return {
@@ -203,7 +237,11 @@ argo-cd:
 
         return { status = "Progressing", message = "Waiting for Ready condition" }
 
+      # Source: https://argo-cd.readthedocs.io/en/release-3.1/operator-manual/health/#argocd-app
+      # Uses the documented argoproj.io/Application health check verbatim,
+      # with a local codeai-* empty-resource override ahead of it.
       resource.customizations.health.argoproj.io_Application: |
+        -- codeai apps are considered unhealthy if they have no resources
         if string.match(obj.metadata.name, "^codeai%-") and #((obj.status and obj.status.resources) or {}) == 0 then
           return {
             status = "Degraded",
@@ -211,7 +249,20 @@ argo-cd:
           }
         end
 
-        return obj.status and obj.status.health or {status = "Progressing", message = ""}
+        -- Verbatim upstream Application health check from Argo CD docs:
+        -- https://argo-cd.readthedocs.io/en/release-3.1/operator-manual/health/#argocd-app
+        hs = {}
+        hs.status = "Progressing"
+        hs.message = ""
+        if obj.status ~= nil then
+          if obj.status.health ~= nil then
+            hs.status = obj.status.health.status
+            if obj.status.health.message ~= nil then
+              hs.message = obj.status.health.message
+            end
+          end
+        end
+        return hs
 
       # BREAK GLASS FOR EMERGENCY ARGOCD ADMIN LOGIN (if Google SSO has failed):
       # 1. set `admin.enabled: true` below
