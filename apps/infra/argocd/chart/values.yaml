@@ -39,7 +39,6 @@ argo-cd:
       reposerver.git.request.timeout: "300s"
     cm:
       url: https://argocd.k8s.code.org
-      application.resourceTrackingMethod: annotation
 
       # Add custom health checks that give ArgoCD better health insight into
       # various kinds of custom objects, particularly crossplane, argo projects
@@ -210,12 +209,6 @@ argo-cd:
 
             return health_status
 
-      resource.exclusions: |
-        - apiGroups:
-          - "*"
-          kinds:
-          - ProviderConfigUsage
-
       # Distilled from Kargo Project condition semantics:
       # https://github.com/akuity/kargo/blob/main/api/v1alpha1/conditions.go#L8-L40
       # https://github.com/akuity/kargo/blob/main/pkg/controller/management/projects/projects.go#L470-L574
@@ -275,6 +268,19 @@ argo-cd:
           end
         end
         return hs
+
+      # Source: https://docs.crossplane.io/latest/guides/crossplane-with-argo-cd/#set-resource-tracking-method
+      # Crossplane recommends annotation-based tracking so Argo CD does not rely on instance labels.
+      application.resourceTrackingMethod: annotation
+
+      # Source: https://docs.crossplane.io/latest/guides/crossplane-with-argo-cd/#set-resource-exclusion
+      # Exclude Crossplane's controller-generated ProviderConfigUsage bookkeeping objects from Argo CD,
+      # because they are internal finalizer/relationship objects and add noisy load to the Argo CD UI.
+      resource.exclusions: |
+        - apiGroups:
+          - "*"
+          kinds:
+          - ProviderConfigUsage
 
       # BREAK GLASS FOR EMERGENCY ARGOCD ADMIN LOGIN (if Google SSO has failed):
       # 1. set `admin.enabled: true` below
@@ -345,7 +351,7 @@ argo-cd:
   repoServer:
     env:
       # `git fetch` is shelled out through repo-server's exec path in Argo CD
-      # v3.3.4, so raise the 90s default exec timeout too.
+      # v3.3.4, so raise the 90s default exec timeout too for our heavy monorepo.
       - name: ARGOCD_EXEC_TIMEOUT
         value: 600s
     resources:
