@@ -152,6 +152,37 @@ argo-cd:
 
             return health_status
 
+        "*.code.org/*":
+          health.lua: |
+            health_status = {
+              status = "Progressing",
+              message = "Waiting for Ready condition",
+            }
+
+            for _, condition in ipairs(obj.status and obj.status.conditions or {}) do
+              if condition.type == "LastAsyncOperation" and condition.status == "False" then
+                return {
+                  status = "Degraded",
+                  message = condition.message or "",
+                }
+              end
+
+              if condition.type == "Synced" and condition.status == "False" then
+                return {
+                  status = "Degraded",
+                  message = condition.message or "",
+                }
+              end
+
+              if condition.type == "Ready" then
+                health_status.status = ({ True = "Healthy", False = "Progressing" })[condition.status] or "Progressing"
+                health_status.message = condition.message or ""
+                return health_status
+              end
+            end
+
+            return health_status
+
       resource.exclusions: |
         - apiGroups:
           - "*"
@@ -172,79 +203,15 @@ argo-cd:
 
         return { status = "Progressing", message = "Waiting for Ready condition" }
 
-      resource.customizations.health.infra.code.org_XClusterDNSCertificate: |
-        local health_status = {
-          status = "Progressing",
-          message = "Waiting for Ready condition",
-        }
-
-        for _, condition in ipairs(obj.status and obj.status.conditions or {}) do
-          if condition.type == "Synced" and condition.status == "False" then
-            return {
-              status = "Degraded",
-              message = condition.message or "",
-            }
-          end
-
-          if condition.type == "Ready" then
-            health_status.status = ({ True = "Healthy", False = "Progressing" })[condition.status] or "Progressing"
-            health_status.message = condition.message or ""
-            return health_status
-          end
-        end
-
-        return health_status
-
       resource.customizations.health.argoproj.io_Application: |
-        local hs = {
-          status = "Progressing",
-          message = "",
-        }
-
-        local status = obj.status or {}
-        local health = status.health or {}
-        local history = status.history or {}
-        local resources = status.resources or {}
-        local conditions = status.conditions or {}
-
-        if health.status ~= nil then
-          hs.status = health.status
-        end
-        if health.message ~= nil then
-          hs.message = health.message
+        if string.match(obj.metadata.name, "^codeai%-") and #((obj.status and obj.status.resources) or {}) == 0 then
+          return {
+            status = "Degraded",
+            message = obj.status and obj.status.operationState and obj.status.operationState.message or "CodeAI application has no resources",
+          }
         end
 
-        local has_history = #history > 0
-        local has_resources = #resources > 0
-
-        -- Treat an app that has never completed an initial sync and has no live
-        -- resource tree as Missing, even if Argo reports a comparison/sync error.
-        if not has_history and not has_resources then
-          for _, condition in ipairs(conditions) do
-            if condition.type == "ComparisonError" then
-              return {
-                status = "Missing",
-                message = condition.message or "",
-              }
-            end
-          end
-
-          if status.operationState ~= nil and status.operationState.phase == "Error" then
-            return {
-              status = "Missing",
-              message = status.operationState.message or "",
-            }
-          end
-
-          if status.sync ~= nil and status.sync.status == "Unknown" then
-            return {
-              status = "Missing",
-              message = hs.message ~= "" and hs.message or "Application has never completed an initial sync",
-            }
-          end
-        end
-
-        return hs
+        return obj.status and obj.status.health or {status = "Progressing", message = ""}
 
       # BREAK GLASS FOR EMERGENCY ARGOCD ADMIN LOGIN (if Google SSO has failed):
       # 1. set `admin.enabled: true` below
