@@ -236,9 +236,10 @@ argo-cd:
       # Source: https://argo-cd.readthedocs.io/en/release-3.1/operator-manual/health/#argocd-app
       # Uses the documented argoproj.io/Application health check verbatim,
       # with a local codeai-* empty-resource override ahead of it.
+      resource.customizations.useOpenLibs.argoproj.io_Application: "true"
       resource.customizations.health.argoproj.io_Application: |
         -- codeai apps are considered unhealthy if they have no resources
-        if obj.metadata.name:sub(1, 7) == "codeai-" and #((obj.status and obj.status.resources) or {}) == 0 then
+        if string.match(obj.metadata.name, "^codeai%-") and #((obj.status and obj.status.resources) or {}) == 0 then
           return {
             status = "Degraded",
             message = obj.status and obj.status.operationState and obj.status.operationState.message or "CodeAI application has no resources",
