@@ -41,6 +41,9 @@ argo-cd:
       url: https://argocd.k8s.code.org
       application.resourceTrackingMethod: annotation
 
+      # Add custom health checks that give ArgoCD better health insight into
+      # various kinds of custom objects, particularly crossplane, argo projects
+      # themselves, and our own custom releases.
       resource.customizations: |
         # Source: https://docs.crossplane.io/latest/guides/crossplane-with-argo-cd/#set-health-status
         "*.upbound.io/*":
