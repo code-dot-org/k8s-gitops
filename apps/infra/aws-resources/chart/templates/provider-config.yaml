@@ -1,0 +1,11 @@
+apiVersion: aws.m.upbound.io/v1beta1
+kind: ClusterProviderConfig
+metadata:
+  name: "default"
+  annotations:
+    # This must delete after aws-resources stop using it, but before the
+    # crossplane app tears down provider CRDs and usage tracking.
+    argocd.argoproj.io/sync-wave: "-10"
+spec:
+  credentials:
+    source: IRSA
