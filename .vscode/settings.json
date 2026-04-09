@@ -1,5 +1,12 @@
 {
   "files.associations": {
     "**/composition-templates/**/*.yaml": "helm-template"
+  },
+  "workbench.colorCustomizations": {
+    "titleBar.activeBackground": "#541650",
+    "titleBar.activeForeground": "#ffffff",
+    "titleBar.inactiveBackground": "#4c1a48",
+    "titleBar.inactiveForeground": "#ffffffcc",
+    "titleBar.border": "#331931",
   }
 }
