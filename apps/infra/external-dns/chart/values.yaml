@@ -6,6 +6,10 @@ external-dns:
   provider:
     name: aws
 
+  # The chart default is upsert-only, which leaves Route53 records behind on
+  # app teardown and wedges hosted-zone deletion during destroy.
+  policy: sync
+
   txtOwnerId: codeai-k8s
 
   sources:
