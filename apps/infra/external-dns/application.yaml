@@ -6,7 +6,10 @@ metadata:
   finalizers:
     - resources-finalizer.argocd.argoproj.io
   annotations:
-    argocd.argoproj.io/sync-wave: "20"
+    # external-dns only depends on aws-resources IRSA and core networking. Keep
+    # it early on create so it is late on destroy and can remove DNS records
+    # after higher-wave ingress apps are torn down.
+    argocd.argoproj.io/sync-wave: "4"
 spec:
   project: default
   sources:
