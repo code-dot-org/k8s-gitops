@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: stress-argo-trace-broken-statefulset
+spec:
+  serviceName: stress-argo-trace-broken-statefulset
+  replicas: 1
+  selector:
+    matchLabels:
+      app: stress-argo-trace-broken-statefulset
+  template:
+    metadata:
+      labels:
+        app: stress-argo-trace-broken-statefulset
+    spec:
+      containers:
+        # StatefulSet Pods have a different ownership path than Deployments and
+        # show up often in long-lived clusters. The tracer should treat them as
+        # first-class workload descendants too.
+        - name: missing
+          image: busybox:this-tag-does-not-exist
+          command:
+            - sh
+            - -c
+            - sleep 3600
