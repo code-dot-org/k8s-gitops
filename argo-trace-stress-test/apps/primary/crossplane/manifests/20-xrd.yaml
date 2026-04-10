@@ -1,0 +1,29 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xstresstraces.trace.stress.code.org
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  group: trace.stress.code.org
+  names:
+    kind: XStressTrace
+    plural: xstresstraces
+  scope: Namespaced
+  defaultCompositionRef:
+    name: stress-argo-trace
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                holdDeletion:
+                  type: boolean
+                emitUsage:
+                  type: boolean

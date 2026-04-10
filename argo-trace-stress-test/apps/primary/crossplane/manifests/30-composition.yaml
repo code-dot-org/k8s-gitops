@@ -1,0 +1,102 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: stress-argo-trace
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  compositeTypeRef:
+    apiVersion: trace.stress.code.org/v1alpha1
+    kind: XStressTrace
+  mode: Pipeline
+  pipeline:
+    - step: render-managed-resources
+      functionRef:
+        name: function-go-templating
+      input:
+        apiVersion: gotemplating.fn.crossplane.io/v1beta1
+        kind: GoTemplate
+        source: Inline
+        inline:
+          template: |
+            {{ $xr := .observed.composite.resource }}
+            ---
+            apiVersion: trace.stress.code.org/v1alpha1
+            kind: StressManagedThing
+            metadata:
+              name: {{ printf "%s-root" $xr.metadata.name }}
+              namespace: {{ $xr.metadata.namespace }}
+              labels:
+                crossplane.io/composite: {{ $xr.metadata.name }}
+                trace.stress.code.org/role: root
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: root
+                gotemplating.fn.crossplane.io/ready: "True"
+            spec:
+              resourceRefs:
+                - apiVersion: trace.stress.code.org/v1alpha1
+                  kind: StressManagedThing
+                  namespace: {{ $xr.metadata.namespace }}
+                  name: {{ printf "%s-middle" $xr.metadata.name }}
+            ---
+            apiVersion: trace.stress.code.org/v1alpha1
+            kind: StressManagedThing
+            metadata:
+              name: {{ printf "%s-middle" $xr.metadata.name }}
+              namespace: {{ $xr.metadata.namespace }}
+              labels:
+                crossplane.io/composite: {{ $xr.metadata.name }}
+                trace.stress.code.org/role: middle
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: middle
+                gotemplating.fn.crossplane.io/ready: "True"
+            spec:
+              resourceRef:
+                apiVersion: trace.stress.code.org/v1alpha1
+                kind: StressManagedThing
+                namespace: {{ $xr.metadata.namespace }}
+                name: {{ printf "%s-leaf" $xr.metadata.name }}
+            ---
+            apiVersion: trace.stress.code.org/v1alpha1
+            kind: StressManagedThing
+            metadata:
+              name: {{ printf "%s-leaf" $xr.metadata.name }}
+              namespace: {{ $xr.metadata.namespace }}
+              labels:
+                crossplane.io/composite: {{ $xr.metadata.name }}
+                trace.stress.code.org/role: leaf
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: leaf
+                gotemplating.fn.crossplane.io/ready: "True"
+              {{- if $xr.spec.holdDeletion }}
+              finalizers:
+                - stress.argotrace.test/finalizer
+              {{- end }}
+            spec: {}
+            {{- if $xr.spec.emitUsage }}
+            ---
+            apiVersion: protection.crossplane.io/v1beta1
+            kind: Usage
+            metadata:
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: leaf-usage
+            spec:
+              reason: Hold root deletion until the leaf is gone.
+              of:
+                apiVersion: trace.stress.code.org/v1alpha1
+                kind: StressManagedThing
+                resourceSelector:
+                  matchControllerRef: true
+                  matchLabels:
+                    trace.stress.code.org/role: root
+              by:
+                apiVersion: trace.stress.code.org/v1alpha1
+                kind: StressManagedThing
+                resourceSelector:
+                  matchControllerRef: true
+                  matchLabels:
+                    trace.stress.code.org/role: leaf
+            {{- end }}
+    - step: auto-ready
+      functionRef:
+        name: function-auto-ready

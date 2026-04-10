@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stress-argo-trace-finalizer
+  finalizers:
+    - stress.argotrace.test/finalizer
+data:
+  note: this object is supposed to wedge delete-time tracing at the finalizer leaf

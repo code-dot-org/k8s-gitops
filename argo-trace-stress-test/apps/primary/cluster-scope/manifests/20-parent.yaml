@@ -1,0 +1,9 @@
+apiVersion: trace.stress.code.org/v1alpha1
+kind: ClusterTraceThing
+metadata:
+  name: stress-argo-trace-cluster-parent
+spec:
+  resourceRef:
+    apiVersion: trace.stress.code.org/v1alpha1
+    kind: ClusterTraceThing
+    name: stress-argo-trace-cluster-child

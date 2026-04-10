@@ -1,0 +1,10 @@
+apiVersion: trace.stress.code.org/v1alpha1
+kind: ClusterTraceThing
+metadata:
+  name: stress-argo-trace-cluster-child
+status:
+  conditions:
+    - type: Ready
+      status: "False"
+      reason: WaitingForClusterInput
+      message: waiting for cluster-scoped dependency

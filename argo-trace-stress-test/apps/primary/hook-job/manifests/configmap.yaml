@@ -1,0 +1,6 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stress-argo-trace-hook-job
+data:
+  note: hook job must finish before this app can complete sync

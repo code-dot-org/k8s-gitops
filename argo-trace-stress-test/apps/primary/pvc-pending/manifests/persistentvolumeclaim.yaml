@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: stress-argo-trace-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  # This should keep the claim Pending without touching any real storage
+  # system. The point is to exercise the common "Pod blocked on PVC bind"
+  # troubleshooting path, not to provision anything.
+  storageClassName: stress-argo-trace-no-such-class

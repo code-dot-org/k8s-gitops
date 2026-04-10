@@ -1,0 +1,10 @@
+apiVersion: trace.stress.code.org/v1alpha1
+kind: XStressTrace
+metadata:
+  name: stress-argo-trace
+  namespace: stress-argo-trace-crossplane
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  holdDeletion: true
+  emitUsage: true

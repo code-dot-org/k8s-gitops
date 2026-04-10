@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stress-argo-trace-broken-pod
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: stress-argo-trace-broken-pod
+  template:
+    metadata:
+      labels:
+        app: stress-argo-trace-broken-pod
+    spec:
+      containers:
+        # This image intentionally does not exist. The point is to give
+        # `argo-trace` a stable owner-ref chain that bottoms out in Pod status
+        # and Warning events without any cloud dependency.
+        - name: missing
+          image: busybox:this-tag-does-not-exist
+          command:
+            - sh
+            - -c
+            - sleep 3600
