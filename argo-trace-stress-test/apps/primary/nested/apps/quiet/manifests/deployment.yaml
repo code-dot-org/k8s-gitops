@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stress-argo-trace-quiet
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: stress-argo-trace-quiet
+  template:
+    metadata:
+      labels:
+        app: stress-argo-trace-quiet
+    spec:
+      containers:
+        - name: echo
+          image: hashicorp/http-echo:1.0.0
+          args:
+            - -text=quiet
+          ports:
+            - containerPort: 5678

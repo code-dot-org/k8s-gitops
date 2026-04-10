@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stress-argo-trace-secondary-idle
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: stress-argo-trace-secondary-idle
+  template:
+    metadata:
+      labels:
+        app: stress-argo-trace-secondary-idle
+    spec:
+      containers:
+        - name: echo
+          image: hashicorp/http-echo:1.0.0
+          args:
+            - -text=secondary-idle
+          ports:
+            - containerPort: 5678

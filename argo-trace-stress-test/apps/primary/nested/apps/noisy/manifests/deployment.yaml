@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stress-argo-trace-noisy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: stress-argo-trace-noisy
+  template:
+    metadata:
+      labels:
+        app: stress-argo-trace-noisy
+    spec:
+      containers:
+        - name: missing
+          image: busybox:this-tag-does-not-exist
+          command:
+            - sh
+            - -c
+            - sleep 3600
