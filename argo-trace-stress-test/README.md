@@ -3,6 +3,9 @@
 This tree exists to harden `bin/argo-trace` against live Argo CD states that
 are awkward, noisy, or easy to truncate by accident.
 
+The runner lives in
+[`code-dot-org/k8s/tofu/codeai-k8s/cluster-infra-argocd/test/argo-trace-stress-test/`](https://github.com/code-dot-org/code-dot-org/tree/k8s/crossplane/k8s/tofu/codeai-k8s/cluster-infra-argocd/test/argo-trace-stress-test).
+
 It is deliberately separate from `mimic/`. `mimic/` is a small Argo shape
 probe. This tree is a broader stress harness.
 
