@@ -53,6 +53,15 @@ externalWebhooksServer:
     enabled: false
     terminatedUpstream: true
 
+managementController:
+  # Kargo puts its own finalizer on controller ServiceAccounts and clears it
+  # from the management controller. Keep that controller until late prune.
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+  serviceAccount:
+    annotations:
+      argocd.argoproj.io/sync-wave: "-10"
+
 webhooksServer:
   enabled: false
 
