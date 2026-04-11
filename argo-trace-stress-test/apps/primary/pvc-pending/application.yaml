@@ -7,7 +7,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/code-dot-org/k8s-gitops.git
-    targetRevision: seth/argo-trace-stress-test
+    targetRevision: main
     path: argo-trace-stress-test/apps/primary/pvc-pending/manifests
     directory:
       recurse: true

@@ -10,7 +10,7 @@ spec:
   generators:
     - git:
         repoURL: https://github.com/code-dot-org/k8s-gitops.git
-        revision: seth/argo-trace-stress-test
+        revision: main
         files:
           - path: argo-trace-stress-test/apps/secondary/*/application.yaml
   template:

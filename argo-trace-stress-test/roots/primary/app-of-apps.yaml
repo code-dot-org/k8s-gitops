@@ -13,14 +13,14 @@ spec:
     # the same object kinds and ownership patterns.
     - git:
         repoURL: https://github.com/code-dot-org/k8s-gitops.git
-        revision: seth/argo-trace-stress-test
+        revision: main
         files:
           - path: argo-trace-stress-test/apps/primary/*/application.yaml
     # Wrap nested ApplicationSets in an Application so Argo owns both levels
     # and `argo-trace` has to recurse through app -> appset -> app.
     - git:
         repoURL: https://github.com/code-dot-org/k8s-gitops.git
-        revision: seth/argo-trace-stress-test
+        revision: main
         files:
           - path: argo-trace-stress-test/apps/primary/*/applicationset.yaml
         template:
@@ -34,7 +34,7 @@ spec:
               namespace: argocd
             source:
               repoURL: https://github.com/code-dot-org/k8s-gitops.git
-              targetRevision: seth/argo-trace-stress-test
+              targetRevision: main
               path: 'argo-trace-stress-test/apps/primary/{{.path.basename}}'
               directory:
                 include: applicationset.yaml
