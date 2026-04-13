@@ -40,6 +40,11 @@ spec:
         include: application.yaml
     - repoURL: https://github.com/code-dot-org/k8s-gitops.git
       targetRevision: main
+      path: apps/infra/after-argocd-delay-pod
+      directory:
+        include: application.yaml
+    - repoURL: https://github.com/code-dot-org/k8s-gitops.git
+      targetRevision: main
       path: apps/infra/kargo-secrets
       directory:
         include: application.yaml

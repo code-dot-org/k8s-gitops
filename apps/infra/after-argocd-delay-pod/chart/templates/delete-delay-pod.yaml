@@ -1,0 +1,101 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+rules:
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Release.Name }}
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ .Release.Name }}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Release.Name }}
+spec:
+  serviceAccountName: {{ .Release.Name }}
+  terminationGracePeriodSeconds: {{ add .Values.preStopSleepSeconds 60 }}
+  containers:
+    - name: sleeper
+      image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+      lifecycle:
+        preStop:
+          exec:
+            command:
+              - /bin/sh
+              - -c
+              - |
+                set -eu
+
+                emit_event() {
+                  reason="$1"
+                  message="$2"
+
+                  echo "${message}"
+
+                  cat <<EOF | kubectl create -f - >/dev/null 2>&1 || true
+                apiVersion: v1
+                kind: Event
+                metadata:
+                  generateName: {{ .Release.Name }}-
+                  namespace: {{ .Release.Namespace }}
+                involvedObject:
+                  apiVersion: networking.k8s.io/v1
+                  kind: Ingress
+                  name: argocd-server
+                  namespace: {{ .Release.Namespace }}
+                reason: ${reason}
+                message: ${message}
+                type: Normal
+                source:
+                  component: after-argocd-delay-pod
+                EOF
+                }
+
+                log_ingress_state() {
+                  phase="$1"
+                  if kubectl -n {{ .Release.Namespace }} get ingress/argocd-server >/dev/null 2>&1; then
+                    emit_event "ArgocdIngressPresent${phase}" "after-argocd-delay-pod: ingress/argocd-server exists at ${phase} in namespace {{ .Release.Namespace }}"
+                  else
+                    emit_event "ArgocdIngressMissing${phase}" "after-argocd-delay-pod: ingress/argocd-server is missing at ${phase} in namespace {{ .Release.Namespace }}"
+                  fi
+                }
+
+                log_ingress_state PreStopStart
+                sleep {{ .Values.preStopSleepSeconds }}
+                log_ingress_state PreStopEnd
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          trap 'exit 0' TERM INT
+          while true; do
+            sleep 3600
+          done
