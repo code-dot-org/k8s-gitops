@@ -5,7 +5,6 @@ require "optparse"
 require "open3"
 require "json"
 require "set"
-require "shellwords"
 require "tmpdir"
 require "time"
 require "timeout"
@@ -378,17 +377,7 @@ module ArgoTrace
         env = shared_kubeconfig.fetch(:env, {})
       end
 
-      puts "COMMAND START: #{Shellwords.join(command)}"
       stdout, stderr, status = capture_command(*command, env: env, timeout_seconds: timeout_seconds)
-      puts "COMMAND RETURN: #{Shellwords.join(command)}"
-      puts "STDOUT <<EOF"
-      print stdout.to_s
-      puts unless stdout.to_s.end_with?("\n")
-      puts "EOF"
-      puts "STDERR <<EOF"
-      print stderr.to_s
-      puts unless stderr.to_s.end_with?("\n")
-      puts "EOF"
       return stdout if status.success?
 
       message = stderr.to_s.strip
@@ -484,6 +473,22 @@ module ArgoTrace
       appset_inventory: build_appset_inventory(argocd_appsets),
       root_inventory: build_root_inventory(app_inventory),
     }
+  end
+
+  def no_argocd_inventory?(inventory)
+    inventory.fetch(:argocd_apps).empty? && inventory.fetch(:argocd_appsets).empty?
+  end
+
+  def current_cluster_name
+    kubeconfig = load_raw_kubeconfig
+    current_context = kubeconfig["current-context"].to_s
+    context = kubeconfig_context(kubeconfig, current_context)
+    cluster_name = context&.dig("context", "cluster").to_s
+    return cluster_name unless cluster_name.empty?
+
+    "current cluster"
+  rescue StandardError
+    "current cluster"
   end
 
   def wave_2_app_details_jobs(appset_names:, app_names:, app_inventory: {}, appset_inventory: {})
@@ -1923,11 +1928,11 @@ module ArgoTrace
       map {|line| strip_ansi_codes(line)}
   end
 
-  def render_fixture_snapshot(tree_lines:, start_time:, end_time:, elapsed_seconds:)
+  def render_fixture_snapshot(tree_lines:, start_time:, end_time:, elapsed_seconds:, cluster_name:)
     [
       "starting argo-trace @ #{format_clock_time(start_time)}",
       "",
-      "# ArgoCD dependency tree @ #{format_clock_time(end_time)}, argo-trace took #{format_elapsed(elapsed_seconds)}",
+      "# ArgoCD dependency tree for #{cluster_name} @ #{format_clock_time(end_time)}, argo-trace took #{format_elapsed(elapsed_seconds)}",
       "",
       *tree_lines,
     ].join("\n") + "\n"
@@ -1942,7 +1947,7 @@ module ArgoTrace
     DEFAULT_NON_TTY_WRAP_WIDTH
   end
 
-  def render_snapshot(start_time:, end_time:, elapsed_seconds:, body_text:)
+  def render_snapshot(start_time:, end_time:, elapsed_seconds:, body_text:, cluster_name:)
     start_clock_time = format_clock_time(start_time)
     end_clock_time = format_clock_time(end_time)
     elapsed = format_elapsed(elapsed_seconds)
@@ -1950,7 +1955,7 @@ module ArgoTrace
     [
       "starting argo-trace @ #{start_clock_time}",
       "",
-      "# ArgoCD dependency tree @ #{end_clock_time}, argo-trace took #{elapsed}",
+      "# ArgoCD dependency tree for #{cluster_name} @ #{end_clock_time}, argo-trace took #{elapsed}",
       "",
       body_text,
     ].join("\n").sub(/\n+\z/, "") + "\n\n\n"
@@ -1958,6 +1963,8 @@ module ArgoTrace
 
   def snapshot_body(command_runner:, wrap_width:, kubectl_details: DEFAULT_KUBECTL_DETAILS, ref_max_recursion_depth: DEFAULT_REF_MAX_RECURSION_DEPTH)
     inventory = fetch_wave1_app_and_appset_list(command_runner: command_runner)
+    return "No ArgoCD Applications or ApplicationSets found on #{current_cluster_name}" if no_argocd_inventory?(inventory)
+
     app_names = apps_requiring_detail(
       app_inventory: inventory.fetch(:app_inventory),
       root_inventory: inventory.fetch(:root_inventory),
@@ -2020,6 +2027,7 @@ module ArgoTrace
         ref_max_recursion_depth: options.fetch(:ref_max_recursion_depth, DEFAULT_REF_MAX_RECURSION_DEPTH)
       )
     end
+    cluster_name = current_cluster_name
 
     loop do
       start_time = now.call
@@ -2031,7 +2039,8 @@ module ArgoTrace
           start_time: start_time,
           end_time: end_time,
           elapsed_seconds: end_time - start_time,
-          body_text: body_text
+          body_text: body_text,
+          cluster_name: cluster_name
         )
       )
       output.flush

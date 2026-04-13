@@ -60,13 +60,14 @@ class ArgoTraceTest < Minitest::Test
       start_time: Time.parse("2026-04-12T12:33:00-10:00"),
       end_time: Time.parse("2026-04-12T12:33:10-10:00"),
       elapsed_seconds: 10.0,
-      body_text: ""
+      body_text: "",
+      cluster_name: "codeai-k8s-test"
     )
 
     assert_equal <<~TEXT, rendered
       starting argo-trace @ 12:33p and 0s
 
-      # ArgoCD dependency tree @ 12:33p and 10s, argo-trace took 10.0s
+      # ArgoCD dependency tree for codeai-k8s-test @ 12:33p and 10s, argo-trace took 10.0s
 
 
     TEXT
@@ -115,6 +116,29 @@ class ArgoTraceTest < Minitest::Test
     )
 
     assert_includes body_text, "- app-of-apps (Application) [sync.status=Synced, health.status=Healthy, status.operationState.phase=Succeeded]"
+  end
+
+  def test_snapshot_body_reports_no_argocd_inventory
+    original_cluster_name_method = ArgoTrace.method(:current_cluster_name)
+    ArgoTrace.define_singleton_method(:current_cluster_name) do
+      "codeai-k8s-test"
+    end
+
+    body_text = ArgoTrace.snapshot_body(
+      command_runner: lambda do |*command, **_kwargs|
+        case command
+        when ArgoTrace::WAVE1_APPSET_LIST_COMMAND, ArgoTrace::WAVE1_APP_LIST_COMMAND
+          "--- []\n"
+        else
+          raise "unexpected command: #{command.inspect}"
+        end
+      end,
+      wrap_width: nil
+    )
+
+    assert_equal "No ArgoCD Applications or ApplicationSets found on codeai-k8s-test", body_text
+  ensure
+    ArgoTrace.define_singleton_method(:current_cluster_name, original_cluster_name_method)
   end
 
   def test_shared_kubeconfig_env_uses_shared_file_for_env_context
@@ -257,6 +281,10 @@ class ArgoTraceTest < Minitest::Test
       Time.parse("2026-04-12T11:59:58-10:00"),
       Time.parse("2026-04-12T12:00:03-10:00"),
     ]
+    original_cluster_name_method = ArgoTrace.method(:current_cluster_name)
+    ArgoTrace.define_singleton_method(:current_cluster_name) do
+      "codeai-k8s-test"
+    end
 
     ArgoTrace.run(
       {poll_every: nil, soft_wrap: :auto},
@@ -266,7 +294,9 @@ class ArgoTraceTest < Minitest::Test
     )
 
     assert_includes output.string, "starting argo-trace @ 11:59a and 58s\n"
-    assert_includes output.string, "# ArgoCD dependency tree @ 12:00p and 3s, argo-trace took 5.0s\n"
+    assert_includes output.string, "# ArgoCD dependency tree for codeai-k8s-test @ 12:00p and 3s, argo-trace took 5.0s\n"
+  ensure
+    ArgoTrace.define_singleton_method(:current_cluster_name, original_cluster_name_method)
   end
 
   def test_run_measures_elapsed_across_body_generation
