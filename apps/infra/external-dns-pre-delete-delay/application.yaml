@@ -1,0 +1,28 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: external-dns-pre-delete-delay
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    # Keep this ahead of external-dns on destroy so we get a short observation
+    # window before wave 4 begins.
+    argocd.argoproj.io/sync-wave: "10"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/code-dot-org/k8s-gitops.git
+    targetRevision: main
+    path: apps/infra/external-dns-pre-delete-delay/chart
+    helm:
+      releaseName: external-dns-pre-delete-delay
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
