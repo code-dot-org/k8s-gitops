@@ -1,0 +1,5 @@
+sleepSeconds: 1200
+
+image:
+  repository: alpine
+  tag: "3.22.1"
