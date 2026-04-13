@@ -116,6 +116,113 @@ class ArgoTraceTest < Minitest::Test
     assert_includes body_text, "- app-of-apps (Application) [sync.status=Synced, health.status=Healthy, status.operationState.phase=Succeeded]"
   end
 
+  def test_snapshot_body_reports_no_argocd_inventory
+    cluster_name_calls = []
+    original_cluster_name_method = ArgoTrace.method(:current_cluster_name)
+    ArgoTrace.define_singleton_method(:current_cluster_name) do
+      cluster_name_calls << true
+      "codeai-k8s-test"
+    end
+
+    body_text = ArgoTrace.snapshot_body(
+      command_runner: lambda do |*command, **_kwargs|
+        case command
+        when ArgoTrace::WAVE1_APPSET_LIST_COMMAND, ArgoTrace::WAVE1_APP_LIST_COMMAND
+          "--- []\n"
+        else
+          raise "unexpected command: #{command.inspect}"
+        end
+      end,
+      wrap_width: nil
+    )
+
+    assert_equal "No ArgoCD Applications or ApplicationSets found on codeai-k8s-test", body_text
+    assert_equal [true], cluster_name_calls
+  ensure
+    ArgoTrace.define_singleton_method(:current_cluster_name, original_cluster_name_method)
+  end
+
+  def test_argocd_command_with_kube_context_inserts_flag_after_binary
+    command = ArgoTrace.argocd_command_with_kube_context(
+      ["argocd", "--core", "app", "list", "-o", "yaml"],
+      "codeai-k8s-argocd"
+    )
+
+    assert_equal ["argocd", "--kube-context", "codeai-k8s-argocd", "--core", "app", "list", "-o", "yaml"], command
+  end
+
+  def test_ensure_argocd_kube_context_uses_env_override_without_creating_temp_context
+    original_env = ENV["ARGOCD_KUBE_CONTEXT"]
+    original_capture_command_method = ArgoTrace.method(:capture_command)
+    seen_commands = []
+    ENV["ARGOCD_KUBE_CONTEXT"] = "from-env"
+    ArgoTrace.define_singleton_method(:capture_command) do |*command, **_kwargs|
+      seen_commands << command
+      raise "capture_command should not be called"
+    end
+
+    resolved = ArgoTrace.ensure_argocd_kube_context
+
+    assert_equal "from-env", resolved.fetch(:name)
+    assert_equal({}, resolved.fetch(:env))
+    assert_nil resolved.fetch(:cleanup)
+    assert_equal [], seen_commands
+  ensure
+    ENV["ARGOCD_KUBE_CONTEXT"] = original_env
+    ArgoTrace.define_singleton_method(:capture_command, original_capture_command_method)
+  end
+
+  def test_ensure_argocd_kube_context_creates_temporary_argocd_namespaced_context_when_env_is_unset
+    original_env = ENV["ARGOCD_KUBE_CONTEXT"]
+    original_capture_command_method = ArgoTrace.method(:capture_command)
+    success_status = Struct.new(:success?).new(true)
+    temporary_kubeconfig_path = nil
+    ENV.delete("ARGOCD_KUBE_CONTEXT")
+    ArgoTrace.define_singleton_method(:capture_command) do |*command, **_kwargs|
+      case command
+      when ["kubectl", "config", "current-context"]
+        ["codeai-k8s", "", success_status]
+      when ["kubectl", "config", "view", "--raw", "--minify", "-o", "jsonpath={.contexts[0].context.namespace}"]
+        ["default", "", success_status]
+      when ["kubectl", "config", "view", "--raw", "-o", "json"]
+        [
+          JSON.dump(
+            {
+              "current-context" => "codeai-k8s",
+              "contexts" => [
+                {
+                  "name" => "codeai-k8s",
+                  "context" => {"cluster" => "cluster-1", "user" => "user-1", "namespace" => "default"},
+                }
+              ],
+              "clusters" => [{"name" => "cluster-1", "cluster" => {"server" => "https://example"}}],
+              "users" => [{"name" => "user-1", "user" => {"token" => "x"}}],
+            }
+          ),
+          "",
+          success_status,
+        ]
+      else
+        raise "unexpected command: #{command.inspect}"
+      end
+    end
+
+    resolved = ArgoTrace.ensure_argocd_kube_context
+
+    assert_match(/\Aargo-trace-argocd-\d+-[0-9a-f]{8}\z/, resolved.fetch(:name))
+    temporary_kubeconfig_path = resolved.fetch(:env).fetch("KUBECONFIG")
+    temporary_kubeconfig = YAML.safe_load(File.read(temporary_kubeconfig_path))
+    temporary_context = temporary_kubeconfig.fetch("contexts").find {|context| context.fetch("name") == resolved.fetch(:name)}
+    assert_equal "argocd", temporary_context.fetch("context").fetch("namespace")
+    refute_nil resolved.fetch(:cleanup)
+    resolved.fetch(:cleanup).call
+    refute File.exist?(temporary_kubeconfig_path)
+  ensure
+    ENV["ARGOCD_KUBE_CONTEXT"] = original_env
+    ArgoTrace.define_singleton_method(:capture_command, original_capture_command_method)
+    File.delete(temporary_kubeconfig_path) if temporary_kubeconfig_path && File.exist?(temporary_kubeconfig_path)
+  end
+
   def test_run_executes_once_without_polling
     output = StringIO.new
     times = [
