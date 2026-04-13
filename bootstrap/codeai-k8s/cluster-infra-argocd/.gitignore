@@ -2,3 +2,4 @@
 tofu.log
 tofu-*.log
 logs/
+cluster.log
