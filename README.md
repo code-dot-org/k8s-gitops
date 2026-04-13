@@ -66,4 +66,4 @@ k8s-gitops/
 If you have an existing ArgoCD instance: `kubectl apply -f apps/app-of-apps/bootstrap.yaml`
 
 For creating from scratch, creating an EKS cluster, bootstrapping argocd etc,
-see: [./bootstrap/README.md](./bootstrap/README.md).
+see: [./bootstrap/codeai-k8s/README.md](./bootstrap/codeai-k8s/README.md).
