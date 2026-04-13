@@ -28,7 +28,9 @@ metadata:
   namespace: {{ $namespace }}
   annotations:
     argocd.argoproj.io/hook: PostDelete
-    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+    # This is a named hook Job, so Argo must delete any prior instance before
+    # trying to create it again on a later delete pass.
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
 spec:
   template:
     spec:
