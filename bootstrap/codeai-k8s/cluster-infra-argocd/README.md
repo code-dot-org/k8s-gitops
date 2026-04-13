@@ -20,6 +20,7 @@ Apply `../cluster/` and `../cluster-infra/` first.
 Prerequisite: `../cluster/` and `../cluster-infra/` must already have been applied.
 
 ```bash
+bundle install
 tofu init
 AWS_PROFILE=codeorg-admin tofu apply
 ```
@@ -35,6 +36,8 @@ stdout.
 
 ### Testing scripts used in deploying the cluster
 
+- This directory has its own Ruby bundle. Run `bundle install` once before
+  using `bin/argo-trace`, `bin/watch-argo-trace`, or the Ruby tests.
 - If you modify `bin/argo-trace`, run before commit:
   `ruby test/argo-trace/argo_trace_test.rb`
 - `test/argo-trace/fixtures/argo-cli-data/` holds saved `argocd --core`
