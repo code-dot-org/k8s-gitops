@@ -450,10 +450,33 @@ module ArgoTrace
     threads = commands.map do |name, command|
       Thread.new do
         [name, fetch_argocd_list(command_runner, command)]
+      end.tap do |thread|
+        thread.report_on_exception = false
       end
     end
 
     threads.map(&:value).to_h
+  end
+
+  def argocd_cm_missing?(command_runner)
+    run_command(command_runner, ["kubectl", "get", "configmap", "-n", "argocd", "argocd-cm"], timeout_seconds: 5)
+    false
+  rescue CommandFailed => exception
+    exception.message.include?('configmaps "argocd-cm" not found')
+  end
+
+  def empty_wave1_inventory
+    {
+      argocd_apps: [],
+      argocd_appsets: [],
+      app_inventory: {},
+      appset_inventory: {},
+      root_inventory: [],
+    }
+  end
+
+  def missing_argocd_inventory
+    empty_wave1_inventory.merge(argocd_not_found: true)
   end
 
   def fetch_wave1_app_and_appset_list(command_runner:)
@@ -473,10 +496,18 @@ module ArgoTrace
       appset_inventory: build_appset_inventory(argocd_appsets),
       root_inventory: build_root_inventory(app_inventory),
     }
+  rescue CommandFailed
+    return missing_argocd_inventory if argocd_cm_missing?(command_runner)
+
+    raise
   end
 
   def no_argocd_inventory?(inventory)
     inventory.fetch(:argocd_apps).empty? && inventory.fetch(:argocd_appsets).empty?
+  end
+
+  def argocd_not_found?(inventory)
+    inventory[:argocd_not_found] == true
   end
 
   def current_cluster_name
@@ -1964,6 +1995,7 @@ module ArgoTrace
 
   def snapshot_body(command_runner:, wrap_width:, kubectl_details: DEFAULT_KUBECTL_DETAILS, ref_max_recursion_depth: DEFAULT_REF_MAX_RECURSION_DEPTH)
     inventory = fetch_wave1_app_and_appset_list(command_runner: command_runner)
+    return "ArgoCD not found on #{current_cluster_name}" if argocd_not_found?(inventory)
     return "No ArgoCD Applications or ApplicationSets found on #{current_cluster_name}" if no_argocd_inventory?(inventory)
 
     app_names = apps_requiring_detail(

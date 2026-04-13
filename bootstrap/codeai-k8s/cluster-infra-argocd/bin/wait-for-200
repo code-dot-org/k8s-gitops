@@ -239,7 +239,7 @@ module WaitFor200
 end
 
 if __FILE__ == $PROGRAM_NAME
-  timeout_seconds = 1200
+  timeout_seconds = 1800
   poll_every_seconds = 5
   usage = "usage: #{File.basename($PROGRAM_NAME)} [--timeout-seconds <value>] [--poll-every-seconds <value>] <url>"
 
