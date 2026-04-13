@@ -41,8 +41,39 @@ spec:
             - /bin/sh
             - -c
             - |
-              echo "argocd-remove-ingress-postdelete: deleting ingress/{{ $fullname }} in namespace {{ $namespace }}"
+              set -e
+
+              emit_event() {
+                reason="$1"
+                message="$2"
+
+                echo "${message}"
+
+                cat <<EOF | kubectl create -f - >/dev/null 2>&1 || true
+              apiVersion: v1
+              kind: Event
+              metadata:
+                generateName: {{ $fullname }}-remove-ingress-postdelete-
+                namespace: {{ $namespace }}
+              involvedObject:
+                apiVersion: networking.k8s.io/v1
+                kind: Ingress
+                name: {{ $fullname }}
+                namespace: {{ $namespace }}
+              reason: ${reason}
+              message: ${message}
+              type: Normal
+              source:
+                component: argocd-remove-ingress-postdelete
+              EOF
+              }
+
+              emit_event DeleteStarted "argocd-remove-ingress-postdelete: deleting ingress/{{ $fullname }} in namespace {{ $namespace }}"
               kubectl -n {{ $namespace }} delete ingress/{{ $fullname }}
-              kubectl -n {{ $namespace }} wait --for=delete ingress/{{ $fullname }} --timeout=300s
-              echo "argocd-remove-ingress-postdelete: deleted ingress/{{ $fullname }} in namespace {{ $namespace }}"
+              if kubectl -n {{ $namespace }} wait --for=delete ingress/{{ $fullname }} --timeout=300s; then
+                emit_event DeleteSucceeded "argocd-remove-ingress-postdelete: deleted ingress/{{ $fullname }} in namespace {{ $namespace }}"
+              else
+                emit_event DeleteTimedOut "argocd-remove-ingress-postdelete: timed out waiting for ingress/{{ $fullname }} deletion in namespace {{ $namespace }}"
+                exit 1
+              fi
 {{- end }}
