@@ -1,4 +1,10 @@
-# OpenTofu norms for our repo
+# codeai-k8s cluster bootstrap
+
+This directory holds tofu modules that bootstrap an EKS codeai-k8s cluster which then looks to `../apps/`
+in this repo as its source of truth. If you're setting up a cluster from scratch, start by reading 
+[./codeai-k8s/README.md](./codeai-k8s/README.md).
+
+## OpenTofu norms for our repo
 
 ## Non-secrets: commit to terraform.tfvars
 
