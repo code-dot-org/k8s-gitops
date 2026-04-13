@@ -117,11 +117,11 @@ class ArgoTraceTest < Minitest::Test
     assert_includes body_text, "- app-of-apps (Application) [sync.status=Synced, health.status=Healthy, status.operationState.phase=Succeeded]"
   end
 
-  def test_temporary_kubeconfig_for_argocd_uses_env_context_by_switching_current_context
+  def test_shared_kubeconfig_env_uses_shared_file_for_env_context
     original_env = ENV["ARGOCD_KUBE_CONTEXT"]
     original_capture_command_method = ArgoTrace.method(:capture_command)
     success_status = Struct.new(:success?).new(true)
-    temporary_kubeconfig_path = nil
+    kubeconfig_path = nil
     ENV["ARGOCD_KUBE_CONTEXT"] = "codeai-k8s-argocd"
 
     ArgoTrace.define_singleton_method(:capture_command) do |*command, **_kwargs|
@@ -145,32 +145,28 @@ class ArgoTraceTest < Minitest::Test
       end
     end
 
-    resolved = ArgoTrace.temporary_kubeconfig_for_argocd
+    resolved = ArgoTrace.shared_kubeconfig_env
 
-    temporary_kubeconfig_path = resolved.fetch(:env).fetch("KUBECONFIG")
-    temporary_kubeconfig = YAML.safe_load(File.read(temporary_kubeconfig_path))
+    kubeconfig_path = resolved.fetch(:env).fetch("KUBECONFIG")
+    temporary_kubeconfig = YAML.safe_load(File.read(kubeconfig_path))
     assert_equal "codeai-k8s-argocd", temporary_kubeconfig.fetch("current-context")
-    refute_nil resolved.fetch(:cleanup)
+    assert_equal ArgoTrace.shared_argocd_kubeconfig_path("codeai-k8s-argocd"), kubeconfig_path
+    assert_nil resolved.fetch(:cleanup)
   ensure
     ENV["ARGOCD_KUBE_CONTEXT"] = original_env
     ArgoTrace.define_singleton_method(:capture_command, original_capture_command_method)
-    resolved&.dig(:cleanup)&.call
-    File.delete(temporary_kubeconfig_path) if temporary_kubeconfig_path && File.exist?(temporary_kubeconfig_path)
+    File.delete(kubeconfig_path) if kubeconfig_path && File.exist?(kubeconfig_path)
   end
 
-  def test_temporary_kubeconfig_for_argocd_adds_argocd_namespace_when_current_context_lacks_it
+  def test_shared_kubeconfig_env_adds_argocd_namespace_in_shared_file
     original_env = ENV["ARGOCD_KUBE_CONTEXT"]
     original_capture_command_method = ArgoTrace.method(:capture_command)
     success_status = Struct.new(:success?).new(true)
-    temporary_kubeconfig_path = nil
+    kubeconfig_path = nil
     ENV.delete("ARGOCD_KUBE_CONTEXT")
 
     ArgoTrace.define_singleton_method(:capture_command) do |*command, **_kwargs|
       case command
-      when ["kubectl", "config", "current-context"]
-        ["codeai-k8s", "", success_status]
-      when ["kubectl", "config", "view", "--raw", "--minify", "-o", "jsonpath={.contexts[0].context.namespace}"]
-        ["default", "", success_status]
       when ["kubectl", "config", "view", "--raw", "-o", "json"]
         [
           JSON.dump(
@@ -189,18 +185,48 @@ class ArgoTraceTest < Minitest::Test
       end
     end
 
-    resolved = ArgoTrace.temporary_kubeconfig_for_argocd
+    resolved = ArgoTrace.shared_kubeconfig_env
 
-    temporary_kubeconfig_path = resolved.fetch(:env).fetch("KUBECONFIG")
-    temporary_kubeconfig = YAML.safe_load(File.read(temporary_kubeconfig_path))
+    kubeconfig_path = resolved.fetch(:env).fetch("KUBECONFIG")
+    temporary_kubeconfig = YAML.safe_load(File.read(kubeconfig_path))
     temporary_context = temporary_kubeconfig.fetch("contexts").find {|context| context.fetch("name") == temporary_kubeconfig.fetch("current-context")}
     assert_equal "argocd", temporary_context.fetch("context").fetch("namespace")
-    refute_nil resolved.fetch(:cleanup)
+    assert_equal ArgoTrace.shared_argocd_kubeconfig_path("codeai-k8s"), kubeconfig_path
+    assert_nil resolved.fetch(:cleanup)
   ensure
     ENV["ARGOCD_KUBE_CONTEXT"] = original_env
     ArgoTrace.define_singleton_method(:capture_command, original_capture_command_method)
-    resolved&.dig(:cleanup)&.call
-    File.delete(temporary_kubeconfig_path) if temporary_kubeconfig_path && File.exist?(temporary_kubeconfig_path)
+    File.delete(kubeconfig_path) if kubeconfig_path && File.exist?(kubeconfig_path)
+  end
+
+  def test_shell_command_runner_shares_kubeconfig_env_with_kubectl_and_argocd
+    original_shared_kubeconfig_env_method = ArgoTrace.method(:shared_kubeconfig_env)
+    original_capture_command_method = ArgoTrace.method(:capture_command)
+    success_status = Struct.new(:success?).new(true)
+    seen_calls = Queue.new
+
+    ArgoTrace.define_singleton_method(:shared_kubeconfig_env) do
+      {env: {"KUBECONFIG" => "/tmp/argo-trace-kubeconfig-codeai-k8s.yaml"}, cleanup: nil}
+    end
+
+    ArgoTrace.define_singleton_method(:capture_command) do |*command, env: {}, **_kwargs|
+      seen_calls << [command, env]
+      ["{}\n", "", success_status]
+    end
+
+    runner = ArgoTrace.shell_command_runner
+    runner.call(*ArgoTrace::WAVE1_APP_LIST_COMMAND)
+    runner.call("kubectl", "get", "pods", "-n", "argocd")
+
+    first_command, first_env = seen_calls.pop
+    second_command, second_env = seen_calls.pop
+    assert_equal ArgoTrace::WAVE1_APP_LIST_COMMAND, first_command
+    assert_equal({"KUBECONFIG" => "/tmp/argo-trace-kubeconfig-codeai-k8s.yaml"}, first_env)
+    assert_equal ["kubectl", "get", "pods", "-n", "argocd"], second_command
+    assert_equal({"KUBECONFIG" => "/tmp/argo-trace-kubeconfig-codeai-k8s.yaml"}, second_env)
+  ensure
+    ArgoTrace.define_singleton_method(:shared_kubeconfig_env, original_shared_kubeconfig_env_method)
+    ArgoTrace.define_singleton_method(:capture_command, original_capture_command_method)
   end
 
   def test_run_executes_once_without_polling

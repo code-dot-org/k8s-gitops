@@ -4,10 +4,9 @@
 require "optparse"
 require "open3"
 require "json"
-require "securerandom"
 require "set"
 require "shellwords"
-require "tempfile"
+require "tmpdir"
 require "time"
 require "timeout"
 require "yaml"
@@ -306,33 +305,6 @@ module ArgoTrace
     argocd_output_list(payload)
   end
 
-  def current_kube_context_field(field_name)
-    stdout, _stderr, status = capture_command(
-      "kubectl",
-      "config",
-      "view",
-      "--raw",
-      "--minify",
-      "-o",
-      "jsonpath={.contexts[0].context.#{field_name}}",
-      timeout_seconds: 5
-    )
-    return "" unless status.success?
-
-    stdout.to_s.strip
-  rescue StandardError
-    ""
-  end
-
-  def current_kube_context_name
-    stdout, _stderr, status = capture_command("kubectl", "config", "current-context", timeout_seconds: 5)
-    return "" unless status.success?
-
-    stdout.to_s.strip
-  rescue StandardError
-    ""
-  end
-
   def load_raw_kubeconfig
     stdout, _stderr, status = capture_command(
       "kubectl",
@@ -352,64 +324,58 @@ module ArgoTrace
     Array(kubeconfig["contexts"]).find {|context| context["name"] == context_name}
   end
 
-  def temporary_kubeconfig_for_argocd
+  def shared_argocd_kubeconfig_path(context_name)
+    sanitized_context_name = context_name.gsub(/[^A-Za-z0-9_.-]/, "_")
+    File.join(Dir.tmpdir, "argo-trace-kubeconfig-#{sanitized_context_name}.yaml")
+  end
+
+  def shared_kubeconfig_env
     explicit_context = ENV["ARGOCD_KUBE_CONTEXT"].to_s.strip
     kubeconfig = load_raw_kubeconfig
+    current_context = kubeconfig["current-context"].to_s.strip
+    return {env: {}, cleanup: nil} if current_context.empty?
 
     if explicit_context.empty?
-      current_context = current_kube_context_name
-      return {env: {}, cleanup: nil} if current_context.empty?
-      return {env: {}, cleanup: nil} if current_kube_context_field("namespace") == "argocd"
-
       source_context = kubeconfig_context(kubeconfig, current_context)
       return {env: {}, cleanup: nil} unless source_context
+      return {env: {}, cleanup: nil} if source_context.dig("context", "namespace") == "argocd"
 
-      temporary_context = "argo-trace-argocd-#{Process.pid}-#{SecureRandom.hex(4)}"
       rewritten_kubeconfig = kubeconfig.merge(
-        "current-context" => temporary_context,
-        "contexts" => Array(kubeconfig["contexts"]) + [
+        "current-context" => current_context,
+        "contexts" => Array(kubeconfig["contexts"]).reject {|context| context["name"] == current_context} + [
           source_context.merge(
-            "name" => temporary_context,
+            "name" => current_context,
             "context" => source_context.fetch("context", {}).merge("namespace" => "argocd")
           )
         ]
       )
+      kubeconfig_path = shared_argocd_kubeconfig_path(current_context)
     else
-      return {env: {}, cleanup: nil} if kubeconfig["current-context"] == explicit_context
+      return {env: {}, cleanup: nil} if current_context == explicit_context
       return {env: {}, cleanup: nil} unless kubeconfig_context(kubeconfig, explicit_context)
 
       rewritten_kubeconfig = kubeconfig.merge("current-context" => explicit_context)
+      kubeconfig_path = shared_argocd_kubeconfig_path(explicit_context)
     end
 
-    temporary_kubeconfig = Tempfile.new(["argo-trace-kubeconfig-", ".yaml"])
-    temporary_kubeconfig.write(YAML.dump(rewritten_kubeconfig))
-    temporary_kubeconfig.flush
+    File.write(kubeconfig_path, YAML.dump(rewritten_kubeconfig))
 
     {
-      env: {"KUBECONFIG" => temporary_kubeconfig.path},
-      cleanup: lambda do
-        temporary_kubeconfig.close!
-      rescue StandardError
-        nil
-      end,
+      env: {"KUBECONFIG" => kubeconfig_path},
+      cleanup: nil,
     }
   rescue StandardError
     {env: {}, cleanup: nil}
   end
 
   def shell_command_runner
-    argocd_kubeconfig = nil
-    cleanup_registered = false
+    shared_kubeconfig = nil
 
     lambda do |*command, timeout_seconds: nil|
       env = {}
-      if command.first == "argocd"
-        argocd_kubeconfig ||= temporary_kubeconfig_for_argocd
-        unless cleanup_registered
-          at_exit { argocd_kubeconfig[:cleanup]&.call } if argocd_kubeconfig
-          cleanup_registered = true
-        end
-        env = argocd_kubeconfig.fetch(:env, {})
+      if %w[argocd kubectl].include?(command.first)
+        shared_kubeconfig ||= shared_kubeconfig_env
+        env = shared_kubeconfig.fetch(:env, {})
       end
 
       puts "COMMAND START: #{Shellwords.join(command)}"
