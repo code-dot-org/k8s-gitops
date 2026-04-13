@@ -399,36 +399,38 @@ module ArgoTrace
   end
 
   def capture_command(*command, env: {}, timeout_seconds: nil)
-    Open3.popen3(env, *command) do |stdin, stdout, stderr, wait_thr|
-      stdin.close
+    Bundler.with_unbundled_env do
+      Open3.popen3(env, *command) do |stdin, stdout, stderr, wait_thr|
+        stdin.close
 
-      stdout_reader = Thread.new do
-        stdout.read
-      rescue IOError
-        +""
-      end
-      stdout_reader.report_on_exception = false
-
-      stderr_reader = Thread.new do
-        stderr.read
-      rescue IOError
-        +""
-      end
-      stderr_reader.report_on_exception = false
-
-      status =
-        if timeout_seconds
-          wait_thr.join(timeout_seconds)&.value || timeout_process(wait_thr, stdout, stderr)
-        else
-          wait_thr.value
+        stdout_reader = Thread.new do
+          stdout.read
+        rescue IOError
+          +""
         end
+        stdout_reader.report_on_exception = false
 
-      [stdout_reader.value, stderr_reader.value, status]
-    ensure
-      stdout.close unless stdout.closed?
-      stderr.close unless stderr.closed?
-      stdout_reader&.join
-      stderr_reader&.join
+        stderr_reader = Thread.new do
+          stderr.read
+        rescue IOError
+          +""
+        end
+        stderr_reader.report_on_exception = false
+
+        status =
+          if timeout_seconds
+            wait_thr.join(timeout_seconds)&.value || timeout_process(wait_thr, stdout, stderr)
+          else
+            wait_thr.value
+          end
+
+        [stdout_reader.value, stderr_reader.value, status]
+      ensure
+        stdout.close unless stdout.closed?
+        stderr.close unless stderr.closed?
+        stdout_reader&.join
+        stderr_reader&.join
+      end
     end
   end
 
