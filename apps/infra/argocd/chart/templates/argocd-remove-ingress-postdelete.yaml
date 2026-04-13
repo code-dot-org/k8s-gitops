@@ -69,8 +69,8 @@ spec:
               }
 
               emit_event DeleteStarted "argocd-remove-ingress-postdelete: deleting ingress/{{ $fullname }} in namespace {{ $namespace }}"
-              kubectl -n {{ $namespace }} delete ingress/{{ $fullname }}
-              if kubectl -n {{ $namespace }} wait --for=delete ingress/{{ $fullname }} --timeout=300s; then
+              kubectl -n {{ $namespace }} delete ingress/{{ $fullname }} --ignore-not-found
+              if kubectl -n {{ $namespace }} wait --for=delete ingress/{{ $fullname }} --timeout=-1s; then
                 emit_event DeleteSucceeded "argocd-remove-ingress-postdelete: deleted ingress/{{ $fullname }} in namespace {{ $namespace }}"
               else
                 emit_event DeleteTimedOut "argocd-remove-ingress-postdelete: timed out waiting for ingress/{{ $fullname }} deletion in namespace {{ $namespace }}"
