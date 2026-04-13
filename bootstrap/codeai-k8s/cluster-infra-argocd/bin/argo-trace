@@ -4,9 +4,8 @@
 require "optparse"
 require "open3"
 require "json"
-require "securerandom"
 require "set"
-require "tempfile"
+require "tmpdir"
 require "time"
 require "timeout"
 require "yaml"
@@ -305,41 +304,6 @@ module ArgoTrace
     argocd_output_list(payload)
   end
 
-  def argocd_command_with_kube_context(command, kube_context_name)
-    return command unless command.first == "argocd"
-    return command if kube_context_name.to_s.empty?
-    return command if command.include?("--kube-context")
-
-    [command.first, "--kube-context", kube_context_name, *command.drop(1)]
-  end
-
-  def current_kube_context_field(field_name)
-    stdout, _stderr, status = capture_command(
-      "kubectl",
-      "config",
-      "view",
-      "--raw",
-      "--minify",
-      "-o",
-      "jsonpath={.contexts[0].context.#{field_name}}",
-      timeout_seconds: 5
-    )
-    return "" unless status.success?
-
-    stdout.to_s.strip
-  rescue StandardError
-    ""
-  end
-
-  def current_kube_context_name
-    stdout, _stderr, status = capture_command("kubectl", "config", "current-context", timeout_seconds: 5)
-    return "" unless status.success?
-
-    stdout.to_s.strip
-  rescue StandardError
-    ""
-  end
-
   def load_raw_kubeconfig
     stdout, _stderr, status = capture_command(
       "kubectl",
@@ -355,62 +319,62 @@ module ArgoTrace
     JSON.parse(stdout)
   end
 
-  def ensure_argocd_kube_context
+  def kubeconfig_context(kubeconfig, context_name)
+    Array(kubeconfig["contexts"]).find {|context| context["name"] == context_name}
+  end
+
+  def shared_argocd_kubeconfig_path(context_name)
+    sanitized_context_name = context_name.gsub(/[^A-Za-z0-9_.-]/, "_")
+    File.join(Dir.tmpdir, "argo-trace-kubeconfig-#{sanitized_context_name}.yaml")
+  end
+
+  def shared_kubeconfig_env
     explicit_context = ENV["ARGOCD_KUBE_CONTEXT"].to_s.strip
-    return {name: explicit_context, env: {}, cleanup: nil} unless explicit_context.empty?
-
-    current_context = current_kube_context_name
-    return {name: nil, env: {}, cleanup: nil} if current_context.empty?
-
-    return {name: current_context, env: {}, cleanup: nil} if current_kube_context_field("namespace") == "argocd"
-
     kubeconfig = load_raw_kubeconfig
-    source_context = Array(kubeconfig["contexts"]).find {|context| context["name"] == current_context}
-    return {name: current_context, env: {}, cleanup: nil} unless source_context
+    current_context = kubeconfig["current-context"].to_s.strip
+    return {env: {}, cleanup: nil} if current_context.empty?
 
-    temporary_context = "argo-trace-argocd-#{Process.pid}-#{SecureRandom.hex(4)}"
-    temporary_kubeconfig = Tempfile.new(["argo-trace-kubeconfig-", ".yaml"])
-    temporary_kubeconfig.write(
-      YAML.dump(
-        kubeconfig.merge(
-          "contexts" => Array(kubeconfig["contexts"]) + [
-            source_context.merge(
-              "name" => temporary_context,
-              "context" => source_context.fetch("context", {}).merge("namespace" => "argocd")
-            )
-          ]
-        )
+    if explicit_context.empty?
+      source_context = kubeconfig_context(kubeconfig, current_context)
+      return {env: {}, cleanup: nil} unless source_context
+      return {env: {}, cleanup: nil} if source_context.dig("context", "namespace") == "argocd"
+
+      rewritten_kubeconfig = kubeconfig.merge(
+        "current-context" => current_context,
+        "contexts" => Array(kubeconfig["contexts"]).reject {|context| context["name"] == current_context} + [
+          source_context.merge(
+            "name" => current_context,
+            "context" => source_context.fetch("context", {}).merge("namespace" => "argocd")
+          )
+        ]
       )
-    )
-    temporary_kubeconfig.flush
+      kubeconfig_path = shared_argocd_kubeconfig_path(current_context)
+    else
+      return {env: {}, cleanup: nil} if current_context == explicit_context
+      return {env: {}, cleanup: nil} unless kubeconfig_context(kubeconfig, explicit_context)
+
+      rewritten_kubeconfig = kubeconfig.merge("current-context" => explicit_context)
+      kubeconfig_path = shared_argocd_kubeconfig_path(explicit_context)
+    end
+
+    File.write(kubeconfig_path, YAML.dump(rewritten_kubeconfig))
 
     {
-      name: temporary_context,
-      env: {"KUBECONFIG" => temporary_kubeconfig.path},
-      cleanup: lambda do
-        temporary_kubeconfig.close!
-      rescue StandardError
-        nil
-      end,
+      env: {"KUBECONFIG" => kubeconfig_path},
+      cleanup: nil,
     }
   rescue StandardError
-    {name: nil, env: {}, cleanup: nil}
+    {env: {}, cleanup: nil}
   end
 
   def shell_command_runner
-    argocd_kube_context = nil
-    cleanup_registered = false
+    shared_kubeconfig = nil
 
     lambda do |*command, timeout_seconds: nil|
       env = {}
-      if command.first == "argocd"
-        argocd_kube_context ||= ensure_argocd_kube_context
-        unless cleanup_registered
-          at_exit { argocd_kube_context[:cleanup]&.call } if argocd_kube_context
-          cleanup_registered = true
-        end
-        env = argocd_kube_context&.fetch(:env, {}) || {}
-        command = argocd_command_with_kube_context(command, argocd_kube_context&.fetch(:name, nil))
+      if %w[argocd kubectl].include?(command.first)
+        shared_kubeconfig ||= shared_kubeconfig_env
+        env = shared_kubeconfig.fetch(:env, {})
       end
 
       stdout, stderr, status = capture_command(*command, env: env, timeout_seconds: timeout_seconds)
@@ -424,39 +388,7 @@ module ArgoTrace
   end
 
   def capture_command(*command, env: {}, timeout_seconds: nil)
-    if env.empty?
-      Open3.popen3(*command) do |stdin, stdout, stderr, wait_thr|
-        stdin.close
-
-        stdout_reader = Thread.new do
-          stdout.read
-        rescue IOError
-          +""
-        end
-        stdout_reader.report_on_exception = false
-
-        stderr_reader = Thread.new do
-          stderr.read
-        rescue IOError
-          +""
-        end
-        stderr_reader.report_on_exception = false
-
-        status =
-          if timeout_seconds
-            wait_thr.join(timeout_seconds)&.value || timeout_process(wait_thr, stdout, stderr)
-          else
-            wait_thr.value
-          end
-
-        [stdout_reader.value, stderr_reader.value, status]
-      ensure
-        stdout.close unless stdout.closed?
-        stderr.close unless stderr.closed?
-        stdout_reader&.join
-        stderr_reader&.join
-      end
-    else
+    Bundler.with_unbundled_env do
       Open3.popen3(env, *command) do |stdin, stdout, stderr, wait_thr|
         stdin.close
 
@@ -548,16 +480,11 @@ module ArgoTrace
   end
 
   def current_cluster_name
-    stdout, _stderr, status = capture_command(
-      "kubectl",
-      "config",
-      "view",
-      "--minify",
-      "-o",
-      "jsonpath={.contexts[0].context.cluster}",
-      timeout_seconds: 5
-    )
-    return stdout.strip if status.success? && !stdout.to_s.strip.empty?
+    kubeconfig = load_raw_kubeconfig
+    current_context = kubeconfig["current-context"].to_s
+    context = kubeconfig_context(kubeconfig, current_context)
+    cluster_name = context&.dig("context", "cluster").to_s
+    return cluster_name unless cluster_name.empty?
 
     "current cluster"
   rescue StandardError
@@ -1176,7 +1103,7 @@ module ArgoTrace
     return false unless selected
 
     rank = node_attention_rank(node)
-    [1, 2].include?(rank)
+    !rank.nil?
   end
 
   def arrowed_child_node_ids(children)
@@ -1820,9 +1747,10 @@ module ArgoTrace
       )
       lines = [[indent, display_label(node), highlighted, arrow_node_label?(node, selected: selected), :node, node_style]]
       display_detail_entries(node).each do |entry_type, text, arrow, style_override|
-        # Condition/error nodes keep their arrows on the attached detail lines,
-        # while Progressing/health.message frontiers arrow the resource/app label.
-        detail_arrow = arrow && (selected || (!selected_ancestor && arrowed_node_ids.empty?))
+        # Keep the arrow on the selected resource/app label only. Attached
+        # detail lines stay styled with the same bold/faint region, but do not
+        # carry their own arrow marker.
+        detail_arrow = false
         detail_style = merge_line_style(selected_subtree ? :bold : :faint, style_override)
         lines << case entry_type
                  when :condition_header
@@ -2001,11 +1929,11 @@ module ArgoTrace
       map {|line| strip_ansi_codes(line)}
   end
 
-  def render_fixture_snapshot(tree_lines:, start_time:, end_time:, elapsed_seconds:)
+  def render_fixture_snapshot(tree_lines:, start_time:, end_time:, elapsed_seconds:, cluster_name:)
     [
       "starting argo-trace @ #{format_clock_time(start_time)}",
       "",
-      "# ArgoCD dependency tree @ #{format_clock_time(end_time)}, argo-trace took #{format_elapsed(elapsed_seconds)}",
+      "# ArgoCD dependency tree for #{cluster_name} @ #{format_clock_time(end_time)}, argo-trace took #{format_elapsed(elapsed_seconds)}",
       "",
       *tree_lines,
     ].join("\n") + "\n"
@@ -2020,7 +1948,7 @@ module ArgoTrace
     DEFAULT_NON_TTY_WRAP_WIDTH
   end
 
-  def render_snapshot(start_time:, end_time:, elapsed_seconds:, body_text:)
+  def render_snapshot(start_time:, end_time:, elapsed_seconds:, body_text:, cluster_name:)
     start_clock_time = format_clock_time(start_time)
     end_clock_time = format_clock_time(end_time)
     elapsed = format_elapsed(elapsed_seconds)
@@ -2028,7 +1956,7 @@ module ArgoTrace
     [
       "starting argo-trace @ #{start_clock_time}",
       "",
-      "# ArgoCD dependency tree @ #{end_clock_time}, argo-trace took #{elapsed}",
+      "# ArgoCD dependency tree for #{cluster_name} @ #{end_clock_time}, argo-trace took #{elapsed}",
       "",
       body_text,
     ].join("\n").sub(/\n+\z/, "") + "\n\n\n"
@@ -2036,9 +1964,7 @@ module ArgoTrace
 
   def snapshot_body(command_runner:, wrap_width:, kubectl_details: DEFAULT_KUBECTL_DETAILS, ref_max_recursion_depth: DEFAULT_REF_MAX_RECURSION_DEPTH)
     inventory = fetch_wave1_app_and_appset_list(command_runner: command_runner)
-    if no_argocd_inventory?(inventory)
-      return "No ArgoCD Applications or ApplicationSets found on #{current_cluster_name}"
-    end
+    return "No ArgoCD Applications or ApplicationSets found on #{current_cluster_name}" if no_argocd_inventory?(inventory)
 
     app_names = apps_requiring_detail(
       app_inventory: inventory.fetch(:app_inventory),
@@ -2102,6 +2028,7 @@ module ArgoTrace
         ref_max_recursion_depth: options.fetch(:ref_max_recursion_depth, DEFAULT_REF_MAX_RECURSION_DEPTH)
       )
     end
+    cluster_name = current_cluster_name
 
     loop do
       start_time = now.call
@@ -2113,7 +2040,8 @@ module ArgoTrace
           start_time: start_time,
           end_time: end_time,
           elapsed_seconds: end_time - start_time,
-          body_text: body_text
+          body_text: body_text,
+          cluster_name: cluster_name
         )
       )
       output.flush

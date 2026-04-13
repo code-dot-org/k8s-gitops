@@ -100,10 +100,10 @@ class ArgoTraceNodeRenderingTest < Minitest::Test
   def test_renders_condition_subtrees_and_operation_messages_for_non_good_conditions
     lines = ArgoTrace.render_display_lines(@tree)
 
-    assert_includes lines, "          - codeai-staging (Application) [sync.status=Unknown, health.status=Healthy, status.operationState.phase=Error, ComparisonError=True]"
-    assert_includes lines, "→           - status.conditions.ComparisonError"
-    assert_includes lines, "→             - message: Failed to load target state: failed to generate manifest for source 1 of 2: rpc error: code = Unknown desc = unable to resolve 'k8s/reorg' to a commit SHA"
-    assert_includes lines, "→           - status.operationState.message: ComparisonError: Failed to load target state: failed to generate manifest for source 1 of 2: rpc error: code = Unknown desc = unable to resolve 'k8s/reorg' to a commit SHA"
+    assert_includes lines, "→         - codeai-staging (Application) [sync.status=Unknown, health.status=Healthy, status.operationState.phase=Error, ComparisonError=True]"
+    assert_includes lines, "            - status.conditions.ComparisonError"
+    assert_includes lines, "              - message: Failed to load target state: failed to generate manifest for source 1 of 2: rpc error: code = Unknown desc = unable to resolve 'k8s/reorg' to a commit SHA"
+    assert_includes lines, "            - status.operationState.message: ComparisonError: Failed to load target state: failed to generate manifest for source 1 of 2: rpc error: code = Unknown desc = unable to resolve 'k8s/reorg' to a commit SHA"
   end
 
   def test_operator_output_includes_metadata_lines_from_saved_fixture_output
@@ -230,9 +230,9 @@ class ArgoTraceNodeRenderingTest < Minitest::Test
 
     lines = ArgoTrace.render_display_lines([node])
 
-    assert_equal "- broken-app (Application) [timed out]", lines.first
-    assert_includes lines, "→ - argo_trace.command: argocd --core --app-namespace argocd app get broken-app -o yaml"
-    assert_includes lines, "→ - argo_trace.stderr: timed out after 60s"
+    assert_equal "→ - broken-app (Application) [timed out]", lines.first
+    assert_includes lines, "  - argo_trace.command: argocd --core --app-namespace argocd app get broken-app -o yaml"
+    assert_includes lines, "  - argo_trace.stderr: timed out after 60s"
   end
 
   def test_non_idle_child_application_under_normal_application_is_arrowed
@@ -278,7 +278,7 @@ class ArgoTraceNodeRenderingTest < Minitest::Test
     lines = ArgoTrace.render_display_lines([infra_node])
 
     assert_includes lines, "→   - levelbuilder (Namespace) [sync.status=Synced, health.status=Progressing]"
-    assert_includes lines, "→     - health.message: Pending deletion"
+    assert_includes lines, "      - health.message: Pending deletion"
   end
 
   def test_live_kubectl_detail_makes_resource_child_non_good_and_shows_detail
@@ -319,7 +319,7 @@ class ArgoTraceNodeRenderingTest < Minitest::Test
     assert_includes lines, "→ - codeai-k8s-cluster-dns-certificate (XClusterDNSCertificate) [sync.status=Synced, status.conditions.Ready=False]"
     assert_includes lines, "  - metadata.deletionTimestamp: #{ArgoTrace.display_metadata_timestamp('2026-04-13T04:05:07Z', now: deletion_now)}"
     assert_includes lines, '  - metadata.finalizers: ["foregroundDeletion"]'
-    assert_includes lines, "→ - status.conditions.Ready: status=False, reason=Deleting"
+    assert_includes lines, "  - status.conditions.Ready: status=False, reason=Deleting"
   end
 
   def test_appset_children_app_children_and_resource_leaves_share_attention_selection

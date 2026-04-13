@@ -1151,8 +1151,8 @@ The operator-facing behavior must not.
 
 If Argo exposes child work under a parent, whether that parent is an
 `ApplicationSet` or an `Application`, normalize those children into one common
-visible-child model, then apply one shared rule to decide which child lines and
-attached detail lines are arrowed and bolded.
+visible-child model, then apply one shared rule to decide which child label is
+arrowed and which attached detail lines are bolded with it.
 
 Do not keep two separate notions of:
 

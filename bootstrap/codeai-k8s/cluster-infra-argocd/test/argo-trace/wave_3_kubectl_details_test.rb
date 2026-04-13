@@ -110,7 +110,7 @@ class ArgoTraceWave3KubectlDetailsTest < Minitest::Test
     assert_includes body_text, "      - metadata.deletionTimestamp: #{ArgoTrace.display_metadata_timestamp('2026-04-12T09:00:00Z', now: deletion_now)}"
     assert_includes body_text, '      - metadata.finalizers: ["kubernetes"]'
     assert_includes body_text, "      - status.phase: Active"
-    assert_includes body_text, "→     - status.conditions.NamespaceDeletionDiscoveryFailure: status=True, reason=DiscoveryFailed, message=waiting for discovery"
+    assert_includes body_text, "      - status.conditions.NamespaceDeletionDiscoveryFailure: status=True, reason=DiscoveryFailed, message=waiting for discovery"
   end
 
   def test_wave_3_runs_selected_kubectl_fetches_in_parallel
@@ -370,7 +370,7 @@ class ArgoTraceWave3KubectlDetailsTest < Minitest::Test
     assert_includes seen_commands, zone_command
     assert_includes body_text, "    - codeai-k8s-cluster-dns-certificate (XClusterDNSCertificate) [sync.status=Synced, health.status=Progressing, status.conditions.Ready=False]"
     assert_includes body_text, "→     - codeai-k8s-cluster-dns-certificate-zone (Zone) [status.conditions.Ready=False, status.conditions.Synced=False]"
-    assert_includes body_text, "→       - status.conditions.Synced: status=False, reason=ReconcileError, message=HostedZoneNotEmpty"
+    assert_includes body_text, "        - status.conditions.Synced: status=False, reason=ReconcileError, message=HostedZoneNotEmpty"
   end
 
   def test_wave_4_stops_recursing_after_child_exposes_blocker_message
@@ -445,7 +445,7 @@ class ArgoTraceWave3KubectlDetailsTest < Minitest::Test
     assert_includes seen_commands, xcert_command
     assert_includes seen_commands, zone_command
     refute_includes seen_commands, record_command
-    assert_includes body_text, "→       - status.conditions.Synced: status=False, reason=ReconcileError, message=HostedZoneNotEmpty"
+    assert_includes body_text, "        - status.conditions.Synced: status=False, reason=ReconcileError, message=HostedZoneNotEmpty"
     refute_includes body_text, "codeai-k8s-cluster-dns-certificate-record"
   end
 
@@ -487,7 +487,7 @@ class ArgoTraceWave3KubectlDetailsTest < Minitest::Test
     assert_includes seen_commands, xcert_command
     refute_includes seen_commands, ["kubectl", "get", "Zone", "codeai-k8s-cluster-dns-certificate-zone", "-n", "crossplane-system", "-o", "yaml", "--ignore-not-found"]
     assert_includes body_text, "→   - codeai-k8s-cluster-dns-certificate (XClusterDNSCertificate) [sync.status=Synced, health.status=Progressing, status.conditions.Synced=False]"
-    assert_includes body_text, "→     - status.conditions.Synced: status=False, reason=ReconcileError, message=HostedZoneNotEmpty"
+    assert_includes body_text, "      - status.conditions.Synced: status=False, reason=ReconcileError, message=HostedZoneNotEmpty"
   end
 
   def test_wave_4_follows_owner_references_from_arrowed_live_resource_nodes
@@ -535,7 +535,7 @@ class ArgoTraceWave3KubectlDetailsTest < Minitest::Test
     assert_includes seen_commands, config_map_command
     assert_includes seen_commands, owner_command
     assert_includes body_text, "→     - app-owner (Deployment) [status.conditions.Available=False]"
-    assert_includes body_text, "→       - status.conditions.Available: status=False, reason=Deleting, message=deployment is deleting"
+    assert_includes body_text, "        - status.conditions.Available: status=False, reason=Deleting, message=deployment is deleting"
   end
 
   def test_wave_4_respects_ref_max_recursion_depth_limit

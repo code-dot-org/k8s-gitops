@@ -35,17 +35,17 @@ starting argo-trace @ 12:33p and 10s
 [2m        - status.applicationStatus.message: Application resource has synced, updating status to Healthy[22m
         - codeai (ApplicationSet) [all conditions good]
 [2m          - metadata.creationTimestamp: about 14 hours ago (4/11/2026 10:40:15 PM HST)[22m
-[1m          - codeai-staging (Application) [sync.status=Unknown, health.status=Healthy, status.operationState.phase=Error, ComparisonError=True][22m
+[1m→         - codeai-staging (Application) [sync.status=Unknown, health.status=Healthy, status.operationState.phase=Error, ComparisonError=True][22m
 [1m            - metadata.creationTimestamp: about 14 hours ago (4/11/2026 10:40:15 PM HST)[22m
 [1m            - metadata.finalizers: ["resources-finalizer.argocd.argoproj.io"][22m
-[1m→           - status.conditions.ComparisonError[22m
-[1m→             - message: Failed to load target state: failed to generate manifest for source 1 of 2: rpc error: code = Unknown desc = unable to resolve 'k8s/reorg' to a commit SHA[22m
-[1m→           - status.operationState.message: ComparisonError: Failed to load target state: failed to generate manifest for source 1 of 2: rpc error: code = Unknown desc = unable to resolve 'k8s/reorg' to a commit SHA[22m
-[1m          - codeai-test (Application) [sync.status=Unknown, health.status=Healthy, ComparisonError=True][22m
+[1m            - status.conditions.ComparisonError[22m
+[1m              - message: Failed to load target state: failed to generate manifest for source 1 of 2: rpc error: code = Unknown desc = unable to resolve 'k8s/reorg' to a commit SHA[22m
+[1m            - status.operationState.message: ComparisonError: Failed to load target state: failed to generate manifest for source 1 of 2: rpc error: code = Unknown desc = unable to resolve 'k8s/reorg' to a commit SHA[22m
+[1m→         - codeai-test (Application) [sync.status=Unknown, health.status=Healthy, ComparisonError=True][22m
 [1m            - metadata.creationTimestamp: about 14 hours ago (4/11/2026 10:40:15 PM HST)[22m
 [1m            - metadata.finalizers: ["resources-finalizer.argocd.argoproj.io"][22m
-[1m→           - status.conditions.ComparisonError[22m
-[1m→             - message: Failed to load target state: failed to generate manifest for source 1 of 2: rpc error: code = Unknown desc = unable to resolve 'k8s/reorg' to a commit SHA[22m
+[1m            - status.conditions.ComparisonError[22m
+[1m              - message: Failed to load target state: failed to generate manifest for source 1 of 2: rpc error: code = Unknown desc = unable to resolve 'k8s/reorg' to a commit SHA[22m
 [2m      - kargo (Application) [sync.status=Synced, health.status=Healthy, status.operationState.phase=Succeeded, step=2, rollout.status=Healthy][22m
 [2m        - sync-wave 1[22m
 [2m          - kargo-project-codeai (Application) [sync.status=Synced, health.status=Healthy][22m

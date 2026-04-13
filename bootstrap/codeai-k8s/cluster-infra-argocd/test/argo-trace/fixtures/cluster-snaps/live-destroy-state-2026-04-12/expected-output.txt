@@ -27,7 +27,7 @@ starting argo-trace @ 9:11p and 40s
 [2m            - metadata.finalizers: ["resources-finalizer.argocd.argoproj.io"][22m
             - sync-wave 1
 [1m→             - codeai-k8s-cluster-dns-certificate (XClusterDNSCertificate) [sync.status=Synced, health.status=Progressing][22m
-[1m→               - health.message: Pending deletion[22m
+[1m                - health.message: Pending deletion[22m
 [2m        - sync-wave 3[22m
 [2m          - networking (Application) [missing][22m
 [2m        - sync-wave 4[22m
