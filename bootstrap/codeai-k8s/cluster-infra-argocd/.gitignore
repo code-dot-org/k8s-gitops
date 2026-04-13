@@ -1,0 +1,4 @@
+.log-cluster-events-watchers.pid
+tofu.log
+tofu-*.log
+logs/

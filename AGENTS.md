@@ -5,8 +5,9 @@
 - Promotion between codeai deployments is done by Kargo, canonically at https://kargo.k8s.code.org
 - This is the gitops repo for https://github.com/code-dot-org/code-dot-org
   - code-dot-org is often checked out next to this one, you can modify both to do projects
-  - Relevant subdirs in that repo are:
-    - k8s/tofu : eks cluster bootstrap, dex, argocd, oidc, aws load balancer controller, ESO, etc
+  - Relevant subdirs here are:
+    - bootstrap/: cluster bootstrap, dex, argocd, oidc, aws load balancer controller, ESO, etc
+  - Relevant subdirs in code-dot-org are:
     - k8s/helm: helm chart for the codeai app
     - k8s/kustomize: kustomize base/ for the codeai app
 - If you modify an app Helm chart under `apps/`, always bump that chart package version in its `Chart.yaml` top-level `version:` field so Argo sees the chart change.
