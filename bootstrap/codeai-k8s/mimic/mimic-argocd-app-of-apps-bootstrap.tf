@@ -1,14 +1,14 @@
 #===============================================================
 # Bootstrap the Argo CD mimic root wrapper Application from GitHub.
 #
-# That Application then manages mimic/apps/app-of-apps/app-of-apps.yaml from
-# k8s-gitops.
+# That Application then manages bootstrap/apptrees/mimic/apps/app-of-apps/app-of-apps.yaml
+# from k8s-gitops.
 #===============================================================
 
 data "github_repository_file" "mimic_app_of_apps_application" {
   repository = "code-dot-org/k8s-gitops"
   branch     = "main"
-  file       = "mimic/apps/app-of-apps/bootstrap.yaml"
+  file       = "bootstrap/apptrees/mimic/apps/app-of-apps/bootstrap.yaml"
 }
 
 resource "kubectl_manifest" "mimic_app_of_apps_bootstrap" {

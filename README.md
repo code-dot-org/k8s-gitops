@@ -58,17 +58,12 @@ k8s-gitops/
             levelbuilder.yaml     # kargo stage for codeai deployment levelbuilder
             ...
 
-  bootstrap/
-    README.md                     # bootstrap norms and state layout
-    codeai-k8s/
-      README.md                   # apply order for the codeai-k8s cluster roots
-      cluster/
-      cluster-infra/
-      cluster-infra-argocd/
-    codeai-k8s-dex/               # org-wide Dex bootstrap shared by clusters
-    modules/                      # bootstrap-only tofu modules
+  bootstrap/                      # tofu to bootstrap a cluster that points at this repoa
 ```
 
 ## Bootstrap Cluster
 
-kubectl apply -f apps/app-of-apps/bootstrap.yaml
+If you have an existing ArgoCD instance: `kubectl apply -f apps/app-of-apps/bootstrap.yaml`
+
+For creating from scratch, creating an EKS cluster, bootstrapping argocd etc,
+see: [./bootstrap/README.md](./bootstrap/README.md).

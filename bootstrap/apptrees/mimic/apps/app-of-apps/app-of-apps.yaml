@@ -1,0 +1,68 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: mimic-app-of-apps
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions:
+    - missingkey=error
+  generators:
+    # For Applications, we treat the file itself as the source of truth
+    # and passthrough almost its metadata/spec into the generated child app.
+    - git:
+        repoURL: https://github.com/code-dot-org/k8s-gitops.git
+        revision: main
+        files:
+          - path: bootstrap/apptrees/mimic/apps/*/application.yaml
+    # ApplicationSets cannot be passed through directly For each applicationset.yaml
+    # we generate a wrapper Application that points at that directory.
+    # `mimic-app-of-apps` itself now uses `bootstrap.yaml` as its wrapper file
+    # and `app-of-apps.yaml` as its managed ApplicationSet file, so it no longer
+    # matches this generator.
+    - git:
+        repoURL: https://github.com/code-dot-org/k8s-gitops.git
+        revision: main
+        files:
+          - path: bootstrap/apptrees/mimic/apps/*/applicationset.yaml
+        template:
+          metadata:
+            finalizers:
+              - resources-finalizer.argocd.argoproj.io
+          spec:
+            project: default
+            destination:
+              server: https://kubernetes.default.svc
+              namespace: argocd
+            source:
+              repoURL: https://github.com/code-dot-org/k8s-gitops.git
+              targetRevision: main
+              path: 'bootstrap/apptrees/mimic/apps/{{.path.basename}}'
+              directory:
+                include: "applicationset.yaml"
+            syncPolicy:
+              automated:
+                prune: true
+                selfHeal: true
+              syncOptions:
+                - ServerSideApply=true
+  # This template does a passthrough of values from each
+  # bootstrap/apptrees/mimic/apps/*/application.yaml
+  # but is not applied to applicationset.yamls.
+  template:
+    metadata:
+      name: '{{.metadata.name}}'
+    spec:
+      # spec.project is intentionally handled here instead of in templatePatch.
+      project: '{{if hasKey .spec "project"}}{{.spec.project}}{{else}}default{{end}}'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: argocd
+  # We check if its an Application (passthru values from application.yaml) or an ApplicationSet (ignore):
+  # - Application -> requires either spec.source or spec.sources
+  # - ApplicationSet -> allows neither
+  templatePatch: |
+    {{- if or (hasKey .spec "source") (hasKey .spec "sources") }}
+    metadata: {{ .metadata | toJson }}
+    spec: {{ omit .spec "project" | toJson }}
+    {{- end }}
