@@ -2,4 +2,4 @@ apiVersion: v2
 name: external-dns-pre-delete-delay-codeai-k8s
 description: Hold destroy before external-dns starts deleting
 type: application
-version: 0.1.0
+version: 0.1.1

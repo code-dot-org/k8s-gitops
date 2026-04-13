@@ -1,4 +1,4 @@
-preStopSleepSeconds: 1200
+preStopSleepSeconds: 240
 
 image:
   repository: alpine
