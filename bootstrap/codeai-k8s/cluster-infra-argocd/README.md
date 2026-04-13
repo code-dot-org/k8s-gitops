@@ -27,7 +27,7 @@ $(tofu -chdir=../cluster output -raw kubectl_config_command)
 bundle install
 
 tofu init
-AWS_PROFILE=codeorg-admin tofu apply
+AWS_PROFILE=cdo-readwrite tofu apply
 ```
 
 ## Watching Argo
