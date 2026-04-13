@@ -19,7 +19,7 @@ AWS_PROFILE=codeorg-admin tofu apply
 Configure `kubectl` to reach the new cluster:
 
 ```bash
-aws eks update-kubeconfig --region us-east-1 --name "$(tofu output -raw cluster_name)"
+$(tofu output -raw kubectl_config_command)
 ```
 
 ## First time cluster setup

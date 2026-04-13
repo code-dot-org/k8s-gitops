@@ -20,7 +20,12 @@ Apply `../cluster/` and `../cluster-infra/` first.
 Prerequisite: `../cluster/` and `../cluster-infra/` must already have been applied.
 
 ```bash
+# Update kubernetes context to point at the cluster we made in ../cluster
+$(tofu -chdir=../cluster output -raw kubectl_config_command)
+
+# We use some ruby scripts here
 bundle install
+
 tofu init
 AWS_PROFILE=codeorg-admin tofu apply
 ```
