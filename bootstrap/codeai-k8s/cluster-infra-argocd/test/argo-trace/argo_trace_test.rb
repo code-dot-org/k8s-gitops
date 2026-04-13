@@ -6,6 +6,7 @@ require "open3"
 require "pathname"
 require "stringio"
 require "tmpdir"
+require "json"
 
 load File.expand_path("../../bin/argo-trace", __dir__)
 
@@ -114,6 +115,92 @@ class ArgoTraceTest < Minitest::Test
     )
 
     assert_includes body_text, "- app-of-apps (Application) [sync.status=Synced, health.status=Healthy, status.operationState.phase=Succeeded]"
+  end
+
+  def test_temporary_kubeconfig_for_argocd_uses_env_context_by_switching_current_context
+    original_env = ENV["ARGOCD_KUBE_CONTEXT"]
+    original_capture_command_method = ArgoTrace.method(:capture_command)
+    success_status = Struct.new(:success?).new(true)
+    temporary_kubeconfig_path = nil
+    ENV["ARGOCD_KUBE_CONTEXT"] = "codeai-k8s-argocd"
+
+    ArgoTrace.define_singleton_method(:capture_command) do |*command, **_kwargs|
+      case command
+      when ["kubectl", "config", "view", "--raw", "-o", "json"]
+        [
+          JSON.dump(
+            {
+              "current-context" => "codeai-k8s",
+              "contexts" => [
+                {"name" => "codeai-k8s", "context" => {"cluster" => "cluster-1", "user" => "user-1", "namespace" => "default"}},
+                {"name" => "codeai-k8s-argocd", "context" => {"cluster" => "cluster-1", "user" => "user-1", "namespace" => "argocd"}},
+              ],
+            }
+          ),
+          "",
+          success_status,
+        ]
+      else
+        raise "unexpected command: #{command.inspect}"
+      end
+    end
+
+    resolved = ArgoTrace.temporary_kubeconfig_for_argocd
+
+    temporary_kubeconfig_path = resolved.fetch(:env).fetch("KUBECONFIG")
+    temporary_kubeconfig = YAML.safe_load(File.read(temporary_kubeconfig_path))
+    assert_equal "codeai-k8s-argocd", temporary_kubeconfig.fetch("current-context")
+    refute_nil resolved.fetch(:cleanup)
+  ensure
+    ENV["ARGOCD_KUBE_CONTEXT"] = original_env
+    ArgoTrace.define_singleton_method(:capture_command, original_capture_command_method)
+    resolved&.dig(:cleanup)&.call
+    File.delete(temporary_kubeconfig_path) if temporary_kubeconfig_path && File.exist?(temporary_kubeconfig_path)
+  end
+
+  def test_temporary_kubeconfig_for_argocd_adds_argocd_namespace_when_current_context_lacks_it
+    original_env = ENV["ARGOCD_KUBE_CONTEXT"]
+    original_capture_command_method = ArgoTrace.method(:capture_command)
+    success_status = Struct.new(:success?).new(true)
+    temporary_kubeconfig_path = nil
+    ENV.delete("ARGOCD_KUBE_CONTEXT")
+
+    ArgoTrace.define_singleton_method(:capture_command) do |*command, **_kwargs|
+      case command
+      when ["kubectl", "config", "current-context"]
+        ["codeai-k8s", "", success_status]
+      when ["kubectl", "config", "view", "--raw", "--minify", "-o", "jsonpath={.contexts[0].context.namespace}"]
+        ["default", "", success_status]
+      when ["kubectl", "config", "view", "--raw", "-o", "json"]
+        [
+          JSON.dump(
+            {
+              "current-context" => "codeai-k8s",
+              "contexts" => [
+                {"name" => "codeai-k8s", "context" => {"cluster" => "cluster-1", "user" => "user-1", "namespace" => "default"}},
+              ],
+            }
+          ),
+          "",
+          success_status,
+        ]
+      else
+        raise "unexpected command: #{command.inspect}"
+      end
+    end
+
+    resolved = ArgoTrace.temporary_kubeconfig_for_argocd
+
+    temporary_kubeconfig_path = resolved.fetch(:env).fetch("KUBECONFIG")
+    temporary_kubeconfig = YAML.safe_load(File.read(temporary_kubeconfig_path))
+    temporary_context = temporary_kubeconfig.fetch("contexts").find {|context| context.fetch("name") == temporary_kubeconfig.fetch("current-context")}
+    assert_equal "argocd", temporary_context.fetch("context").fetch("namespace")
+    refute_nil resolved.fetch(:cleanup)
+  ensure
+    ENV["ARGOCD_KUBE_CONTEXT"] = original_env
+    ArgoTrace.define_singleton_method(:capture_command, original_capture_command_method)
+    resolved&.dig(:cleanup)&.call
+    File.delete(temporary_kubeconfig_path) if temporary_kubeconfig_path && File.exist?(temporary_kubeconfig_path)
   end
 
   def test_run_executes_once_without_polling

@@ -3,7 +3,11 @@
 
 require "optparse"
 require "open3"
+require "json"
+require "securerandom"
 require "set"
+require "shellwords"
+require "tempfile"
 require "time"
 require "timeout"
 require "yaml"
@@ -302,9 +306,123 @@ module ArgoTrace
     argocd_output_list(payload)
   end
 
+  def current_kube_context_field(field_name)
+    stdout, _stderr, status = capture_command(
+      "kubectl",
+      "config",
+      "view",
+      "--raw",
+      "--minify",
+      "-o",
+      "jsonpath={.contexts[0].context.#{field_name}}",
+      timeout_seconds: 5
+    )
+    return "" unless status.success?
+
+    stdout.to_s.strip
+  rescue StandardError
+    ""
+  end
+
+  def current_kube_context_name
+    stdout, _stderr, status = capture_command("kubectl", "config", "current-context", timeout_seconds: 5)
+    return "" unless status.success?
+
+    stdout.to_s.strip
+  rescue StandardError
+    ""
+  end
+
+  def load_raw_kubeconfig
+    stdout, _stderr, status = capture_command(
+      "kubectl",
+      "config",
+      "view",
+      "--raw",
+      "-o",
+      "json",
+      timeout_seconds: 5
+    )
+    raise CommandFailed, "failed to read kubeconfig" unless status.success?
+
+    JSON.parse(stdout)
+  end
+
+  def kubeconfig_context(kubeconfig, context_name)
+    Array(kubeconfig["contexts"]).find {|context| context["name"] == context_name}
+  end
+
+  def temporary_kubeconfig_for_argocd
+    explicit_context = ENV["ARGOCD_KUBE_CONTEXT"].to_s.strip
+    kubeconfig = load_raw_kubeconfig
+
+    if explicit_context.empty?
+      current_context = current_kube_context_name
+      return {env: {}, cleanup: nil} if current_context.empty?
+      return {env: {}, cleanup: nil} if current_kube_context_field("namespace") == "argocd"
+
+      source_context = kubeconfig_context(kubeconfig, current_context)
+      return {env: {}, cleanup: nil} unless source_context
+
+      temporary_context = "argo-trace-argocd-#{Process.pid}-#{SecureRandom.hex(4)}"
+      rewritten_kubeconfig = kubeconfig.merge(
+        "current-context" => temporary_context,
+        "contexts" => Array(kubeconfig["contexts"]) + [
+          source_context.merge(
+            "name" => temporary_context,
+            "context" => source_context.fetch("context", {}).merge("namespace" => "argocd")
+          )
+        ]
+      )
+    else
+      return {env: {}, cleanup: nil} if kubeconfig["current-context"] == explicit_context
+      return {env: {}, cleanup: nil} unless kubeconfig_context(kubeconfig, explicit_context)
+
+      rewritten_kubeconfig = kubeconfig.merge("current-context" => explicit_context)
+    end
+
+    temporary_kubeconfig = Tempfile.new(["argo-trace-kubeconfig-", ".yaml"])
+    temporary_kubeconfig.write(YAML.dump(rewritten_kubeconfig))
+    temporary_kubeconfig.flush
+
+    {
+      env: {"KUBECONFIG" => temporary_kubeconfig.path},
+      cleanup: lambda do
+        temporary_kubeconfig.close!
+      rescue StandardError
+        nil
+      end,
+    }
+  rescue StandardError
+    {env: {}, cleanup: nil}
+  end
+
   def shell_command_runner
+    argocd_kubeconfig = nil
+    cleanup_registered = false
+
     lambda do |*command, timeout_seconds: nil|
-      stdout, stderr, status = capture_command(*command, timeout_seconds: timeout_seconds)
+      env = {}
+      if command.first == "argocd"
+        argocd_kubeconfig ||= temporary_kubeconfig_for_argocd
+        unless cleanup_registered
+          at_exit { argocd_kubeconfig[:cleanup]&.call } if argocd_kubeconfig
+          cleanup_registered = true
+        end
+        env = argocd_kubeconfig.fetch(:env, {})
+      end
+
+      puts "COMMAND START: #{Shellwords.join(command)}"
+      stdout, stderr, status = capture_command(*command, env: env, timeout_seconds: timeout_seconds)
+      puts "COMMAND RETURN: #{Shellwords.join(command)}"
+      puts "STDOUT <<EOF"
+      print stdout.to_s
+      puts unless stdout.to_s.end_with?("\n")
+      puts "EOF"
+      puts "STDERR <<EOF"
+      print stderr.to_s
+      puts unless stderr.to_s.end_with?("\n")
+      puts "EOF"
       return stdout if status.success?
 
       message = stderr.to_s.strip
@@ -314,8 +432,8 @@ module ArgoTrace
     end
   end
 
-  def capture_command(*command, timeout_seconds: nil)
-    Open3.popen3(*command) do |stdin, stdout, stderr, wait_thr|
+  def capture_command(*command, env: {}, timeout_seconds: nil)
+    Open3.popen3(env, *command) do |stdin, stdout, stderr, wait_thr|
       stdin.close
 
       stdout_reader = Thread.new do
