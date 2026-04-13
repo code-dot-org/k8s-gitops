@@ -1,5 +1,0 @@
-preStopSleepSeconds: 300
-
-image:
-  repository: bitnami/kubectl
-  tag: "latest"

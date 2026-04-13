@@ -1,5 +1,0 @@
-apiVersion: v2
-name: after-argocd-delay-pod-codeai-k8s
-description: Hold destroy before the argocd wave and record argocd ingress presence
-type: application
-version: 0.1.0
