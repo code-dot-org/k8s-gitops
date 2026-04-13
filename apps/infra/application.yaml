@@ -35,16 +35,6 @@ spec:
         include: application.yaml
     - repoURL: https://github.com/code-dot-org/k8s-gitops.git
       targetRevision: main
-      path: apps/infra/external-dns-pre-delete-delay
-      directory:
-        include: application.yaml
-    - repoURL: https://github.com/code-dot-org/k8s-gitops.git
-      targetRevision: main
-      path: apps/infra/external-dns-delete-delay
-      directory:
-        include: application.yaml
-    - repoURL: https://github.com/code-dot-org/k8s-gitops.git
-      targetRevision: main
       path: apps/infra/external-secrets-operator
       directory:
         include: application.yaml
