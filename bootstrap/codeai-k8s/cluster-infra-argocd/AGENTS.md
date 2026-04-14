@@ -65,11 +65,3 @@
   `ruby test/log_cluster_events_test.rb`
 - If you modify `bin/wait-for-200`, run before commit:
   `ruby test/wait_for_200_test.rb`
-
-### Smoke testing a cluster is working once its up
-
-- once a cluster is up, you can use these smoke tests to test it:
-  `./cluster-smoke-tests/test-external-secrets.sh`
-  `./cluster-smoke-tests/test-ingress.sh`
-  `./cluster-smoke-tests/test-nlb.sh`
-  `./cluster-smoke-tests/test-gateway-http.sh`

@@ -55,11 +55,3 @@ stdout.
   `ruby test/wait_for_200_test.rb`
 - `bin/wait-for-200` smoke:
   `bin/wait-for-200 --timeout-seconds 30 https://studio.code.org`
-
-### Smoke testing a cluster is working once its up
-
-- once a cluster is up, you can use these smoke tests to test it:
-  `./cluster-smoke-tests/test-external-secrets.sh`
-  `./cluster-smoke-tests/test-ingress.sh`
-  `./cluster-smoke-tests/test-nlb.sh`
-  `./cluster-smoke-tests/test-gateway-http.sh`
