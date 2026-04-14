@@ -18,6 +18,7 @@ spec:
   forProvider:
     name: {{ $xr.spec.clusterSubdomain }}
     comment: Cluster subdomain hosted zone for {{ $xr.spec.clusterSubdomain }}
+    forceDestroy: true
 ---
 apiVersion: iam.aws.m.upbound.io/v1beta1
 kind: Role
