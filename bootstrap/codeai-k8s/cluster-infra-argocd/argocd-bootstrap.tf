@@ -24,6 +24,11 @@ resource "helm_release" "argocd_bootstrap" {
         redisSecretInit = {
           enabled = true
         }
+        server = {
+          ingress = {
+            enabled = false
+          }
+        }
       }
       _bootstrap = {}
     })
