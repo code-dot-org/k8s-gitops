@@ -1,3 +1,4 @@
+{{- if eq (include "crossplane.isAnyAWSProviderEnabled" .) "true" -}}
 apiVersion: pkg.crossplane.io/v1
 kind: Provider
 metadata:
@@ -9,4 +10,5 @@ spec:
   runtimeConfigRef:
     apiVersion: pkg.crossplane.io/v1beta1
     kind: DeploymentRuntimeConfig
-    name: "provider-aws"
+    name: "aws-runtime-config"
+{{- end }}

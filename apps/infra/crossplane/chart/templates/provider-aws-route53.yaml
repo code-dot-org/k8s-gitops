@@ -1,3 +1,4 @@
+{{- if .Values.provider.aws.route53.enabled -}}
 apiVersion: pkg.crossplane.io/v1
 kind: Provider
 metadata:
@@ -7,4 +8,5 @@ metadata:
 spec:
   package: "xpkg.upbound.io/upbound/provider-aws-route53:v2.5.1"
   runtimeConfigRef:
-    name: "provider-aws"
+    name: "aws-runtime-config"
+{{- end }}

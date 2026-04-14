@@ -9,7 +9,7 @@
 locals {
   crossplane_aws = {
     namespace            = "crossplane-system"
-    service_account_name = "provider-aws"
+    service_account_name = "crossplane-aws"
     role_name            = "${var.cluster_name}-crossplane-aws"
     oidc_host            = replace(var.oidc_provider_arn, "/^(.*provider/)/", "")
     cluster_subdomain    = var.cluster_subdomain

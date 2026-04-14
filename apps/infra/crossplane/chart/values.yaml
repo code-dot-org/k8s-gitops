@@ -24,3 +24,22 @@ crossplane:
   providers:
     aws:
       iamRoleArn:
+
+provider:
+  aws:
+    acm:
+      enabled: true
+    cloudfront:
+      enabled: false
+    elasticache:
+      enabled: false
+    family:
+      enabled: true
+    iam:
+      enabled: true
+    rds:
+      enabled: false
+    route53:
+      enabled: true
+    secretsmanager:
+      enabled: false
