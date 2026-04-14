@@ -16,6 +16,9 @@ external-dns:
     - service
     - ingress
     - crd
+    # EKS Auto Mode does not yet support the Gateway path we were using here.
+    # - gateway-httproute
+    # - gateway-grpcroute
 
   domainFilters:
     - k8s.code.org
