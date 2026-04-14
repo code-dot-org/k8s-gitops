@@ -28,11 +28,11 @@ class LogClusterEventsTest < Minitest::Test
       assert status.success?, stderr
 
       first_lines = stdout.lines.first(3).map(&:strip)
-      assert_match(%r{\Atail -n \+1 -f .*/logs/cluster-.*-destroy\.log\z}, first_lines[0])
+      assert_match(%r{\Atail -n \+1 -f .*/logs/cluster-events-.*-destroy\.log\z}, first_lines[0])
       assert_match(%r{\Atail -n \+1 -f .*/cluster\.log\z}, first_lines[1])
       assert_match(%r{\Atail -n \+1 -f .*/logs/argo-trace-destroy-.*\.log\.md\z}, first_lines[2])
 
-      run_log = Dir.glob(File.join(module_dir, "logs", "cluster-*-destroy.log")).fetch(0)
+      run_log = Dir.glob(File.join(module_dir, "logs", "cluster-events-*-destroy.log")).fetch(0)
       argo_trace_log = Dir.glob(File.join(module_dir, "logs", "argo-trace-destroy-*.log.md")).fetch(0)
 
       wait_for_file_content(argo_trace_log, "## fake trace\n")

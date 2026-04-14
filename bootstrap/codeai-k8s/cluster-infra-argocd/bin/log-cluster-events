@@ -97,7 +97,7 @@ case "$command" in
     ;;
   start)
     run_stamp=$(date '+%Y-%m-%d-at-%I%M%p' | sed 's/-at-0/-at-/; s/AM/a/; s/PM/p/')
-    run_log_file="$logs_dir/cluster-$run_stamp-$label.log"
+    run_log_file="$logs_dir/cluster-events-$run_stamp-$label.log"
     argo_trace_log_file="$logs_dir/argo-trace-$label-$run_stamp.log.md"
 
     printf '%s\n' "$run_log_file" > "$run_log_pointer"

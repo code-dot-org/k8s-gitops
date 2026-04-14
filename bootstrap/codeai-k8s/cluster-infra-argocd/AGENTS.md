@@ -9,7 +9,7 @@
 - `bin/log-cluster-events` runs `bin/argo-trace` as a sidecar logger and writes `logs/argo-trace-<label>-<timestamp>.log.md`. That tracer is not an implementation detail; treat that md log as a primary debugging tool and mirror its output raw in chat when it emits updates.
 - While `bin/log-cluster-events` is active, relay each new `bin/argo-trace` message to the user verbatim in chat as soon as it arrives.
 - `bin/log-cluster-events` now writes three first-class logs per session:
-  - `logs/cluster-<timestamp>-<label>.log`
+  - `logs/cluster-events-<timestamp>-<label>.log`
   - `cluster.log`
   - `logs/argo-trace-<label>-<timestamp>.log.md`
 - When running `bin/log-cluster-events start`, ALWAYS print the verbatim `tail -n +1 -f ...` commands for all three logs to the chat with user once they are sent to you.
@@ -30,7 +30,7 @@
   - `bin/argo-trace`
 - Think from those two files first. Use the tracer output as the clearest view of what Argo is blocked on. Use the tracer source to prove why the tree looks the way it does. Do not treat its output as magic.
 - In chat, mirror that `.log.md` output raw. Add interpretation only after the raw block, and only if needed to explain what changed or why it matters.
-- Use the per-run `logs/cluster-*.log` only for proof, low-level provider errors, shell output, or other debug spew the md log does not carry.
+- Use the per-run `logs/cluster-events-*.log` only for proof, low-level provider errors, shell output, or other debug spew the md log does not carry.
 - Do not diagnose from `cluster.log` unless you need long-run history. Prefer the latest per-run files.
 
 ## Destroy rules
