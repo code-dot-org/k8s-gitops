@@ -99,6 +99,7 @@ data "aws_iam_policy_document" "crossplane_aws" {
     actions = [
       "route53:ChangeTagsForResource",
       "route53:DeleteHostedZone",
+      "route53:GetDNSSEC",
       "route53:GetHostedZone",
       "route53:ListResourceRecordSets",
       "route53:ListTagsForResource",
