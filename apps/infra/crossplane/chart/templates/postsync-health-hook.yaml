@@ -51,7 +51,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: wait
-          image: bitnami/kubectl:1.32.2
+          image: rancher/kubectl:v1.35.0
           command:
             - /bin/sh
             - -ceu
