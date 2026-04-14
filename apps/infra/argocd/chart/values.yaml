@@ -302,7 +302,6 @@ argo-cd:
     ingress:
       enabled: true
       controller: generic
-      ingressClassName: aws-alb
       hostname: argocd.k8s.code.org
       annotations:
         alb.ingress.kubernetes.io/scheme: internet-facing
