@@ -10,13 +10,14 @@
   "cluster_region": "us-east-1"
   "cluster_subdomain": "k8s.code.org"
   "frontend_security_group_id": "sg-663a031e"
-  "frontend_security_group_namespaces":
-  - "levelbuilder"
-  - "production"
-  - "test"
   "iam_arn_prefix": "arn:aws:iam::475661607190"
+  "node_iam_role_name": "codeai-k8s-eks-auto"
+  "node_security_group_id": ""
   "oidc_provider_arn": "arn:aws:iam::475661607190:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/91C0A419CB3F0C5AF51E1BE555ADA0F5"
   "parent_domain_zone_id": "Z2LCOI49SCXUGU"
+  "private_subnet_ids":
+  - "subnet-00a88e87130c55b93"
+  - "subnet-06e992172d6beba43"
   "single_namespace_environment_types":
   - "levelbuilder"
   - "production"

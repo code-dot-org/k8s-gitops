@@ -1,14 +1,5 @@
 apiVersion: v2
 name: networking
-description: Local chart for AWS Load Balancer Controller, Gateway API CRDs, and the shared AWS ALB gateway resources
+description: Local chart for EKS Auto Mode ingress resources and the shared frontend node pool
 type: application
-version: 0.1.0
-
-# fetch-crds.sh reads appVersion and downloads:
-# https://github.com/kubernetes-sigs/gateway-api/releases/download/${appVersion}/standard-install.yaml
-appVersion: v1.5.0
-
-dependencies:
-  - name: aws-load-balancer-controller
-    repository: https://aws.github.io/eks-charts
-    version: 1.17.1
+version: 0.1.1

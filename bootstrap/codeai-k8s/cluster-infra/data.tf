@@ -24,3 +24,14 @@ data "aws_route53_zone" "parent_domain" {
   name         = local.cluster_outs.parent_domain
   private_zone = false
 }
+
+data "aws_subnets" "private" {
+  filter {
+    name   = "vpc-id"
+    values = [local.cluster_outs.vpc_id]
+  }
+
+  tags = {
+    "kubernetes.io/role/internal-elb" = "1"
+  }
+}

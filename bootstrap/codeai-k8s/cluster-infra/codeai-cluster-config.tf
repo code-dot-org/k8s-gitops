@@ -33,9 +33,11 @@ resource "github_repository_file" "codeai_cluster_config_values" {
         oidc_provider_arn                  = local.oidc_provider_arn
         parent_domain_zone_id              = data.aws_route53_zone.parent_domain.zone_id
         single_namespace_environment_types = sort(tolist(toset(local.single_namespace_environment_types)))
-        frontend_security_group_namespaces = sort(tolist(toset(local.cluster_outs.frontend_security_group_namespaces)))
         cluster_primary_security_group_id  = local.cluster_outs.cluster_primary_security_group_id
         frontend_security_group_id         = local.cluster_outs.frontend_security_group_id
+        node_iam_role_name                 = local.node_iam_role_name
+        node_security_group_id             = local.node_security_group_id
+        private_subnet_ids                 = local.private_subnet_ids
       }
     }),
   ])

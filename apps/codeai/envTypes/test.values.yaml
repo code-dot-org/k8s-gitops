@@ -3,6 +3,14 @@ RAILS_ENV: test
 healthChecks:
   enabled: true
 require_external_secrets: true
+scheduling:
+  nodeSelector:
+    code.org/workload-class: frontend
+  tolerations:
+    - key: code.org/workload-class
+      operator: Equal
+      value: frontend
+      effect: NoSchedule
 autoscaling:
   enabled: true
   minReplicas: 1

@@ -113,17 +113,3 @@ variable "frontend_security_group_id" {
   type        = string
   default     = "sg-663a031e"
 }
-
-variable "frontend_security_group_namespaces" {
-  description = "Namespaces whose EKS pods should get the frontend security group."
-  type        = set(string)
-  default     = ["production", "test", "levelbuilder"]
-
-  validation {
-    condition = alltrue([
-      for namespace in var.frontend_security_group_namespaces :
-      contains(var.single_namespace_environment_types, namespace)
-    ])
-    error_message = "frontend_security_group_namespaces must be a subset of single_namespace_environment_types."
-  }
-}

@@ -1,9 +1,14 @@
 # Deriving IAM Files From Addon Modules
 
-This note exists for two files:
+This note still applies to `infra/external-dns/external-dns.tf`.
+
+It also keeps the old ALBC derivation notes around as history. The live cluster
+path now uses EKS Auto Mode ingress instead of an ALBC IAM file.
+
+This note exists for:
 
 - `infra/external-dns/external-dns.tf`
-- `infra/networking/aws-load-balancer-controller.tf`
+- historical ALBC derivation notes
 
 Those files are no longer addon module calls. They are first-class AWS IAM
 resources derived from addon module source. If you want to refresh them to

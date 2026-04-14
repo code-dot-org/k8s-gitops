@@ -3,7 +3,7 @@
 Bootstraps ArgoCD and the app-of-apps, then hands Kubernetes-side resources off to Argo from `k8s-gitops`.
 
 Includes:
-- AWS Load Balancer Controller
+- EKS Auto Mode ingress class resources
 - External Secrets Operator
 - External Secrets per-environment SecretStores and envtype fanout
 - ExternalDNS

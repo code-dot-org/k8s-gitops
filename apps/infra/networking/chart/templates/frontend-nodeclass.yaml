@@ -1,0 +1,24 @@
+{{- $config := .Values.codeai_cluster_config -}}
+{{- $nodeSecurityGroupId := default $config.cluster_primary_security_group_id $config.node_security_group_id -}}
+apiVersion: eks.amazonaws.com/v1
+kind: NodeClass
+metadata:
+  name: frontend
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  # Auto Mode does not support SGPP. The whole NodeClass gets the pod SGs.
+  role: {{ required "codeai_cluster_config.node_iam_role_name is required" $config.node_iam_role_name | quote }}
+  subnetSelectorTerms:
+{{- range $subnetId := required "codeai_cluster_config.private_subnet_ids is required" $config.private_subnet_ids }}
+    - id: {{ $subnetId | quote }}
+{{- end }}
+  securityGroupSelectorTerms:
+    - id: {{ required "a node security group id is required" $nodeSecurityGroupId | quote }}
+  podSubnetSelectorTerms:
+{{- range $subnetId := $config.private_subnet_ids }}
+    - id: {{ $subnetId | quote }}
+{{- end }}
+  podSecurityGroupSelectorTerms:
+    - id: {{ required "codeai_cluster_config.cluster_primary_security_group_id is required" $config.cluster_primary_security_group_id | quote }}
+    - id: {{ required "codeai_cluster_config.frontend_security_group_id is required" $config.frontend_security_group_id | quote }}

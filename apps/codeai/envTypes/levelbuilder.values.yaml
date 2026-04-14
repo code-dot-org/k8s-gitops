@@ -3,3 +3,11 @@ RAILS_ENV: levelbuilder
 healthChecks:
   enabled: true
 require_external_secrets: true
+scheduling:
+  nodeSelector:
+    code.org/workload-class: frontend
+  tolerations:
+    - key: code.org/workload-class
+      operator: Equal
+      value: frontend
+      effect: NoSchedule

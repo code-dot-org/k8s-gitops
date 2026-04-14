@@ -1,0 +1,8 @@
+apiVersion: eks.amazonaws.com/v1
+kind: IngressClassParams
+metadata:
+  name: aws-alb
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  scheme: "internet-facing"

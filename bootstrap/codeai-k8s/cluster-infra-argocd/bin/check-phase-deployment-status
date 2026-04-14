@@ -12,7 +12,6 @@ EXPECTED_WORKLOADS = [
   {app: "external-dns", kind: "Deployment", namespace: "external-dns", name: "external-dns"},
   {app: "external-secrets-operator", kind: "Deployment", namespace: "external-secrets", name: "external-secrets-operator"},
   {app: "external-secrets-operator", kind: "Deployment", namespace: "external-secrets", name: "external-secrets-operator-webhook"},
-  {app: "networking", kind: "Deployment", namespace: "kube-system", name: "networking-aws-load-balancer-controller"},
   {app: "kargo", kind: "Deployment", namespace: "kargo", name: "kargo-api"},
   {app: "kargo", kind: "Deployment", namespace: "kargo", name: "kargo-controller"},
   {app: "codeai-staging", kind: "Deployment", namespace: "staging", name: "staging-cdo-dashboard"},

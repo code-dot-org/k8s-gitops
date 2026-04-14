@@ -28,6 +28,11 @@ output "cluster_primary_security_group_id" {
   value       = module.eks.cluster_primary_security_group_id
 }
 
+output "node_security_group_id" {
+  description = "EKS Auto node security group ID"
+  value       = module.eks.node_security_group_id
+}
+
 output "oidc_provider_arn" {
   description = "ARN of the OIDC provider for IRSA"
   value       = module.eks.oidc_provider_arn
@@ -78,7 +83,20 @@ output "frontend_security_group_id" {
   value       = var.frontend_security_group_id
 }
 
-output "frontend_security_group_namespaces" {
-  description = "Namespaces whose EKS pods should get the frontend security group."
-  value       = sort(tolist(var.frontend_security_group_namespaces))
+output "node_iam_role_name" {
+  description = "EKS Auto node IAM role name"
+  value       = module.eks.node_iam_role_name
+}
+
+output "node_iam_role_arn" {
+  description = "EKS Auto node IAM role ARN"
+  value       = module.eks.node_iam_role_arn
+}
+
+output "private_subnet_ids" {
+  description = "Private subnet IDs used by the cluster"
+  value = [
+    aws_subnet.private_1.id,
+    aws_subnet.private_2.id,
+  ]
 }

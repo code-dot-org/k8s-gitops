@@ -1,7 +1,7 @@
 # cluster
 
-Creates the EKS Fargate cluster along with required VPC subnets, NAT gateways, IAM,
-and core cluster outputs for later ordered roots.
+Creates the EKS Auto Mode cluster along with required VPC subnets, NAT gateways,
+IAM, and core cluster outputs for later ordered roots.
 
 Apply this first, before `../cluster-infra/`.
 
@@ -31,7 +31,7 @@ $(tofu output -raw kubectl_config_command)
 
 ### Can you start a Pod and can it reach DNS?
 
-Takes a few minutes cause fargate is slooooow.
+Takes a few minutes cause node bring-up is still not instant.
 
 ```bash
 ./test/test-pod-and-dns.sh

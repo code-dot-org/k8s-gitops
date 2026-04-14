@@ -9,23 +9,6 @@ metadata:
     argocd.argoproj.io/sync-wave: "3"
 spec:
   project: default
-  ignoreDifferences:
-    - kind: Secret
-      group: ""
-      name: aws-load-balancer-tls
-      namespace: kube-system
-      jsonPointers:
-        - /data
-    - kind: MutatingWebhookConfiguration
-      group: admissionregistration.k8s.io
-      name: aws-load-balancer-webhook
-      jqPathExpressions:
-        - .webhooks[]?.clientConfig.caBundle
-    - kind: ValidatingWebhookConfiguration
-      group: admissionregistration.k8s.io
-      name: aws-load-balancer-webhook
-      jqPathExpressions:
-        - .webhooks[]?.clientConfig.caBundle
   sources:
     - repoURL: https://github.com/code-dot-org/k8s-gitops.git
       targetRevision: main

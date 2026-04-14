@@ -18,7 +18,6 @@ locals {
     iam_role_names = concat(
       [
         "${var.cluster_name}-external-dns",
-        "${var.cluster_name}-aws-load-balancer-controller",
         "${var.cluster_name}-eso-dex",
         "${var.cluster_name}-eso-kargo-external-secret-stores",
         "${var.cluster_name}-eso-adhoc",
@@ -30,7 +29,6 @@ locals {
     )
     iam_policy_names = [
       "${var.cluster_name}-external-dns",
-      "${var.cluster_name}-aws-load-balancer-controller",
     ]
   }
 }

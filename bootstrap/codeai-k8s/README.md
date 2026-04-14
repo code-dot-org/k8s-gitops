@@ -2,7 +2,7 @@
 
 This directory contains three OpenTofu root modules. Apply them in order:
 
-1. **[cluster/](cluster/README.md)** — EKS cluster + VPC networking
+1. **[cluster/](cluster/README.md)** — EKS Auto Mode cluster + VPC networking
 2. **[cluster-infra/](cluster-infra/README.md)** — AWS-side resources and shared bootstrap config
 3. **[cluster-infra-argocd/](cluster-infra-argocd/README.md)** — Kubernetes-side resources and Argo CD bootstrap
 
@@ -18,4 +18,3 @@ Only required if you're starting on a fresh account, not needed for each cluster
   `./cluster-smoke-tests/test-external-secrets.sh`
   `./cluster-smoke-tests/test-ingress.sh`
   `./cluster-smoke-tests/test-nlb.sh`
-  `./cluster-smoke-tests/test-gateway-http.sh`

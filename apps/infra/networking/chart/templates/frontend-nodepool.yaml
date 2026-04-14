@@ -1,0 +1,25 @@
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: frontend
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  template:
+    metadata:
+      labels:
+        code.org/workload-class: "frontend"
+    spec:
+      nodeClassRef:
+        group: eks.amazonaws.com
+        kind: NodeClass
+        name: frontend
+      requirements:
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values:
+            - on-demand
+      taints:
+        - key: code.org/workload-class
+          value: "frontend"
+          effect: NoSchedule
