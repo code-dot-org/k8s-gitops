@@ -6,6 +6,15 @@
 # expect to install first. Keep the trust strict by naming exact service
 # accounts. Keep the policy bounded to the AWS services Crossplane should own.
 
+# This policy now derives many names and fences from var.cluster_name. Refuse
+# empty input here so the policy never degenerates into wildcard-shaped names.
+check "cluster_name_not_empty" {
+  assert {
+    condition     = trimspace(var.cluster_name) != ""
+    error_message = "var.cluster_name must be non-empty."
+  }
+}
+
 locals {
   crossplane_aws = {
     namespace            = "crossplane-system"
@@ -15,18 +24,10 @@ locals {
     cluster_subdomain    = var.cluster_subdomain
     parent_zone_arn      = "arn:${data.aws_partition.current.partition}:route53:::hostedzone/${data.aws_route53_zone.parent_domain.zone_id}"
     hosted_zone_arn_wildcard = "arn:${data.aws_partition.current.partition}:route53:::hostedzone/*"
-    iam_role_names = concat(
-      [
-        "${var.cluster_name}-external-dns",
-        "${var.cluster_name}-eso-dex",
-        "${var.cluster_name}-eso-kargo-external-secret-stores",
-        "${var.cluster_name}-eso-adhoc",
-      ],
-      [
-        for env in sort(tolist(var.single_namespace_environment_types)) :
-        "${var.cluster_name}-eso-${env}"
-      ]
-    )
+    iam_role_names = [
+      "${var.cluster_name}-external-dns",
+      "${var.cluster_name}-eso-*",
+    ]
     iam_policy_names = [
       "${var.cluster_name}-external-dns",
     ]
@@ -66,19 +67,12 @@ data "aws_iam_policy_document" "crossplane_aws_trust" {
 }
 
 data "aws_iam_policy_document" "crossplane_aws" {
+  # ACM create-time fencing is by requested domain names plus request tag.
+  # Existing-certificate writes are fenced by resource tag using code.ai/cluster.
   statement {
     effect = "Allow"
     actions = [
-      "acm:AddTagsToCertificate",
-      "acm:DeleteCertificate",
-      "acm:DescribeCertificate",
-      "acm:GetCertificate",
       "acm:ListCertificates",
-      "acm:ListTagsForCertificate",
-      "acm:RemoveTagsFromCertificate",
-      "acm:RenewCertificate",
-      "acm:RequestCertificate",
-      "acm:UpdateCertificateOptions",
     ]
     resources = ["*"]
   }
@@ -86,13 +80,64 @@ data "aws_iam_policy_document" "crossplane_aws" {
   statement {
     effect = "Allow"
     actions = [
+      "acm:RequestCertificate",
+    ]
+    resources = ["*"]
+
+    condition {
+      test     = "ForAllValues:StringLike"
+      variable = "acm:DomainNames"
+      values = [
+        # IAM '*' is not DNS-label-aware. This also allows deeper names under
+        # the suffix, e.g. foo.bar.k8s.code.org.
+        "*.${local.crossplane_aws.cluster_subdomain}",
+      ]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestTag/code.ai/cluster"
+      values   = [var.cluster_name]
+    }
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "acm:AddTagsToCertificate",
+      "acm:DeleteCertificate",
+      "acm:DescribeCertificate",
+      "acm:GetCertificate",
+      "acm:ListTagsForCertificate",
+      "acm:RemoveTagsFromCertificate",
+      "acm:RenewCertificate",
+      "acm:UpdateCertificateOptions",
+    ]
+    resources = [
+      "arn:${data.aws_partition.current.partition}:acm:*:${data.aws_caller_identity.current.account_id}:certificate/*",
+    ]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:ResourceTag/code.ai/cluster"
+      values   = [var.cluster_name]
+    }
+  }
+
+  # Route53 has weak IAM fences here. Hosted zone create and reusable
+  # delegation set create/delete stay broad; record changes are fenced below.
+  statement {
+    effect = "Allow"
+    actions = [
       "route53:CreateHostedZone",
-      "route53:CreateReusableDelegationSet",
-      "route53:DeleteReusableDelegationSet",
       "route53:GetChange",
       "route53:GetReusableDelegationSet",
       "route53:ListHostedZones",
       "route53:ListHostedZonesByName",
+
+      # Sadly, couldn't find a way to fence these in AWS atm
+      "route53:CreateReusableDelegationSet",
+      "route53:DeleteReusableDelegationSet",
     ]
     resources = ["*"]
   }
@@ -153,20 +198,48 @@ data "aws_iam_policy_document" "crossplane_aws" {
     }
   }
 
-  # CloudFront is global, and its control-plane APIs do not admit a cleaner
-  # resource fence for the first slice.
   statement {
     effect = "Allow"
     actions = [
-      "cloudfront:Create*",
-      "cloudfront:Delete*",
-      "cloudfront:Get*",
-      "cloudfront:List*",
-      "cloudfront:TagResource",
-      "cloudfront:UntagResource",
-      "cloudfront:Update*",
+      "cloudfront:GetDistribution",
+      "cloudfront:GetDistributionConfig",
+      "cloudfront:ListDistributions",
+      "cloudfront:ListTagsForResource",
     ]
     resources = ["*"]
+  }
+
+  # CloudFront distribution IDs are assigned by AWS. Fence creates by request
+  # tag and existing-resource writes by resource tag using code.ai/cluster.
+  statement {
+    effect = "Allow"
+    actions = [
+      "cloudfront:CreateDistribution",
+    ]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestTag/code.ai/cluster"
+      values   = [var.cluster_name]
+    }
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "cloudfront:DeleteDistribution",
+      "cloudfront:TagResource",
+      "cloudfront:UntagResource",
+      "cloudfront:UpdateDistribution",
+    ]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:ResourceTag/code.ai/cluster"
+      values   = [var.cluster_name]
+    }
   }
 
   # IAM is fenced to the concrete names we expect Crossplane to manage in this
@@ -175,7 +248,6 @@ data "aws_iam_policy_document" "crossplane_aws" {
   statement {
     effect = "Allow"
     actions = [
-      "iam:AttachRolePolicy",
       "iam:CreatePolicy",
       "iam:CreatePolicyVersion",
       "iam:CreateRole",
@@ -183,7 +255,6 @@ data "aws_iam_policy_document" "crossplane_aws" {
       "iam:DeletePolicyVersion",
       "iam:DeleteRole",
       "iam:DeleteRolePolicy",
-      "iam:DetachRolePolicy",
       "iam:PutRolePolicy",
       "iam:SetDefaultPolicyVersion",
       "iam:TagPolicy",
@@ -208,6 +279,29 @@ data "aws_iam_policy_document" "crossplane_aws" {
   statement {
     effect = "Allow"
     actions = [
+      "iam:AttachRolePolicy",
+      "iam:DetachRolePolicy",
+    ]
+    resources = [
+      for role_name in local.crossplane_aws.iam_role_names :
+      "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:role/${role_name}"
+    ]
+
+    # Attach/detach is authorized on the role ARN; fence the managed policy side
+    # separately so these roles cannot bind arbitrary account policies.
+    condition {
+      test     = "ArnEquals"
+      variable = "iam:PolicyARN"
+      values = [
+        for policy_name in local.crossplane_aws.iam_policy_names :
+        "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:policy/${policy_name}"
+      ]
+    }
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
       "iam:Get*",
       "iam:List*",
     ]
@@ -217,17 +311,72 @@ data "aws_iam_policy_document" "crossplane_aws" {
   statement {
     effect = "Allow"
     actions = [
-      "elasticache:AddTagsToResource",
-      "elasticache:Create*",
-      "elasticache:Delete*",
       "elasticache:Describe*",
       "elasticache:List*",
-      "elasticache:Modify*",
-      "elasticache:RebootCacheCluster",
-      "elasticache:RemoveTagsFromResource",
-      "elasticache:TagResource",
-      "elasticache:TestFailover",
-      "elasticache:UntagResource",
+    ]
+    resources = ["*"]
+  }
+
+  # ElastiCache create paths are fenced by request tag. The create-time tag
+  # helper is limited to ${cluster_name}-* names so it cannot retag arbitrary
+  # existing caches.
+  statement {
+    effect = "Allow"
+    actions = [
+      "elasticache:CreateCacheCluster",
+      "elasticache:CreateCacheSubnetGroup",
+      "elasticache:CreateReplicationGroup",
+    ]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestTag/code.ai/cluster"
+      values   = [var.cluster_name]
+    }
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "elasticache:AddTagsToResource",
+    ]
+    resources = [
+      "arn:${data.aws_partition.current.partition}:elasticache:*:${data.aws_caller_identity.current.account_id}:cluster:${var.cluster_name}-*",
+      "arn:${data.aws_partition.current.partition}:elasticache:*:${data.aws_caller_identity.current.account_id}:replicationgroup:${var.cluster_name}-*",
+      "arn:${data.aws_partition.current.partition}:elasticache:*:${data.aws_caller_identity.current.account_id}:subnetgroup:${var.cluster_name}-*",
+    ]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestTag/code.ai/cluster"
+      values   = [var.cluster_name]
+    }
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "elasticache:DeleteCacheCluster",
+      "elasticache:DeleteCacheSubnetGroup",
+      "elasticache:DeleteReplicationGroup",
+      "elasticache:ModifyCacheCluster",
+      "elasticache:ModifyReplicationGroup",
+    ]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:ResourceTag/code.ai/cluster"
+      values   = [var.cluster_name]
+    }
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "rds:Describe*",
+      "rds:ListTagsForResource",
     ]
     resources = ["*"]
   }
@@ -236,19 +385,23 @@ data "aws_iam_policy_document" "crossplane_aws" {
     effect = "Allow"
     actions = [
       "rds:AddTagsToResource",
-      "rds:Create*",
-      "rds:Delete*",
-      "rds:Describe*",
-      "rds:ListTagsForResource",
-      "rds:Modify*",
-      "rds:Promote*",
-      "rds:RebootDBInstance",
+      "rds:CreateDBCluster",
+      "rds:CreateDBClusterParameterGroup",
+      "rds:CreateDBInstance",
+      "rds:CreateDBSubnetGroup",
+      "rds:DeleteDBCluster",
+      "rds:DeleteDBClusterParameterGroup",
+      "rds:DeleteDBInstance",
+      "rds:DeleteDBSubnetGroup",
+      "rds:ModifyDBCluster",
+      "rds:ModifyDBClusterParameterGroup",
+      "rds:ModifyDBInstance",
+      "rds:ModifyDBSubnetGroup",
       "rds:RemoveTagsFromResource",
-      "rds:Restore*",
-      "rds:Start*",
-      "rds:Stop*",
     ]
-    resources = ["*"]
+    resources = [
+      "arn:${data.aws_partition.current.partition}:rds:*:${data.aws_caller_identity.current.account_id}:*:${var.cluster_name}-*",
+    ]
   }
 
   # Secrets Manager is intentionally absolute for now. Tighten this once secret
@@ -257,9 +410,92 @@ data "aws_iam_policy_document" "crossplane_aws" {
   statement {
     effect = "Allow"
     actions = [
-      "secretsmanager:*",
+      "secretsmanager:BatchGetSecretValue",
+      "secretsmanager:DescribeSecret",
+      "secretsmanager:GetSecretValue",
+      "secretsmanager:ListSecrets",
+      "secretsmanager:ListSecretVersionIds",
     ]
     resources = ["*"]
+  }
+
+  # S3 is fenced to buckets named ${cluster_name}-* at the ARN layer. Create is
+  # also fenced by request tag. Steady-state bucket and object access is fenced
+  # by the bucket's code.ai/cluster tag.
+  statement {
+    effect = "Allow"
+    actions = [
+      "s3:CreateBucket",
+    ]
+    resources = [
+      "arn:${data.aws_partition.current.partition}:s3:::${var.cluster_name}-*",
+    ]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestTag/code.ai/cluster"
+      values   = [var.cluster_name]
+    }
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "s3:GetBucketTagging",
+      "s3:PutBucketTagging",
+    ]
+    resources = [
+      "arn:${data.aws_partition.current.partition}:s3:::${var.cluster_name}-*",
+    ]
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "s3:DeleteBucket",
+      "s3:GetBucketLocation",
+      "s3:GetBucketTagging",
+      "s3:GetBucketVersioning",
+      "s3:ListBucket",
+      "s3:ListBucketMultipartUploads",
+      "s3:ListBucketVersions",
+      "s3:PutBucketTagging",
+      "s3:PutBucketVersioning",
+    ]
+    resources = [
+      "arn:${data.aws_partition.current.partition}:s3:::${var.cluster_name}-*",
+    ]
+
+    condition {
+      test     = "StringEquals"
+      variable = "s3:BucketTag/code.ai/cluster"
+      values   = [var.cluster_name]
+    }
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "s3:AbortMultipartUpload",
+      "s3:DeleteObject",
+      "s3:DeleteObjectTagging",
+      "s3:DeleteObjectVersion",
+      "s3:GetObject",
+      "s3:GetObjectTagging",
+      "s3:GetObjectVersion",
+      "s3:ListMultipartUploadParts",
+      "s3:PutObject",
+      "s3:PutObjectTagging",
+    ]
+    resources = [
+      "arn:${data.aws_partition.current.partition}:s3:::${var.cluster_name}-*/*",
+    ]
+
+    condition {
+      test     = "StringEquals"
+      variable = "s3:BucketTag/code.ai/cluster"
+      values   = [var.cluster_name]
+    }
   }
 }
 
