@@ -1,5 +1,6 @@
 {{ $xr := .observed.composite.resource }}
 {{ $oidcHost := trimPrefix "https://" $xr.spec.clusterOidcIssuerUrl }}
+{{ $delegationSetName := printf "%s-cluster-zone" $xr.spec.clusterName }}
 {{ $resources := .observed.resources | default (dict) }}
 {{ $zone := get $resources "cluster-zone" }}
 {{ $cert := get $resources "wildcard-certificate" }}
@@ -16,11 +17,14 @@ spec:
     name: default
     kind: ClusterProviderConfig
   forProvider:
+    delegationSetIdRef:
+      name: {{ $delegationSetName }}
     name: {{ $xr.spec.clusterSubdomain }}
     comment: Cluster subdomain hosted zone for {{ $xr.spec.clusterSubdomain }}
     forceDestroy: true
     tags:
       code.ai/cluster: {{ $xr.spec.clusterName | quote }}
+      code.ai/is-cluster-domain: "true"
 ---
 apiVersion: iam.aws.m.upbound.io/v1beta1
 kind: Role
@@ -213,3 +217,19 @@ spec:
       - {{ $dvo.resourceRecordName }}
 {{ end }}
 {{ end }}
+---
+# Use a reusable delegation set so Route53 can reject duplicate public hosted
+# zones for this subdomain at create time, instead of leaving external-dns to
+# fail later against an ambiguous multi-zone state.
+apiVersion: route53.aws.m.upbound.io/v1beta1
+kind: DelegationSet
+metadata:
+  name: {{ $delegationSetName }}
+  annotations:
+    gotemplating.fn.crossplane.io/composition-resource-name: cluster-zone-delegation-set
+spec:
+  providerConfigRef:
+    name: default
+    kind: ClusterProviderConfig
+  forProvider:
+    referenceName: {{ $delegationSetName }}
