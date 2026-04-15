@@ -24,6 +24,24 @@ module "eks" {
   node_iam_role_use_name_prefix = false
   node_security_group_use_name_prefix = false
 
+  enabled_log_types = [
+    "api",
+    "authenticator",
+    # TODO: disabled k8s audit for cost reasons while Seth tears down and sets up
+    # clusters all day. This was costing about $40/day in CloudWatch usage. I think
+    # a setup/teardown cycle of the cluster costs about $5 in cloudwatch logs. Eep.
+    #
+    # Re-evaluate re-enabling once the cluster is in a stable state; if it is still
+    # flooding the logs with spam, keep this off until the churn is fixed.
+    #
+    # Can check daily usage with:
+    # aws cloudwatch get-metric-statistics --region us-east-1 --namespace AWS/Logs --metric-name IncomingBytes --dimensions Name=LogGroupName,Value=/aws/eks/codeai-k8s/cluster --start-time 2026-04-01T00:00:00Z --end-time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --period 86400 --statistics Sum --output json
+    #
+    # Should try to turn this on anytime after May 15, 2026 to get k8s audit logs back:
+    #
+    # "audit",
+  ]
+
   #=============================================================
   # Map AWS IAM roles to cluster permissions (affects kubectl)
   #=============================================================
