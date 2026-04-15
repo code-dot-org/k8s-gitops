@@ -58,18 +58,7 @@ k8s-gitops/
             levelbuilder.yaml     # kargo stage for codeai deployment levelbuilder
             ...
 
-  bootstrap/
-    README.md                     # bootstrap norms and state layout
-    apptrees/                     # non-production Argo tree fixtures and stress trees
-      mimic/
-      argo-trace-stress-test/
-    codeai-k8s/
-      README.md                   # apply order for the codeai-k8s cluster roots
-      cluster/
-      cluster-infra/
-      cluster-infra-argocd/
-    codeai-k8s-dex/               # org-wide Dex bootstrap shared by clusters
-    modules/                      # bootstrap-only tofu modules
+  bootstrap/                      # tofu modules to bootstrap a codeai-k8s eks cluster
 ```
 
 ## Bootstrap Cluster
