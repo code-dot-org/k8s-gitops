@@ -2,7 +2,7 @@ apiVersion: v2
 name: crossplane-codeai-k8s
 description: Local chart for Crossplane on codeai-k8s
 type: application
-version: 0.1.12
+version: 0.1.13
 
 dependencies:
   - name: crossplane
