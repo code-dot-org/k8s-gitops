@@ -87,7 +87,10 @@ data "aws_iam_policy_document" "crossplane_aws" {
     effect = "Allow"
     actions = [
       "route53:CreateHostedZone",
+      "route53:CreateReusableDelegationSet",
+      "route53:DeleteReusableDelegationSet",
       "route53:GetChange",
+      "route53:GetReusableDelegationSet",
       "route53:ListHostedZones",
       "route53:ListHostedZonesByName",
     ]
