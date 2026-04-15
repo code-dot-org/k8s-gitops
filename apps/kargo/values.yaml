@@ -57,6 +57,14 @@ webhooksServer:
   enabled: false
 
 controller:
+  annotations:
+    # Keep the controller Deployment in the same later wave as its
+    # ServiceAccount. Moving only the ServiceAccount to wave 1 fixed prune
+    # ordering, but it also left the Deployment in wave 0, where it degraded on
+    # apply before Argo ever advanced to create the ServiceAccount. With both in
+    # wave 1, apply can create them together, and prune still removes them
+    # before the wave 0 management controller that clears the finalizer.
+    argocd.argoproj.io/sync-wave: "1"
   serviceAccount:
     annotations:
       # On app teardown we observed kargo-controller's ServiceAccount stick in
