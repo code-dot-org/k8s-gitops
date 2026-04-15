@@ -51,7 +51,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: wait
-          image: rancher/kubectl:v1.35.0
+          image: cgr.dev/chainguard/kubectl:latest-dev
           command:
             - /bin/sh
             - -ceu
