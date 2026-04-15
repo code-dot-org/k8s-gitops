@@ -213,6 +213,34 @@ class ArgoTraceTest < Minitest::Test
     ArgoTrace.define_singleton_method(:current_cluster_name, original_cluster_name_method)
   end
 
+  def test_snapshot_body_reports_repo_server_not_ready_during_argocd_rollout
+    original_cluster_name_method = ArgoTrace.method(:current_cluster_name)
+    ArgoTrace.define_singleton_method(:current_cluster_name) do
+      "codeai-k8s-test"
+    end
+
+    body_text = ArgoTrace.snapshot_body(
+      command_runner: lambda do |*command, **_kwargs|
+        case command
+        when ArgoTrace::WAVE1_APPSET_LIST_COMMAND, ArgoTrace::WAVE1_APP_LIST_COMMAND
+          raise ArgoTrace::CommandFailed,
+                'argocd --core appset list -o yaml: {"level":"fatal","msg":"cannot find ready pod with selector: [app.kubernetes.io/name=argocd-repo-server] - use the --{component}-name flag in this command or set the environmental variable","time":"2026-04-15T00:52:34-10:00"}'
+        when ["kubectl", "get", "configmap", "-n", "argocd", "argocd-cm"]
+          "configmap/argocd-cm\n"
+        when ["kubectl", "get", "namespace", "kube-system", "-o", "name", "--request-timeout=5s"]
+          "namespace/kube-system\n"
+        else
+          raise "unexpected command: #{command.inspect}"
+        end
+      end,
+      wrap_width: nil
+    )
+
+    assert_equal "ArgoCD is running on codeai-k8s-test, but argocd-repo-server is not ready yet", body_text
+  ensure
+    ArgoTrace.define_singleton_method(:current_cluster_name, original_cluster_name_method)
+  end
+
   def test_snapshot_body_reports_timed_out_argocd_lists_when_cluster_is_reachable
     original_cluster_name_method = ArgoTrace.method(:current_cluster_name)
     ArgoTrace.define_singleton_method(:current_cluster_name) do
