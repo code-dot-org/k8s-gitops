@@ -15,5 +15,4 @@ provider "github" {
 provider "github" {
   alias = "kargo_k8s_gitops"
   owner = "code-dot-org"
-  # Do not make provider init depend on a secret created by this same root.
 }
