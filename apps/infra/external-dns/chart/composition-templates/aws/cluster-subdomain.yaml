@@ -19,6 +19,8 @@ spec:
     name: {{ $xr.spec.clusterSubdomain }}
     comment: Cluster subdomain hosted zone for {{ $xr.spec.clusterSubdomain }}
     forceDestroy: true
+    tags:
+      code.ai/cluster: {{ $xr.spec.clusterName | quote }}
 ---
 apiVersion: iam.aws.m.upbound.io/v1beta1
 kind: Role
@@ -142,7 +144,7 @@ spec:
           {
             "Effect": "Allow",
             "Action": "route53:ListTagsForResource",
-            "Resource": "arn:aws:route53:::hostedzone/{{ $zone.resource.status.atProvider.zoneId }}"
+            "Resource": "arn:aws:route53:::hostedzone/*"
           },
           {
             "Effect": "Allow",

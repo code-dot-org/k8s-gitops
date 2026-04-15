@@ -31,5 +31,8 @@ external-dns:
 
   extraArgs:
     - --aws-zone-type=public
+
+    # These flags implements support for the code.ai/dns-name label that ingresses apply in
+    # order to have external-dns map them a sub-domain name.
     - --fqdn-template={{ printf "{{ with index .Labels %q }}{{ . }}{{ else }}ignore{{ end }}" "code.ai/dns-name" }}.k8s.code.org
-    - --exclude-domains=ignore.k8s.code.org
+    - --exclude-domains=ignore.k8s.code.org # if there's no label on ingress, we map to this /dev/null domain
