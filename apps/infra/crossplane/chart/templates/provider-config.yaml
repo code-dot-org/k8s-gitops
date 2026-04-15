@@ -1,12 +1,11 @@
 apiVersion: aws.m.upbound.io/v1beta1
 kind: ClusterProviderConfig
 metadata:
-  name: "default"
+  name: default
   annotations:
-    # This must delete after aws-resources stop using it, but before the
-    # crossplane app tears down provider CRDs and usage tracking.
+    # The AWS family provider installs this CRD asynchronously.
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
-    argocd.argoproj.io/sync-wave: "-10"
+    argocd.argoproj.io/sync-wave: "30"
 spec:
   credentials:
     source: IRSA

@@ -1,9 +1,10 @@
+{{- if eq .Values.provider "aws" }}
 apiVersion: apiextensions.crossplane.io/v1
 kind: CompositeResourceDefinition
 metadata:
   name: xclusterdnscertificates.infra.code.org
   annotations:
-    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/sync-wave: "-101"
 spec:
   group: infra.code.org
   names:
@@ -53,7 +54,7 @@ kind: Composition
 metadata:
   name: codeai-k8s-cluster-dns-certificate
   annotations:
-    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/sync-wave: "-101"
 spec:
   compositeTypeRef:
     apiVersion: infra.code.org/v1alpha1
@@ -69,7 +70,8 @@ spec:
         source: Inline
         inline:
           template: |
-{{ .Files.Get "composition-templates/cluster-subdomain.yaml" | indent 12 }}
+{{ .Files.Get "composition-templates/aws/cluster-subdomain.yaml" | indent 12 }}
     - step: auto-ready
       functionRef:
         name: function-auto-ready
+{{- end }}

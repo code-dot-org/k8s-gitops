@@ -1238,8 +1238,6 @@ The minimum expected structure under this repo is:
       - infra (Application)
         - sync-wave 0
           - crossplane (Application)
-        - sync-wave 2
-          - aws-resources (Application)
         - sync-wave 3
           - networking (Application)
         - sync-wave 4

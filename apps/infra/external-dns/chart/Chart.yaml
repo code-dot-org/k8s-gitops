@@ -2,7 +2,7 @@ apiVersion: v2
 name: external-dns-codeai-k8s
 description: Local chart for ExternalDNS values on codeai-k8s
 type: application
-version: 0.1.2
+version: 0.1.5
 
 dependencies:
   - name: external-dns
