@@ -56,6 +56,17 @@ externalWebhooksServer:
 webhooksServer:
   enabled: false
 
+controller:
+  serviceAccount:
+    annotations:
+      # On app teardown we observed kargo-controller's ServiceAccount stick in
+      # Pending deletion with kargo.akuity.io/finalizer after the Kargo
+      # management controller had already been torn down. Deleting this
+      # ServiceAccount one wave earlier leaves the management controller alive
+      # long enough to remove the per-Project secret-read RoleBindings and
+      # clear the finalizer.
+      argocd.argoproj.io/sync-wave: "1"
+
 extraObjects:
   - apiVersion: rbac.authorization.k8s.io/v1
     kind: ClusterRole
