@@ -165,6 +165,56 @@ class ArgoTraceTest < Minitest::Test
     ArgoTrace.define_singleton_method(:current_cluster_name, original_cluster_name_method)
   end
 
+  def test_snapshot_body_reports_timed_out_argocd_lists_when_cluster_is_reachable
+    original_cluster_name_method = ArgoTrace.method(:current_cluster_name)
+    ArgoTrace.define_singleton_method(:current_cluster_name) do
+      "codeai-k8s-test"
+    end
+
+    body_text = ArgoTrace.snapshot_body(
+      command_runner: lambda do |*command, **_kwargs|
+        case command
+        when ArgoTrace::WAVE1_APPSET_LIST_COMMAND, ArgoTrace::WAVE1_APP_LIST_COMMAND
+          raise Timeout::Error
+        when ["kubectl", "get", "namespace", "kube-system", "-o", "name", "--request-timeout=5s"]
+          "namespace/kube-system\n"
+        else
+          raise "unexpected command: #{command.inspect}"
+        end
+      end,
+      wrap_width: nil
+    )
+
+    assert_equal "Timed out fetching ArgoCD Applications or ApplicationSets on codeai-k8s-test", body_text
+  ensure
+    ArgoTrace.define_singleton_method(:current_cluster_name, original_cluster_name_method)
+  end
+
+  def test_snapshot_body_reports_unreachable_cluster_after_argocd_list_timeout
+    original_cluster_name_method = ArgoTrace.method(:current_cluster_name)
+    ArgoTrace.define_singleton_method(:current_cluster_name) do
+      "codeai-k8s-test"
+    end
+
+    body_text = ArgoTrace.snapshot_body(
+      command_runner: lambda do |*command, **_kwargs|
+        case command
+        when ArgoTrace::WAVE1_APPSET_LIST_COMMAND, ArgoTrace::WAVE1_APP_LIST_COMMAND
+          raise Timeout::Error
+        when ["kubectl", "get", "namespace", "kube-system", "-o", "name", "--request-timeout=5s"]
+          raise ArgoTrace::CommandFailed, "kubectl get namespace kube-system: dial tcp 10.0.0.1:443: i/o timeout"
+        else
+          raise "unexpected command: #{command.inspect}"
+        end
+      end,
+      wrap_width: nil
+    )
+
+    assert_equal "Cannot reach cluster codeai-k8s-test", body_text
+  ensure
+    ArgoTrace.define_singleton_method(:current_cluster_name, original_cluster_name_method)
+  end
+
   def test_shared_kubeconfig_env_uses_shared_file_for_env_context
     original_env = ENV["ARGOCD_KUBE_CONTEXT"]
     original_capture_command_method = ArgoTrace.method(:capture_command)

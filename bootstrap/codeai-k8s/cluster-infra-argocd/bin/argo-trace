@@ -20,6 +20,8 @@ module ArgoTrace
   DEFAULT_NON_TTY_WRAP_WIDTH = 150
   DEFAULT_PER_CALL_TIMEOUT_SECONDS = 60
   DEFAULT_TOTAL_SNAPSHOT_TIMEOUT_SECONDS = 90
+  DEFAULT_WAVE1_LIST_TIMEOUT_SECONDS = 120
+  DEFAULT_CLUSTER_REACHABILITY_TIMEOUT_SECONDS = 10
   DEFAULT_MAX_PARALLEL_CALLS = 50
   DEFAULT_KUBECTL_DETAILS = true
   DEFAULT_REF_MAX_RECURSION_DEPTH = 2
@@ -300,7 +302,13 @@ module ArgoTrace
   end
 
   def fetch_argocd_list(command_runner, command)
-    payload = load_argocd_yaml(run_command(command_runner, command))
+    payload = load_argocd_yaml(
+      run_command(
+        command_runner,
+        command,
+        timeout_seconds: DEFAULT_WAVE1_LIST_TIMEOUT_SECONDS
+      )
+    )
     argocd_output_list(payload)
   end
 
@@ -479,6 +487,25 @@ module ArgoTrace
     empty_wave1_inventory.merge(argocd_not_found: true)
   end
 
+  def argocd_timeout_inventory
+    empty_wave1_inventory.merge(argocd_timed_out: true)
+  end
+
+  def cluster_unreachable_inventory
+    empty_wave1_inventory.merge(cluster_unreachable: true)
+  end
+
+  def cluster_reachable?(command_runner)
+    run_command(
+      command_runner,
+      ["kubectl", "get", "namespace", "kube-system", "-o", "name", "--request-timeout=5s"],
+      timeout_seconds: DEFAULT_CLUSTER_REACHABILITY_TIMEOUT_SECONDS
+    )
+    true
+  rescue CommandFailed, Timeout::Error
+    false
+  end
+
   def fetch_wave1_app_and_appset_list(command_runner:)
     wave1_app_and_appset_lists = fetch_argocd_lists_in_parallel(
       command_runner,
@@ -498,8 +525,12 @@ module ArgoTrace
     }
   rescue CommandFailed
     return missing_argocd_inventory if argocd_cm_missing?(command_runner)
+    return cluster_unreachable_inventory unless cluster_reachable?(command_runner)
 
     raise
+  rescue Timeout::Error
+    return cluster_unreachable_inventory unless cluster_reachable?(command_runner)
+    return argocd_timeout_inventory
   end
 
   def no_argocd_inventory?(inventory)
@@ -508,6 +539,14 @@ module ArgoTrace
 
   def argocd_not_found?(inventory)
     inventory[:argocd_not_found] == true
+  end
+
+  def argocd_timed_out?(inventory)
+    inventory[:argocd_timed_out] == true
+  end
+
+  def cluster_unreachable?(inventory)
+    inventory[:cluster_unreachable] == true
   end
 
   def current_cluster_name
@@ -1995,7 +2034,9 @@ module ArgoTrace
 
   def snapshot_body(command_runner:, wrap_width:, kubectl_details: DEFAULT_KUBECTL_DETAILS, ref_max_recursion_depth: DEFAULT_REF_MAX_RECURSION_DEPTH)
     inventory = fetch_wave1_app_and_appset_list(command_runner: command_runner)
+    return "Cannot reach cluster #{current_cluster_name}" if cluster_unreachable?(inventory)
     return "ArgoCD not found on #{current_cluster_name}" if argocd_not_found?(inventory)
+    return "Timed out fetching ArgoCD Applications or ApplicationSets on #{current_cluster_name}" if argocd_timed_out?(inventory)
     return "No ArgoCD Applications or ApplicationSets found on #{current_cluster_name}" if no_argocd_inventory?(inventory)
 
     app_names = apps_requiring_detail(

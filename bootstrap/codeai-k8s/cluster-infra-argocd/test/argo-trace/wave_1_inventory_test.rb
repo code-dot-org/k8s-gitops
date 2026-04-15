@@ -162,22 +162,34 @@ class ArgoTraceWave1InventoryTest < Minitest::Test
       attr_reader :commands
 
       def call(*command, timeout_seconds: nil)
-        @commands << command
-        sleep 0.05 if command == ArgoTrace::WAVE1_APP_LIST_COMMAND
+        @commands << [command, timeout_seconds]
+        return "namespace/kube-system\n" if command == ["kubectl", "get", "namespace", "kube-system", "-o", "name", "--request-timeout=5s"]
+        raise Timeout::Error if command == ArgoTrace::WAVE1_APP_LIST_COMMAND
         return "---\n[]\n" if command == ArgoTrace::WAVE1_APPSET_LIST_COMMAND
-        return "---\n[]\n" if command == ArgoTrace::WAVE1_APP_LIST_COMMAND
 
         raise "unexpected command: #{command.inspect}"
       end
     end.new
 
-    inventory = ArgoTrace.fetch_wave1_app_and_appset_list(
-      command_runner: command_runner,
-      per_call_timeout_seconds: 0.01,
-      total_snapshot_timeout_seconds: 1
-    )
+    inventory = ArgoTrace.fetch_wave1_app_and_appset_list(command_runner: command_runner)
 
     assert_equal [], inventory[:argocd_apps]
     assert_equal [], inventory[:argocd_appsets]
+    assert_equal true, inventory[:argocd_timed_out]
+  end
+
+  def test_fetch_wave1_app_and_appset_list_reports_unreachable_cluster_after_timeout
+    command_runner = Class.new do
+      def call(*command, timeout_seconds: nil)
+        raise Timeout::Error if [ArgoTrace::WAVE1_APPSET_LIST_COMMAND, ArgoTrace::WAVE1_APP_LIST_COMMAND].include?(command)
+        raise ArgoTrace::CommandFailed, "kubectl get namespace kube-system: dial tcp 10.0.0.1:443: i/o timeout" if command == ["kubectl", "get", "namespace", "kube-system", "-o", "name", "--request-timeout=5s"]
+
+        raise "unexpected command: #{command.inspect}"
+      end
+    end.new
+
+    inventory = ArgoTrace.fetch_wave1_app_and_appset_list(command_runner: command_runner)
+
+    assert_equal true, inventory[:cluster_unreachable]
   end
 end
