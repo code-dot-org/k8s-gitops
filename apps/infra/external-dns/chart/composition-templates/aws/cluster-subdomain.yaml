@@ -38,6 +38,8 @@ spec:
     name: default
     kind: ClusterProviderConfig
   forProvider:
+    tags:
+      code.ai/cluster: {{ $xr.spec.clusterName | quote }}
     assumeRolePolicy: |
       {
         "Version": "2012-10-17",
@@ -74,6 +76,8 @@ spec:
     region: {{ $xr.spec.clusterRegion }}
     domainName: "*.{{ $xr.spec.clusterSubdomain }}"
     validationMethod: DNS
+    tags:
+      code.ai/cluster: {{ $xr.spec.clusterName | quote }}
     subjectAlternativeNames:
 {{ range $env := $xr.spec.singleNamespaceEnvironmentTypes }}
       - "*.{{ $env }}.{{ $xr.spec.clusterSubdomain }}"
@@ -136,6 +140,8 @@ spec:
   forProvider:
     description: IAM Policy for external-dns operator
     path: /
+    tags:
+      code.ai/cluster: {{ $xr.spec.clusterName | quote }}
     policy: |
       {
         "Version": "2012-10-17",

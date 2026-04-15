@@ -18,6 +18,8 @@ spec:
     name: default
     kind: ClusterProviderConfig
   forProvider:
+    tags:
+      code.ai/cluster: {{ $clusterName | quote }}
     assumeRolePolicy: |
       {
         "Version": "2012-10-17",
