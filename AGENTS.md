@@ -14,3 +14,20 @@
 - If you modify an app Helm chart under `apps/`, always bump that chart package version in its `Chart.yaml` top-level `version:` field so Argo sees the chart change.
 - If you push changes in this repo, then for Argo-managed changes immediately trigger a normal refresh on the affected Application, and if it still has not moved to the new Git revision, trigger a sync to save time.
 - If you change the structure of `apps/app-of-apps/*`, make a parallel edit under `bootstrap/apptrees/mimic/apps/app-of-apps/*` when relevant, so the test tree does not bitrot.
+
+## Bootstrapping and Destroying app-of-apps w/o tofu
+
+- When users says to create or destroy app-of-apps, the do not mean OpenTofu. they mean:
+  - create: `kubectl apply -f apps/app-of-apps/bootstrap.yaml`
+  - destroy: `kubectl delete -f apps/app-of-apps/bootstrap.yaml`
+  - both can take upwards of 30 minutes, the user may or may not want you to monitor. If they do,   default to polling every minute, and focusing particularly on argo-trace output. Default to waiting until the destroy/create is done and either argo-trace says no apps or its healthy.
+- When starting an apply or destroy, whether via `tofu apply`, `tofu destroy`, or by manually adding or removing app-of-apps from Argo and watching, run `bootstrap/codeai-k8s/cluster-infra-argocd/bin/log-cluster-events start` before you begin.
+- No matter what happens, when the watched run is done, run `bootstrap/codeai-k8s/cluster-infra-argocd/bin/log-cluster-events stop`.
+- `bootstrap/codeai-k8s/cluster-infra-argocd/bin/log-cluster-events start` accepts an optional label. If omitted, it uses `session`. Use "bootstrap-app-of-apps" for creation and "destroy-app-of-apps" for deletion.
+- `bootstrap/codeai-k8s/cluster-infra-argocd/bin/log-cluster-events` runs `bootstrap/codeai-k8s/cluster-infra-argocd/bin/argo-trace` as a sidecar logger and writes `bootstrap/codeai-k8s/cluster-infra-argocd/logs/argo-trace-<label>-<timestamp>.log.md`. That tracer is not an implementation detail; treat that md log as a primary debugging tool and mirror its output raw in chat when it emits updates.
+- `bootstrap/codeai-k8s/cluster-infra-argocd/bin/log-cluster-events` now writes three first-class logs per session:
+  - `bootstrap/codeai-k8s/cluster-infra-argocd/logs/cluster-events-<timestamp>-<label>.log`
+  - `bootstrap/codeai-k8s/cluster-infra-argocd/cluster.log`
+  - `bootstrap/codeai-k8s/cluster-infra-argocd/logs/argo-trace-<label>-<timestamp>.log.md`
+- When running `bootstrap/codeai-k8s/cluster-infra-argocd/bin/log-cluster-events start`, ALWAYS print the verbatim `tail -n +1 -f ...` commands for all three logs to the chat with user once they are sent to you.
+- Stop the sidecar watchers with `bootstrap/codeai-k8s/cluster-infra-argocd/bin/log-cluster-events stop`.
