@@ -68,6 +68,6 @@ spec:
               wait_until_healthy function function-go-templating
               {{- range $key, $provider := .Values.provider.aws }}
               {{- if and (kindIs "map" $provider) ($provider.enabled | default false) }}
-              wait_until_healthy provider {{ if eq $key "family" }}crossplane-provider-family-aws{{ else }}crossplane-provider-aws-{{ $key }}{{ end }}
+              wait_until_healthy provider {{ if eq $key "family" }}upbound-provider-family-aws{{ else }}provider-aws-{{ $key }}{{ end }}
               {{- end }}
               {{- end }}

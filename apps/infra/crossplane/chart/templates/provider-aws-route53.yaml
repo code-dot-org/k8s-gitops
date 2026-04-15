@@ -2,7 +2,7 @@
 apiVersion: pkg.crossplane.io/v1
 kind: Provider
 metadata:
-  name: crossplane-provider-aws-route53
+  name: provider-aws-route53
   annotations:
     argocd.argoproj.io/sync-wave: "20"
 spec:

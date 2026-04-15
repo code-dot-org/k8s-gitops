@@ -1,12 +1,12 @@
-{{- if .Values.provider.aws.cloudfront.enabled -}}
+{{- if .Values.provider.aws.s3.enabled -}}
 apiVersion: pkg.crossplane.io/v1
 kind: Provider
 metadata:
-  name: provider-aws-cloudfront
+  name: provider-aws-s3
   annotations:
     argocd.argoproj.io/sync-wave: "20"
 spec:
-  package: xpkg.upbound.io/upbound/provider-aws-cloudfront:v2.5.1
+  package: xpkg.upbound.io/upbound/provider-aws-s3:v2.5.1
   runtimeConfigRef:
     name: crossplane-aws-runtime-config
 {{- end }}

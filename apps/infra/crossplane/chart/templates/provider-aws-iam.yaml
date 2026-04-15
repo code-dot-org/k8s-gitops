@@ -2,7 +2,7 @@
 apiVersion: pkg.crossplane.io/v1
 kind: Provider
 metadata:
-  name: crossplane-provider-aws-iam
+  name: provider-aws-iam
   annotations:
     argocd.argoproj.io/sync-wave: "20"
 spec:

@@ -2,7 +2,7 @@
 apiVersion: pkg.crossplane.io/v1
 kind: Provider
 metadata:
-  name: crossplane-provider-family-aws
+  name: upbound-provider-family-aws
   annotations:
     argocd.argoproj.io/sync-wave: "20"
 spec:
