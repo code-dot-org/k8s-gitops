@@ -38,6 +38,8 @@ spec:
       serviceAccountName: {{ include "argo-cd.controller.serviceAccountName" $argocd }}
       containers:
         - name: kubectl
+          # Intentionally unpinned: tiny public kubectl images with a shell are
+          # hard to find, and kubectl version compatibility is usually excellent.
           image: cgr.dev/chainguard/kubectl:latest-dev
           command:
             - /bin/sh
