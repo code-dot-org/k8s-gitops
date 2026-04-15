@@ -2,11 +2,11 @@
 apiVersion: pkg.crossplane.io/v1
 kind: Provider
 metadata:
-  name: "provider-aws-acm"
+  name: crossplane-provider-aws-acm
   annotations:
     argocd.argoproj.io/sync-wave: "20"
 spec:
-  package: "xpkg.upbound.io/upbound/provider-aws-acm:v2.5.1"
+  package: xpkg.upbound.io/upbound/provider-aws-acm:v2.5.1
   runtimeConfigRef:
-    name: "aws-runtime-config"
+    name: crossplane-aws-runtime-config
 {{- end }}

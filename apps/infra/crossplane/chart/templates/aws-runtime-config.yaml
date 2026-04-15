@@ -6,7 +6,7 @@
 apiVersion: pkg.crossplane.io/v1beta1
 kind: DeploymentRuntimeConfig
 metadata:
-  name: "aws-runtime-config"
+  name: crossplane-aws-runtime-config
   annotations:
     argocd.argoproj.io/sync-wave: "10"
 spec:
@@ -27,7 +27,7 @@ spec:
   serviceAccountTemplate:
     metadata:
       # this service account name must match the one in crossplane-aws.tf
-      name: "crossplane-aws"
+      name: crossplane-aws
       annotations:
         eks.amazonaws.com/role-arn: {{ $iamRoleArn | quote }}
 {{- end }}
