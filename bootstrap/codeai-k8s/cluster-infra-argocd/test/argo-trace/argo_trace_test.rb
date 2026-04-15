@@ -165,6 +165,54 @@ class ArgoTraceTest < Minitest::Test
     ArgoTrace.define_singleton_method(:current_cluster_name, original_cluster_name_method)
   end
 
+  def test_snapshot_body_treats_singular_missing_argocd_cm_as_no_argocd_inventory
+    original_cluster_name_method = ArgoTrace.method(:current_cluster_name)
+    ArgoTrace.define_singleton_method(:current_cluster_name) do
+      "codeai-k8s-test"
+    end
+
+    body_text = ArgoTrace.snapshot_body(
+      command_runner: lambda do |*command, **_kwargs|
+        case command
+        when ArgoTrace::WAVE1_APPSET_LIST_COMMAND, ArgoTrace::WAVE1_APP_LIST_COMMAND,
+             ["kubectl", "get", "configmap", "-n", "argocd", "argocd-cm"]
+          raise ArgoTrace::CommandFailed, 'configmap "argocd-cm" not found'
+        else
+          raise "unexpected command: #{command.inspect}"
+        end
+      end,
+      wrap_width: nil
+    )
+
+    assert_equal "ArgoCD not found on codeai-k8s-test", body_text
+  ensure
+    ArgoTrace.define_singleton_method(:current_cluster_name, original_cluster_name_method)
+  end
+
+  def test_snapshot_body_treats_missing_argocd_namespace_as_no_argocd_inventory
+    original_cluster_name_method = ArgoTrace.method(:current_cluster_name)
+    ArgoTrace.define_singleton_method(:current_cluster_name) do
+      "codeai-k8s-test"
+    end
+
+    body_text = ArgoTrace.snapshot_body(
+      command_runner: lambda do |*command, **_kwargs|
+        case command
+        when ArgoTrace::WAVE1_APPSET_LIST_COMMAND, ArgoTrace::WAVE1_APP_LIST_COMMAND,
+             ["kubectl", "get", "configmap", "-n", "argocd", "argocd-cm"]
+          raise ArgoTrace::CommandFailed, 'namespaces "argocd" not found'
+        else
+          raise "unexpected command: #{command.inspect}"
+        end
+      end,
+      wrap_width: nil
+    )
+
+    assert_equal "ArgoCD not found on codeai-k8s-test", body_text
+  ensure
+    ArgoTrace.define_singleton_method(:current_cluster_name, original_cluster_name_method)
+  end
+
   def test_snapshot_body_reports_timed_out_argocd_lists_when_cluster_is_reachable
     original_cluster_name_method = ArgoTrace.method(:current_cluster_name)
     ArgoTrace.define_singleton_method(:current_cluster_name) do

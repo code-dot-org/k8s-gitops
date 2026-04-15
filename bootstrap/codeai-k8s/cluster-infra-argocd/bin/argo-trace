@@ -470,7 +470,12 @@ module ArgoTrace
     run_command(command_runner, ["kubectl", "get", "configmap", "-n", "argocd", "argocd-cm"], timeout_seconds: 5)
     false
   rescue CommandFailed => exception
-    exception.message.include?('configmaps "argocd-cm" not found')
+    message = exception.message
+
+    message.include?('configmap "argocd-cm" not found') ||
+      message.include?('configmaps "argocd-cm" not found') ||
+      message.include?('namespaces "argocd" not found') ||
+      message.include?('namespace "argocd" not found')
   end
 
   def empty_wave1_inventory
