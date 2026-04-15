@@ -1,19 +1,22 @@
+{{- if eq .Values.provider "aws" }}
 {{- $clusterName := .Values.codeai_cluster_config.cluster_name -}}
 {{- $clusterRegion := .Values.codeai_cluster_config.cluster_region -}}
 {{- $oidcProviderArn := .Values.codeai_cluster_config.oidc_provider_arn -}}
 {{- $oidcHost := trimPrefix "https://" .Values.codeai_cluster_config.cluster_oidc_issuer_url -}}
 {{- $accountID := index (splitList ":" $oidcProviderArn) 4 -}}
-{{- $namespace := include "aws-resources.namespace" . -}}
 ---
 apiVersion: iam.aws.m.upbound.io/v1beta1
 kind: Role
 metadata:
-  name: kargo-external-secret-stores
-  namespace: {{ $namespace }}
+  name: eso-adhoc
+  namespace: crossplane-system
   annotations:
-    crossplane.io/external-name: {{ printf "%s-eso-kargo-external-secret-stores" $clusterName | quote }}
+    argocd.argoproj.io/sync-wave: "-100"
+    crossplane.io/external-name: {{ printf "%s-eso-adhoc" $clusterName | quote }}
 spec:
-{{ include "aws-resources.providerConfigRef" . | indent 2 }}
+  providerConfigRef:
+    name: default
+    kind: ClusterProviderConfig
   forProvider:
     assumeRolePolicy: |
       {
@@ -27,10 +30,7 @@ spec:
             },
             "Condition": {
               "StringEquals": {
-                "{{ $oidcHost }}:sub": [
-                  "system:serviceaccount:kargo-shared-resources:external-secrets-sa-kargo-shared-resources",
-                  "system:serviceaccount:kargo-system-resources:external-secrets-sa-kargo-system-resources"
-                ],
+                "{{ $oidcHost }}:sub": "system:serviceaccount:external-secrets:external-secrets-sa-adhoc",
                 "{{ $oidcHost }}:aud": "sts.amazonaws.com"
               }
             }
@@ -41,23 +41,37 @@ spec:
 apiVersion: iam.aws.m.upbound.io/v1beta1
 kind: RolePolicy
 metadata:
-  name: kargo-external-secret-stores
-  namespace: {{ $namespace }}
+  name: eso-adhoc
+  namespace: crossplane-system
   annotations:
+    argocd.argoproj.io/sync-wave: "-100"
     crossplane.io/external-name: secrets-manager-access
 spec:
-{{ include "aws-resources.providerConfigRef" . | indent 2 }}
+  providerConfigRef:
+    name: default
+    kind: ClusterProviderConfig
   forProvider:
     roleRef:
-      name: kargo-external-secret-stores
+      name: eso-adhoc
     policy: |
       {
         "Version": "2012-10-17",
         "Statement": [
           {
             "Effect": "Allow",
+            "Action": [
+              "secretsmanager:ListSecrets",
+              "secretsmanager:BatchGetSecretValue"
+            ],
+            "Resource": "*"
+          },
+          {
+            "Effect": "Allow",
             "Action": "secretsmanager:GetSecretValue",
-            "Resource": "arn:aws:secretsmanager:{{ $clusterRegion }}:{{ $accountID }}:secret:k8s/tofu/{{ $clusterName }}/kargo/*"
+            "Resource": [
+              "arn:aws:secretsmanager:{{ $clusterRegion }}:{{ $accountID }}:secret:adhoc/cdo/*"
+            ]
           }
         ]
       }
+{{- end }}

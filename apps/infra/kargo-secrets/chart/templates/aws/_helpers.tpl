@@ -1,8 +1,8 @@
-{{- define "aws-resources.namespace" -}}
+{{- define "kargo-secrets.aws.namespace" -}}
 crossplane-system
 {{- end -}}
 
-{{- define "aws-resources.providerConfigRef" -}}
+{{- define "kargo-secrets.aws.providerConfigRef" -}}
 providerConfigRef:
   name: default
   kind: ClusterProviderConfig

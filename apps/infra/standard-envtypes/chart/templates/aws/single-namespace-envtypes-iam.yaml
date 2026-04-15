@@ -1,20 +1,23 @@
+{{- if eq .Values.provider "aws" }}
 {{- $clusterName := .Values.codeai_cluster_config.cluster_name -}}
 {{- $clusterRegion := .Values.codeai_cluster_config.cluster_region -}}
 {{- $oidcProviderArn := .Values.codeai_cluster_config.oidc_provider_arn -}}
 {{- $oidcHost := trimPrefix "https://" .Values.codeai_cluster_config.cluster_oidc_issuer_url -}}
 {{- $accountID := index (splitList ":" $oidcProviderArn) 4 -}}
-{{- $namespace := include "aws-resources.namespace" . -}}
 {{- range $env := .Values.codeai_cluster_config.single_namespace_environment_types }}
 ---
 apiVersion: iam.aws.m.upbound.io/v1beta1
 kind: Role
 metadata:
   name: eso-{{ $env }}
-  namespace: {{ $namespace }}
+  namespace: crossplane-system
   annotations:
+    argocd.argoproj.io/sync-wave: "-100"
     crossplane.io/external-name: {{ printf "%s-eso-%s" $clusterName $env | quote }}
 spec:
-{{ include "aws-resources.providerConfigRef" $ | indent 2 }}
+  providerConfigRef:
+    name: default
+    kind: ClusterProviderConfig
   forProvider:
     assumeRolePolicy: |
       {
@@ -40,11 +43,14 @@ apiVersion: iam.aws.m.upbound.io/v1beta1
 kind: RolePolicy
 metadata:
   name: eso-{{ $env }}
-  namespace: {{ $namespace }}
+  namespace: crossplane-system
   annotations:
+    argocd.argoproj.io/sync-wave: "-100"
     crossplane.io/external-name: secrets-manager-access
 spec:
-{{ include "aws-resources.providerConfigRef" $ | indent 2 }}
+  providerConfigRef:
+    name: default
+    kind: ClusterProviderConfig
   forProvider:
     roleRef:
       name: eso-{{ $env }}
@@ -71,67 +77,4 @@ spec:
         ]
       }
 {{- end }}
----
-apiVersion: iam.aws.m.upbound.io/v1beta1
-kind: Role
-metadata:
-  name: eso-adhoc
-  namespace: {{ $namespace }}
-  annotations:
-    crossplane.io/external-name: {{ printf "%s-eso-adhoc" $clusterName | quote }}
-spec:
-{{ include "aws-resources.providerConfigRef" . | indent 2 }}
-  forProvider:
-    assumeRolePolicy: |
-      {
-        "Version": "2012-10-17",
-        "Statement": [
-          {
-            "Effect": "Allow",
-            "Action": "sts:AssumeRoleWithWebIdentity",
-            "Principal": {
-              "Federated": {{ $oidcProviderArn | quote }}
-            },
-            "Condition": {
-              "StringEquals": {
-                "{{ $oidcHost }}:sub": "system:serviceaccount:external-secrets:external-secrets-sa-adhoc",
-                "{{ $oidcHost }}:aud": "sts.amazonaws.com"
-              }
-            }
-          }
-        ]
-      }
----
-apiVersion: iam.aws.m.upbound.io/v1beta1
-kind: RolePolicy
-metadata:
-  name: eso-adhoc
-  namespace: {{ $namespace }}
-  annotations:
-    crossplane.io/external-name: secrets-manager-access
-spec:
-{{ include "aws-resources.providerConfigRef" . | indent 2 }}
-  forProvider:
-    roleRef:
-      name: eso-adhoc
-    policy: |
-      {
-        "Version": "2012-10-17",
-        "Statement": [
-          {
-            "Effect": "Allow",
-            "Action": [
-              "secretsmanager:ListSecrets",
-              "secretsmanager:BatchGetSecretValue"
-            ],
-            "Resource": "*"
-          },
-          {
-            "Effect": "Allow",
-            "Action": "secretsmanager:GetSecretValue",
-            "Resource": [
-              "arn:aws:secretsmanager:{{ $clusterRegion }}:{{ $accountID }}:secret:adhoc/cdo/*"
-            ]
-          }
-        ]
-      }
+{{- end }}

@@ -95,6 +95,7 @@ spec:
     zoneId: {{ $zone.resource.status.atProvider.zoneId }}
     records:
       - {{ printf "%s. awsdns-hostmaster.amazon.com. 1 7200 900 1209600 86400" (index $zone.resource.status.atProvider.nameServers 0) | quote }}
+---
 apiVersion: route53.aws.m.upbound.io/v1beta1
 kind: Record
 metadata:

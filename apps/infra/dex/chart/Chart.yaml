@@ -2,7 +2,7 @@ apiVersion: v2
 name: dex
 description: Local chart for Dex
 type: application
-version: 0.1.0
+version: 0.1.2
 
 dependencies:
   - name: dex
