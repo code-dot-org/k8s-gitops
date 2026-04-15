@@ -236,7 +236,7 @@ class ArgoTraceTest < Minitest::Test
       wrap_width: nil
     )
 
-    assert_equal "ArgoCD is running on codeai-k8s-test, but argocd-repo-server is not ready yet", body_text
+    assert_equal "ArgoCD is running on codeai-k8s-test, but argocd --core could not find a ready pod for argocd-repo-server", body_text
   ensure
     ArgoTrace.define_singleton_method(:current_cluster_name, original_cluster_name_method)
   end

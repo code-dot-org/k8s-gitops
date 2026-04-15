@@ -2060,9 +2060,9 @@ module ArgoTrace
     return "ArgoCD not found on #{current_cluster_name}" if argocd_not_found?(inventory)
     if argocd_component_not_ready?(inventory)
       component_name = inventory[:argocd_component_name]
-      return "ArgoCD is running on #{current_cluster_name}, but #{component_name} is not ready yet" if component_name
+      return "ArgoCD is running on #{current_cluster_name}, but argocd --core could not find a ready pod for #{component_name}" if component_name
 
-      return "ArgoCD is running on #{current_cluster_name}, but a required component is not ready yet"
+      return "ArgoCD is running on #{current_cluster_name}, but argocd --core could not find a required ready component pod"
     end
     return "Timed out fetching ArgoCD Applications or ApplicationSets on #{current_cluster_name}" if argocd_timed_out?(inventory)
     return "No ArgoCD Applications or ApplicationSets found on #{current_cluster_name}" if no_argocd_inventory?(inventory)
