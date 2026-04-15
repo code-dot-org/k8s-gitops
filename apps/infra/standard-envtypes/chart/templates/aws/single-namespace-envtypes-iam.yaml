@@ -9,7 +9,7 @@
 apiVersion: iam.aws.m.upbound.io/v1beta1
 kind: Role
 metadata:
-  name: eso-{{ $env }}
+  name: standard-envtypes-eso-{{ $env }}
   namespace: crossplane-system
   annotations:
     argocd.argoproj.io/sync-wave: "-100"
@@ -42,7 +42,7 @@ spec:
 apiVersion: iam.aws.m.upbound.io/v1beta1
 kind: RolePolicy
 metadata:
-  name: eso-{{ $env }}
+  name: standard-envtypes-eso-{{ $env }}
   namespace: crossplane-system
   annotations:
     argocd.argoproj.io/sync-wave: "-100"
@@ -53,7 +53,7 @@ spec:
     kind: ClusterProviderConfig
   forProvider:
     roleRef:
-      name: eso-{{ $env }}
+      name: standard-envtypes-eso-{{ $env }}
     policy: |
       {
         "Version": "2012-10-17",

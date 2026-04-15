@@ -8,7 +8,7 @@
 apiVersion: iam.aws.m.upbound.io/v1beta1
 kind: Role
 metadata:
-  name: eso-adhoc
+  name: standard-envtypes-eso-adhoc
   namespace: crossplane-system
   annotations:
     argocd.argoproj.io/sync-wave: "-100"
@@ -41,7 +41,7 @@ spec:
 apiVersion: iam.aws.m.upbound.io/v1beta1
 kind: RolePolicy
 metadata:
-  name: eso-adhoc
+  name: standard-envtypes-eso-adhoc
   namespace: crossplane-system
   annotations:
     argocd.argoproj.io/sync-wave: "-100"
@@ -52,7 +52,7 @@ spec:
     kind: ClusterProviderConfig
   forProvider:
     roleRef:
-      name: eso-adhoc
+      name: standard-envtypes-eso-adhoc
     policy: |
       {
         "Version": "2012-10-17",
