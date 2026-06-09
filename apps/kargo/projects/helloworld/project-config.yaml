@@ -1,0 +1,9 @@
+apiVersion: kargo.akuity.io/v1alpha1
+kind: ProjectConfig
+metadata:
+  name: kargo-project-helloworld
+  namespace: kargo-project-helloworld
+spec:
+  promotionPolicies:
+    - stage: dev
+      autoPromotionEnabled: true

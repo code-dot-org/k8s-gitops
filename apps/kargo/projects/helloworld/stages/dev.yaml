@@ -1,0 +1,43 @@
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Stage
+metadata:
+  name: dev
+  namespace: kargo-project-helloworld
+spec:
+  requestedFreight:
+    - origin:
+        kind: Warehouse
+        name: kargo-project-helloworld
+      sources:
+        direct: true
+  promotionTemplate:
+    spec:
+      vars:
+        - name: gitopsRepo
+          value: https://github.com/code-dot-org/k8s-gitops.git
+      steps:
+        - uses: git-clone
+          config:
+            repoURL: ${{ vars.gitopsRepo }}
+            checkout:
+              - branch: main
+                path: ./gitops
+        - uses: yaml-update
+          config:
+            path: ./gitops/apps/helloworld/values.yaml
+            updates:
+              - key: image
+                value: docker.io/library/nginx:${{ imageFrom("docker.io/library/nginx").Tag }}
+        - uses: git-commit
+          config:
+            path: ./gitops
+            message: |
+              Promote helloworld dev to ${{ imageFrom("docker.io/library/nginx").Tag }} [skip ci]
+        - uses: git-push
+          config:
+            path: ./gitops
+        - uses: argocd-update
+          config:
+            apps:
+              - name: helloworld
+                namespace: argocd
