@@ -1,0 +1,38 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: helloworld
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    # Authorizes the Kargo dev stage to run argocd-update against this app.
+    kargo.akuity.io/authorized-stage: kargo-project-helloworld:dev
+  labels:
+    app.kubernetes.io/managed-by: kargo
+    kargo.akuity.io/project: kargo-project-helloworld
+spec:
+  project: default
+  sources:
+    # The chart lives in this repo; the image tag comes from values.yaml below,
+    # which the Kargo dev stage rewrites on each promotion.
+    - repoURL: https://github.com/code-dot-org/k8s-gitops.git
+      targetRevision: main
+      path: apps/helloworld/chart
+      helm:
+        releaseName: helloworld
+        valueFiles:
+          - $values/apps/helloworld/values.yaml
+    - repoURL: https://github.com/code-dot-org/k8s-gitops.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: helloworld
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - CreateNamespace=true

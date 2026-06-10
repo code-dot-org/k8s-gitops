@@ -1,0 +1,30 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: helloworld
+  labels:
+    # external-dns maps this label to <value>.k8s.code.org (see apps/infra/external-dns).
+    code.ai/dns-name: {{ .Values.dnsName }}
+  annotations:
+    argocd.argoproj.io/ignore-default-links: "true"
+    link.argocd.argoproj.io/external-link: https://{{ .Values.dnsName }}.k8s.code.org/
+    # ALB settings mirror the proven set used by the Kargo ingress (apps/kargo/values.yaml).
+    # The wildcard ACM cert (*.k8s.code.org) is auto-discovered by host, so no cert ARN needed.
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/backend-protocol: HTTP
+spec:
+  ingressClassName: aws-alb
+  rules:
+    - host: {{ .Values.dnsName }}.k8s.code.org
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: helloworld
+                port:
+                  name: http

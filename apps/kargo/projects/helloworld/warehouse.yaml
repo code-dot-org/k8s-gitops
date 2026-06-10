@@ -1,0 +1,12 @@
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Warehouse
+metadata:
+  name: kargo-project-helloworld
+  namespace: kargo-project-helloworld
+spec:
+  subscriptions:
+    - image:
+        repoURL: docker.io/library/nginx
+        imageSelectionStrategy: SemVer
+        semverConstraint: '>=1.27.0'
+        cacheByTag: true # nginx patch tags (e.g. 1.27.3) are immutable, caching is safe
