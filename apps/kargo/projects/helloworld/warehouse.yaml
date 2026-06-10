@@ -7,6 +7,13 @@ spec:
   subscriptions:
     - image:
         repoURL: docker.io/library/nginx
-        imageSelectionStrategy: SemVer
-        semverConstraint: '>=1.27.0'
-        cacheByTag: true # nginx patch tags (e.g. 1.27.3) are immutable, caching is safe
+        # Track ONE explicit tag instead of enumerating every nginx tag. The Digest
+        # strategy resolves just this tag's manifest (a single pull per poll), so it
+        # can't trip Docker Hub's anonymous pull rate limit the way SemVer discovery did.
+        imageSelectionStrategy: Digest
+        allowTagsRegexes:
+          - '^1\.30\.2-alpine-slim$'
+        # false: this is a moving variant tag (no pinned alpine sub-version), so Kargo
+        # re-resolves its digest each poll and produces new Freight when it's rebuilt.
+        # Still only one tag / one pull, so no rate-limit risk.
+        cacheByTag: false
