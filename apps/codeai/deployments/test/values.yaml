@@ -1,4 +1,4 @@
-image: ghcr.io/code-dot-org/code-dot-org:git-b126038a3b31d9ea84841d360e1917aeb85b095c # updated by k8s-commit-to-kargo-warehouse.yml
+image: ghcr.io/code-dot-org/code-dot-org:git-b5d6809cfe06682df558ee5e5f85766255ca8386 # updated by k8s-commit-to-kargo-warehouse.yml
 dnsName: studio.test
 user:
   uid: 0
