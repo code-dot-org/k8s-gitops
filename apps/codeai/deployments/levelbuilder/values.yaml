@@ -1,4 +1,4 @@
-image: ghcr.io/code-dot-org/code-dot-org:git-9f9baf5743a5020650faf58620f83a6067d11a9f # updated by k8s-commit-to-kargo-warehouse.yml
+image: ghcr.io/code-dot-org/code-dot-org:git-9d3397d08776b1569a988a3cd496e352b6abc462 # updated by k8s-commit-to-kargo-warehouse.yml
 dnsName: studio.levelbuilder
 autoscaling:
   maxReplicas: 1
