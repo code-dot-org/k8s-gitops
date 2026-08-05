@@ -1,4 +1,8 @@
 RAILS_ENV: development
+# The chart pins activeJobWorker.RAILS_ENV to adhoc and does not inherit the
+# chart-wide RAILS_ENV; override it here so the worker runs as this envType.
+activeJobWorker:
+  RAILS_ENV: development
 healthChecks:
   enabled: false
 
