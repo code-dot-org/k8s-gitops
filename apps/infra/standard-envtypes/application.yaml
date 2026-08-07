@@ -20,11 +20,6 @@ spec:
   # versions, and stays correct as the shape of the manifest changes (dataFrom
   # is now a two-element list; indexed JSON pointers would not survive that).
   #
-  # Added in 1021fba, removed by b60928c ("disable SSA on noisy ESO apps",
-  # which removed these but left ServerSideApply=true in place). The drift went
-  # unnoticed until the vendored chart archive was rebuilt, because the stale
-  # archive still declared the defaulted fields.
-  #
   # NOTE: managedFieldsManagers depends on server-side apply for field
   # ownership tracking. If SSA is ever disabled here, switch to jqPathExpressions.
   #============================================================================
