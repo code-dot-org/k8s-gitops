@@ -89,6 +89,32 @@ spec:
         - regexp:
             source: {{ printf "^%s/cdo/(.*)$" .environment_type | quote }}
             target: "$1"
+    #==========================================================================
+    # CloudFormation-provisioned DB endpoints and credentials.
+    #
+    # dashboard declares these as !StackSecret (code-dot-org config.yml.erb),
+    # which resolves by reading the EC2 instance's aws:cloudformation:stack-name
+    # tag. There is no EC2 instance in Kubernetes, so that resolution cannot
+    # work; syncing the secrets here instead means pods read them as CDO_* env
+    # vars and never call Secrets Manager at boot.
+    #
+    # Only single-namespace env types get this. Adhoc deployments have one
+    # CloudFormation stack per adhoc, so there is no CfnStack/adhoc/* path, and
+    # the multi-namespace IAM policy does not grant one.
+    #
+    # NOTE: dataFrom entries merge in order, so a key present under both paths
+    # would take its value from this second entry. The two sets are disjoint
+    # today (<env>/cdo/* holds mysql:// URLs, CfnStack/<env>/* holds hostnames,
+    # ports, and RDS-Proxy-format credential JSON).
+    #==========================================================================
+    - find:
+        path: {{ printf "CfnStack/%s/" .environment_type | quote }}
+        name:
+          regexp: {{ printf "^CfnStack/%s/.*$" .environment_type | quote }}
+      rewrite:
+        - regexp:
+            source: {{ printf "^CfnStack/%s/(.*)$" .environment_type | quote }}
+            target: "$1"
 {{- else }}
 #==============================================================================
 # ClusterExternalSecret fanout for multi-namespace env types like adhoc-*
