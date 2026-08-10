@@ -9,29 +9,6 @@ metadata:
     argocd.argoproj.io/sync-wave: "30"
 spec:
   project: default
-  #============================================================================
-  # The ESO controller writes defaults onto ExternalSecret objects that our
-  # manifests do not declare (creationPolicy, deletionPolicy,
-  # conversionStrategy, decodingStrategy), which Argo otherwise reports as
-  # permanent drift.
-  #
-  # Ignore by field manager rather than by path: this covers every field the
-  # external-secrets controller owns, including ones added by future ESO
-  # versions, and stays correct as the shape of the manifest changes (dataFrom
-  # is now a two-element list; indexed JSON pointers would not survive that).
-  #
-  # NOTE: managedFieldsManagers depends on server-side apply for field
-  # ownership tracking. If SSA is ever disabled here, switch to jqPathExpressions.
-  #============================================================================
-  ignoreDifferences:
-    - group: external-secrets.io
-      kind: ExternalSecret
-      managedFieldsManagers:
-        - external-secrets
-    - group: external-secrets.io
-      kind: ClusterExternalSecret
-      managedFieldsManagers:
-        - external-secrets
   sources:
     - repoURL: https://github.com/code-dot-org/k8s-gitops.git
       targetRevision: main
@@ -51,8 +28,5 @@ spec:
       prune: true
       selfHeal: true
     syncOptions:
-      # Make the sync operation honor ignoreDifferences, not just the diff view,
-      # so selfHeal does not fight the ESO controller on every reconcile.
-      - RespectIgnoreDifferences=true
       - ServerSideApply=true
       - CreateNamespace=true
