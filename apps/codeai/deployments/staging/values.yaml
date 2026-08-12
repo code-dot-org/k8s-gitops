@@ -1,4 +1,4 @@
-image: ghcr.io/code-dot-org/code-dot-org:git-ec871c3fda520feff2131893da51ecfc85476006
+image: ghcr.io/code-dot-org/code-dot-org:git-fc95f3d1777b44217d00a80711c9fb623e1746e7 # updated by k8s-commit-to-kargo-warehouse.yml
 dnsName: studio.staging
 user:
   uid: 0
