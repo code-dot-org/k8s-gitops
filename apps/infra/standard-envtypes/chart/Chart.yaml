@@ -3,8 +3,3 @@ name: standard-envtypes
 description: Standard environment-type ESO resources for codeai-k8s
 type: application
 version: 0.1.5
-
-dependencies:
-  - name: eso-per-envtype
-    repository: file://../../charts/eso-per-env
-    version: 0.1.0

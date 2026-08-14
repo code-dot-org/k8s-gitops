@@ -1,6 +1,0 @@
-dependencies:
-- name: eso-per-envtype
-  repository: file://../../charts/eso-per-env
-  version: 0.1.0
-digest: sha256:e5ffa1139a1c3179a406c24383f8b99d8d49a07eaaabac3fa60f31adb957f1d2
-generated: "2026-04-03T10:51:56.494445-10:00"

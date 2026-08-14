@@ -79,9 +79,18 @@ spec:
     name: aws-secrets-manager-store
     kind: SecretStore
   target:
+    # These four fields (here and in each find block below) are the CRD
+    # defaults. We declare them anyway: if we omit them the API server fills
+    # them in at admission, and Argo then reports the difference between our
+    # manifest and the live object as permanent drift. Declaring them keeps
+    # desired == live and needs no ignoreDifferences in application.yaml.
+    creationPolicy: Owner
+    deletionPolicy: Retain
     name: cdo-external-secrets
   dataFrom:
     - find:
+        conversionStrategy: Default
+        decodingStrategy: None
         path: {{ printf "%s/cdo/" .environment_type | quote }}
         name:
           regexp: {{ printf "^%s/cdo/.*$" .environment_type | quote }}
@@ -102,15 +111,24 @@ spec:
     # CloudFormation stack per adhoc, so there is no CfnStack/adhoc/* path, and
     # the multi-namespace IAM policy does not grant one.
     #
+    # Matched on the db_ prefix rather than the whole path: every key dashboard
+    # needs from here starts with db_ (db_cluster_id, db_endpoint_*,
+    # db_credential_*), and CfnStack/<env>/ also holds unrelated keys such as
+    # `chef` that would otherwise be swept in. RE2 has no negative lookahead, so
+    # a positive match is the way to express this -- and it stays correct as
+    # other things get filed under this prefix.
+    #
     # NOTE: dataFrom entries merge in order, so a key present under both paths
     # would take its value from this second entry. The two sets are disjoint
     # today (<env>/cdo/* holds mysql:// URLs, CfnStack/<env>/* holds hostnames,
     # ports, and RDS-Proxy-format credential JSON).
     #==========================================================================
     - find:
+        conversionStrategy: Default
+        decodingStrategy: None
         path: {{ printf "CfnStack/%s/" .environment_type | quote }}
         name:
-          regexp: {{ printf "^CfnStack/%s/.*$" .environment_type | quote }}
+          regexp: {{ printf "^CfnStack/%s/db_.*$" .environment_type | quote }}
       rewrite:
         - regexp:
             source: {{ printf "^CfnStack/%s/(.*)$" .environment_type | quote }}
@@ -139,9 +157,15 @@ spec:
       name: aws-secrets-manager-store-{{ .environment_type }}
       kind: ClusterSecretStore
     target:
+      # CRD defaults, declared to avoid Argo drift. See the ExternalSecret
+      # branch above.
+      creationPolicy: Owner
+      deletionPolicy: Retain
       name: cdo-external-secrets
     dataFrom:
       - find:
+          conversionStrategy: Default
+          decodingStrategy: None
           path: {{ printf "%s/cdo/" .environment_type | quote }}
           name:
             regexp: {{ printf "^%s/cdo/.*$" .environment_type | quote }}
