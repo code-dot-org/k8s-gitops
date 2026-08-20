@@ -1,4 +1,4 @@
-image: ghcr.io/code-dot-org/cdo-rails@sha256:50c4d2a837031fc6deedae2053325502b9bea4c561f13e8ad8c08b617beb65d9
+image: ghcr.io/code-dot-org/cdo-rails@sha256:849dc2f4a15de02c0951f4688686b70d25169e8be72b3fc976924616f49a95b1
 dnsName: studio.staging
 user:
   uid: 0
