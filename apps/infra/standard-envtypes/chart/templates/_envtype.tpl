@@ -87,6 +87,24 @@ spec:
     creationPolicy: Owner
     deletionPolicy: Retain
     name: cdo-external-secrets
+{{- if .compose_db_urls }}
+    template:
+      engineVersion: v2
+      # Merge renders these keys on top of the dataFrom-synced keys; the
+      # default (Replace) would drop every other key from the Secret.
+      mergePolicy: Merge
+      data:
+        # Compose the app's mysql:// URLs from the CloudFormation-provisioned
+        # credentials and cluster writer endpoint synced by the CfnStack find
+        # block below. This overrides the <env>/cdo/db_writer and db_reader
+        # values from secrets manager.
+        #
+        # Every key referenced here must exist in Secrets Manager for each env
+        # type this renders for (see compose_db_url_environment_types in
+        # values.yaml): a missing key fails the entire Secret sync.
+        db_writer: {{ `mysql://{{ (.db_credential_writer | fromJson).username }}:{{ (.db_credential_writer | fromJson).password }}@{{ .db_endpoint_writer }}:{{ .db_endpoint_writer_port }}/` | quote }}
+        db_reader: {{ `mysql://{{ (.db_credential_reader | fromJson).username }}:{{ (.db_credential_reader | fromJson).password }}@{{ .db_endpoint_writer }}:{{ .db_endpoint_writer_port }}/` | quote }}
+{{- end }}
   dataFrom:
     - find:
         conversionStrategy: Default
@@ -119,9 +137,10 @@ spec:
     # other things get filed under this prefix.
     #
     # NOTE: dataFrom entries merge in order, so a key present under both paths
-    # would take its value from this second entry. The two sets are disjoint
-    # today (<env>/cdo/* holds mysql:// URLs, CfnStack/<env>/* holds hostnames,
-    # ports, and RDS-Proxy-format credential JSON).
+    # takes its value from this second entry. The db_credential_* keys ARE
+    # present under both (e.g. staging/cdo/db_credential_writer exists alongside
+    # CfnStack/staging/db_credential_writer), and the CfnStack value winning is
+    # intended.
     #==========================================================================
     - find:
         conversionStrategy: Default

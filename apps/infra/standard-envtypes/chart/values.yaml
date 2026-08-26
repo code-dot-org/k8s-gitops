@@ -11,3 +11,19 @@ adhoc:
   environment_type: adhoc
   multi_namespace_regexes:
     - "^adhoc-.*"
+
+# Env types whose db_writer / db_reader URLs are composed (via the
+# ExternalSecret's target.template) from the CloudFormation-provisioned
+# CfnStack/<env>/db_* secrets, overriding the frozen <env>/cdo/ values.
+#
+# Only list env types verified to have CfnStack/<env>/db_credential_writer,
+# db_credential_reader, db_endpoint_writer, and db_endpoint_writer_port in
+# Secrets Manager: an ESO template that references a missing key fails the
+# entire cdo-external-secrets sync for that env type.
+#
+# production is deliberately absent: no CfnStack/production/* secrets exist
+# (its legacy CloudFormation stack is not named "production").
+compose_db_url_environment_types:
+  - levelbuilder
+  - staging
+  - test
