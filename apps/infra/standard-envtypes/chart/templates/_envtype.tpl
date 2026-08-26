@@ -97,15 +97,7 @@ spec:
         # Compose the app's mysql:// URLs from the CloudFormation-provisioned
         # credentials and cluster writer endpoint synced by the CfnStack find
         # block below. This overrides the <env>/cdo/db_writer and db_reader
-        # values, which have been frozen since 2019 and reference the retired
-        # `application-writer` MySQL user (renamed to `writer` and put under
-        # Custom::SQLUser provisioning in code-dot-org #52796/#56431).
-        #
-        # The credential passwords are generated with ExcludePunctuation, so
-        # embedding them in a URL without percent-encoding is safe. db_reader
-        # uses the SELECT-only `reader` user against the writer endpoint:
-        # CloudFormation publishes no direct reader endpoint, and routing reads
-        # through the RDS Proxy reader endpoint is a separate decision.
+        # values from secrets manager.
         #
         # Every key referenced here must exist in Secrets Manager for each env
         # type this renders for (see compose_db_url_environment_types in
@@ -148,8 +140,7 @@ spec:
     # takes its value from this second entry. The db_credential_* keys ARE
     # present under both (e.g. staging/cdo/db_credential_writer exists alongside
     # CfnStack/staging/db_credential_writer), and the CfnStack value winning is
-    # intended: it is the live, CloudFormation-managed credential, while the
-    # <env>/cdo/ copies are frozen 2019-era values.
+    # intended.
     #==========================================================================
     - find:
         conversionStrategy: Default
