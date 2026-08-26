@@ -2,4 +2,4 @@ apiVersion: v2
 name: standard-envtypes
 description: Standard environment-type ESO resources for codeai-k8s
 type: application
-version: 0.1.5
+version: 0.1.6

@@ -11,5 +11,6 @@
   "multi_namespace_regexes" nil
   "iam_role_arn" (printf "%s:role/%s-eso-%s" $iamArnPrefix $clusterName $env)
   "region" $.Values.codeai_cluster_config.cluster_region
+  "compose_db_urls" (has $env ($.Values.compose_db_url_environment_types | default list))
 ) | trim }}
 {{- end }}
