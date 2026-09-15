@@ -1,4 +1,0 @@
-# Image tag is managed by Kargo (kargo-project-helloworld "dev" stage promotions).
-# A real starting tag keeps the app healthy before the first promotion.
-image: docker.io/library/nginx:1.30.2-alpine-slim
-dnsName: hello

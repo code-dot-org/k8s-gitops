@@ -1,5 +1,0 @@
-apiVersion: v2
-name: helloworld
-description: Minimal static nginx app used to exercise the Kargo image pipeline
-type: application
-version: 0.1.0
