@@ -1,191 +1,115 @@
 ## Context
 
-`codeai-k8s` is an EKS Auto Mode cluster in `us-east-1`. ArgoCD reads infrastructure and application configuration from this repository. The root ApplicationSet discovers `apps/*/application.yaml` and waits for the `infra` bootstrap group before starting other applications. Frontend nodes carry a scheduling taint.
+`codeai-k8s` is an EKS Auto Mode cluster managed through ArgoCD. Root discovery already includes `apps/*/application.yaml`; the `infra` bootstrap group gates application startup. The new monitoring application must be outside that group.
 
-The user has confirmed an existing Amazon Managed Grafana (AMG) workspace and excluded Grafana Cloud on budget grounds. The adjacent `infrastructure/observability/opentofu/environments/prod/main.tf` composes existing AMG and Amazon Managed Service for Prometheus (AMP) modules. The Grafana module owns SAML, workspace IAM/query policies, its OpenTofu service account/token, data sources, folders, dashboards, alerts, and the root notification policy. These are code-confirmed definitions; deployed state, ingestion, effective permissions, and incremental capacity/budget have not been verified live.
-
-`infrastructure/observability/dashboards/grafana` builds dashboards and alert groups from TypeScript using the Grafana Foundation SDK. `yarn build` writes `dist/`; the production OpenTofu environment's `dashboards` symlink points there. Stable data-source UIDs are shared between HCL and `src/lib/config.ts`. Existing views include Rack/API, authentication, and CloudWatch ActiveJob metrics. Observability is currently commented out of both OpenTofu CI workspace matrices, and those workflows do not build the TypeScript package. Comments describing a CI build do not establish a working deployment pipeline.
-
-In the adjacent `code-dot-org` repository, Dashboard exports OpenTelemetry traces. The Chef collector converts Rack spans into request metrics before sampling traces and sends those metrics to AMP using SigV4. That collector is a host service; no Kubernetes equivalent was found in the checked manifests. Its host-oriented labels need adaptation when a collector receives telemetry from multiple pods.
-
-`dashboard/app/jobs/concerns/active_job_metrics.rb` already emits queue, failure, wait, and execution metrics to the `code-dot-org/ActiveJob` CloudWatch namespace. `bin/cron/report_activejob_metrics` refreshes overall queue metrics through Chef cron. The worker-count implementation inspects local processes, and the existing Grafana dashboard includes EC2 daemon CPU/memory panels. These need Kubernetes-specific validation and adaptation; the existing dashboard alone does not prove Kubernetes coverage.
-
-The platform team owns collection and AWS access. Application owners define useful request and worker signals. The AMG administrator supplies workspace access, and the budget owner sets acceptable incremental spend.
+`infrastructure/observability/opentofu/environments/prod` defines Amazon Managed Grafana (AMG), Amazon Managed Service for Prometheus (AMP), and their data-source connection. Its TypeScript dashboard package generates JSON consumed by OpenTofu. These definitions have been inspected in code; live access, configuration, and existing collection still need verification. Application observability in `code-dot-org` is a separate project.
 
 ## Goals / Non-Goals
 
-**Goals:**
+**Current task:** write and validate the local implementation files using repository
+definitions and OpenTofu references. Live AWS discovery, real infrastructure plans,
+publication, deployment, and rollout verification are outside this task. They are
+documented below for a later, separately authorized rollout and do not block the
+local implementation.
 
-- Provide cluster, node, workload, application, and selected log visibility in the existing AMG workspace.
-- Use Prometheus-compatible metrics and OpenTelemetry application telemetry with a reproducible GitOps deployment.
-- Reuse AMP and existing application instrumentation where confirmed; preserve Sentry behavior.
-- Keep application startup independent of collector or backend availability.
-- Measure coverage, delivery reliability, alert usefulness, and incremental cost before production expansion.
+**V1 goal:** Open one AMG dashboard and see current Kubernetes infrastructure health without changing the application or introducing another telemetry backend.
 
-**Non-Goals:**
+**Included:** node readiness and allocatable capacity, workload availability, pod state/restarts, container CPU/memory, and basic collection health.
 
-- Grafana Cloud subscriptions or features that require its Kubernetes Monitoring application.
-- A new AMG workspace, migration of existing shared workspaces, or teardown of existing telemetry stores.
-- Operating a full local Prometheus database, Loki, Tempo, or a Grafana server.
-- Changing authentication for existing AMG users or replacing Sentry.
-- Initial deployment of eBPF instrumentation, profiling, energy metrics, or comprehensive AWS cost accounting.
+**Deferred:** logs/events, new alerts/notification routes, recording rules, detailed host/control-plane diagnostics, application telemetry, high availability, persistent buffering, CI automation, and a formal production-promotion process. No Grafana Cloud, local Prometheus database, or additional AMG/AMP workspace.
 
 ## Decisions
 
-### 1. Use AMG with AMP and CloudWatch
+### 1. Use one collector and a small chart composition
 
-AMG queries metrics in AMP and selected logs in CloudWatch. Use the AMP data-source plugin appropriate to the installed AMG version, with the workspace IAM role providing query access. Collectors receive separate, resource-scoped writer roles. Prefer existing OIDC service-account IAM patterns; do not introduce static AWS keys.
+Add `apps/monitoring/application.yaml` and a local wrapper chart with pinned `grafana/alloy` and `prometheus-community/kube-state-metrics` dependencies. Reuse compatible existing exporters where discovered. Use the standalone Alloy chart rather than the broader `grafana/k8s-monitoring` bundle: this scope needs a few explicit scrape jobs and no operator, custom resources, or multi-signal deployment machinery.
 
-Reuse the workspaces already owned by the infrastructure repository. The production environment exports AMG ID/endpoint and AMP ID/ARN/remote-write URL. Publish only the needed nonsecret destination identifiers and region into cluster configuration; keep Grafana provider tokens and OpenTofu state out of Kubernetes. Verify that the Chef destination and these AMP outputs agree before enabling ingestion. An unexpected missing or unsuitable workspace is an inventory discrepancy to resolve with its owner, not a trigger to create a replacement automatically.
+Run Alloy as a single-replica Deployment with a `Recreate` update strategy and clustering/autoscaling disabled. This intentionally trades brief update gaps for a simple, single scrape owner. kube-state-metrics also runs as one instance with Recreate updates if this project installs it, avoiding overlapping exporter instances. Keep both components' services internal. Validate the selected chart versions and rendered configuration before deployment; bump the wrapper chart version for changes.
 
-The configured AMG version is `12.4`, while the HCL and TypeScript still specify the core `prometheus` data-source type with SigV4 (UID `effqou9gjnlkwa`). AWS documents that AMG 12 removes core-plugin SigV4 and migrates those data sources to the AMP plugin. Inspect the live version, plugin type, and migration state; reconcile HCL and SDK references together before a shared apply, preserving the UID and existing consumers. The CloudWatch source already exists as `managed-cloudwatch`. This is a compatibility preflight, not evidence of a live outage.
+The [standalone Alloy chart](https://grafana.com/docs/alloy/latest/configure/kubernetes/) accepts explicit collector configuration, and its [values](https://github.com/grafana/alloy/blob/main/operations/helm/charts/alloy/values.yaml) support choosing the controller and replica count.
 
-This follows the data-store separation in AWS's EKS monitoring reference solution. That solution is a reference for compatible metrics, rules, and dashboards, not a deployment template to apply wholesale to this Auto Mode cluster.
+### 2. Retain Alloy with a narrower rationale
 
-Alternative: a local Prometheus server queried by AMG. This adds storage, availability, and private connectivity work. Revisit it only if AMP cost is unacceptable or local query/rule evaluation during a backend outage becomes a requirement.
+Alloy is an open-source OpenTelemetry Collector distribution with native Prometheus components. Choose it for the direct discovery, scraping, relabeling, and remote-write path to AMP. The upstream OpenTelemetry Collector Contrib remains a viable alternative and offers a configuration model already used by the application team. AMG does not require either distribution. [Alloy overview](https://grafana.com/docs/alloy/latest/introduction/)
 
-### 2. Use Alloy for Kubernetes collection and validate application consolidation
+The tradeoff is maintaining a small Alloy configuration for Kubernetes alongside independently owned application Collector configuration. Clustering and the broad monitoring bundle are not v1 benefits because this design does not use them. Both distributions can provide AWS request signing and buffered remote write; we are not claiming a cost or performance advantage. No Rails migration or collector comparison project is required for v1.
 
-**Decision:** Use Grafana Alloy as the default collector for new Kubernetes infrastructure metrics. The expected benefit is less configuration to assemble and maintain through the `grafana/k8s-monitoring` chart, together with built-in coordination of Prometheus scraping across replicas. Consolidating the Rails telemetry pipeline on Alloy remains subject to the application validation below.
+### 3. Collect only the dashboard's inputs
 
-Alloy is an open-source distribution of the OpenTelemetry Collector with additional Prometheus components. The alternative considered here is the upstream OpenTelemetry Collector Contrib distribution. Both support our telemetry architecture; AMG does not require Alloy, and existing dashboards depend on metric names, labels, and units rather than the collector distribution. [Alloy overview](https://grafana.com/docs/alloy/latest/introduction/)
-
-#### Rationale and tradeoffs
-
-| Concern | Alloy | Upstream OpenTelemetry Collector Contrib |
-| --- | --- | --- |
-| Kubernetes setup | The selected monitoring chart generates collection configuration and can deploy supporting exporters such as kube-state-metrics and node exporter. | We would assemble the Collector configuration and supporting exporter deployments for the same coverage. |
-| Scraping across replicas | Opt-in clustering assigns scrape targets between peers. | Requires explicit target sharding or a component such as the OpenTelemetry Operator's Target Allocator. |
-| Existing Rails pipeline | The chosen Alloy component configuration requires adapting and revalidating the current pipeline. | Can reuse more of the existing Collector YAML, with Kubernetes-specific identity and deployment changes. |
-| AMP delivery | Supports AWS request signing, retries, and disk buffering. | Supports equivalent delivery capabilities; these are requirements for either choice. |
-
-The chart integration and scrape coordination are the main reasons to select Alloy. The [Kubernetes monitoring chart](https://github.com/grafana/k8s-monitoring-helm) packages exporters and collection configuration, while [Alloy clustering](https://grafana.com/docs/alloy/latest/reference/components/prometheus/prometheus.scrape/#clustering) distributes scrape ownership. The upstream Collector also supports distributed scraping through [sharding or a Target Allocator](https://opentelemetry.io/docs/collector/scaling/). Neither approach removes the need to validate coverage and duplicate collection during scaling.
-
-The accepted cost is learning and maintaining Alloy's component configuration and the monitoring chart's generated resources alongside our existing Collector YAML. Reduced Kubernetes configuration work is an expected operational benefit to verify during the pilot, not a measured cost or performance advantage. Both [Alloy remote write](https://grafana.com/docs/alloy/latest/reference/components/prometheus/prometheus.remote_write/) and the upstream Collector's [remote-write exporter](https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/exporter/prometheusremotewriteexporter/README.md) and [AWS signing extension](https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/extension/sigv4authextension/README.md) provide the relevant AMP delivery capabilities. The distribution choice does not by itself reduce AMP ingestion charges or settle CloudWatch log collection.
-
-#### Application pipeline validation
-
-The existing `code-dot-org/cookbooks/cdo-otel-collector/templates/otel-config.yaml.erb` already receives application telemetry, generates Rack metrics before trace sampling, writes to AMP, and exports sampled traces to Sentry. Reuse that behavior as the reference. Before enabling an Alloy application pipeline, compare known request/error counts, histogram units and buckets, source labels, sampling order, Sentry delivery, and resource use with the existing pipeline. Confirm that consolidation reduces maintenance enough to justify adapting its configuration.
-
-If the selected Alloy release cannot preserve those behaviors or introduces disproportionate migration work, retain upstream Collector Contrib for Kubernetes application telemetry and keep Alloy responsible for infrastructure scraping. That fallback adds a second collector configuration to operate and must have explicit ownership without duplicate ingestion. Revisit the infrastructure collector choice if the pinned chart and clustering provide insufficient benefit over a Contrib deployment. This decision does not migrate the existing Chef-managed host collectors.
-
-#### Deployment constraints
-
-Use a pinned `grafana/k8s-monitoring` chart through a local wrapper, configured explicitly for AMP and with Grafana Cloud integrations disabled. Verify the selected release's values schema, dependencies, operator CRDs, Helm hooks, and ArgoCD behavior before deployment. No chart upgrade is automatic.
-
-Enable Kubernetes metrics and the backing services needed by the selected dashboards: kube-state-metrics, node metrics, and kubelet/cAdvisor collection. Reuse compatible exporters discovered during inventory to avoid duplicate scraping. Confirm which EKS control-plane metrics are exposed and document unavailable signals.
-
-Metric collectors coordinate scrape ownership. Node-level exporters receive the tolerations needed to cover frontend and system nodes. Application OTLP receivers have an internal Service and explicit resource limits; production placement and replica count follow the observed traffic and availability target. Stateful span aggregation needs distinct collector-series identity when multiple replicas export to AMP.
-
-Alternative: AMP managed scrapers. They reduce collector maintenance but add service charges and do not replace the application OTLP pipeline. Compare costs during inventory and retain Alloy as the default unless measured requirements favor managed scraping.
-
-### 3. Keep monitoring outside the bootstrap gate
-
-Add `apps/monitoring/application.yaml`, without the `code.org/bootstrap-group: infra` label. Use `apps/monitoring/chart/` for Kubernetes resources. Existing root discovery handles the application; changing the root ApplicationSet is not expected.
-
-Keep the three repositories' responsibilities explicit:
-
-| Repository | Ownership |
+| Source | V1 signals |
 | --- | --- |
-| `k8s-gitops` | Argo application, namespace, collectors/exporters, service accounts, cluster IAM integration, and deployment values |
-| `infrastructure/observability` | Shared AMG/AMP stores, workspace query IAM, CloudWatch log-group lifecycle, AMP rule namespaces, dashboard/alert source and provisioning, and Grafana notification routing |
-| `code-dot-org` | Rails/worker instrumentation and any required Helm/Kustomize application templates |
+| kube-state-metrics | Node readiness/allocatable capacity, workload desired/ready counts, pod phase, container restarts, and resource requests/limits |
+| Kubelet/cAdvisor | Container CPU usage and memory working set, attributed to node/namespace/pod/container |
+| Scrape results and Alloy self-metrics | Target health, sample freshness, and delivery errors/backlog |
 
-Use the existing cluster OIDC/service-account IAM pattern for scoped collector writers, referencing the AMP ARN from infrastructure outputs. Record one owner for each IAM resource; do not manage the same resource in both OpenTofu and Crossplane. Owned log groups and AMP rule namespaces belong alongside the existing infrastructure modules and survive Argo application removal.
+Start at a 60-second scrape interval. Define the metric allowlist and dashboard queries together. Attach a stable cluster label and preserve applicable source labels; avoid copying arbitrary application labels. Discover and authenticate to kubelets through a verified path that reaches all expected nodes, including frontend-tainted nodes. Central scraping does not require a collector on every node. No node-exporter DaemonSet or privileged host mounts in v1.
 
-Extend `observability/dashboards/grafana/src/` and its `src/index.ts` registry, then consume the generated JSON through the existing Grafana module. New dashboard resources go in `dashboards.tf`; new alert groups use the existing `alerts.tf` loader and feature-to-folder mapping. Keep new data transformations in `locals.tf` per infrastructure repository guidance. Reuse the module's provider authentication and token rotation; do not introduce an additional Grafana API reconciler or provisioner in `apps/monitoring/`. Review the whole shared OpenTofu plan for unrelated changes before applying it.
+Inventory existing targets first to avoid duplicate scraping. Missing kubelet access is a concrete prerequisite to resolve, not a reason to quietly show missing CPU/memory as healthy. Do not scrape application endpoints or generate request/span metrics.
 
-Run dependency installation from the lockfile, `yarn typecheck`, and `yarn build` before OpenTofu validation/plan so the symlink resolves complete artifacts. Use a documented manual build/plan/apply initially, unless CI is deliberately enabled with dashboard-source path triggers, generated artifacts available at plan and apply, required credentials, and separate plan/apply environments. Never assume merge-to-main already deploys observability. Grafana provisioning remains independent of application boot.
+### 4. Reuse backends and existing identity patterns
 
-Application telemetry settings belong in `apps/codeai/envTypes/` and deployment values. The adjacent chart already supports `extraEnv`; worker settings use `activeJobWorker.extraEnv`. Any required application template changes must maintain the relevant Helm/Kustomize parity.
+Use OpenTofu to resolve the AMP destination; do not manually configure workspace ARNs or IDs. `cluster-infra/monitoring-config.tf` reads `prometheus_workspace_arn` and `prometheus_remote_write_url` from the existing infrastructure observability state and derives the region from the ARN. The existing cluster-config publisher includes these as `amp` in `apps/infra/codeai-cluster-config.values.yaml`, which the monitoring Argo app already consumes. Cluster account and OIDC values also remain OpenTofu-generated. Only enablement and collection settings belong in the hand-maintained monitoring values file.
 
-### 4. Preserve application metric accuracy and source identity
+This follows the repository's existing remote-state-to-GitOps pattern. Generating cluster configuration now requires read access to the observability state snapshot; only selected non-secret outputs are published, and neither Argo nor Alloy gets state access. The existing GitHub publisher commits directly to `main` on apply. Publication is a deployment-related operation and remains on hold; do not edit the generated file by hand or apply merely to discover an ARN.
 
-Adapt the existing Rack span-metrics pipeline for Kubernetes, using Alloy after the application validation in decision 2 or the documented upstream Collector fallback. Attribute telemetry to the originating service, environment, cluster, namespace, pod, and service instance, with a documented mapping from OpenTelemetry attributes to query labels. Do not substitute the gateway pod's identity for application identity. Use Kubernetes metadata enrichment and explicit resource attributes where needed.
+Grant the collector `aps:RemoteWrite` for that workspace through the existing cluster workload IAM pattern. Use scoped Kubernetes read permissions, authenticated TLS, and no static AWS keys. Keep Grafana administrative credentials out of the cluster.
 
-Generate request metrics from the full received Rack span stream before trace sampling. Existing consumers query `rack_calls_total` and `rack_duration_milliseconds_bucket`; preserve names, millisecond units, buckets, and bounded dimensions unless a coordinated migration is documented. Rack/Auth queries currently select `process_pid="", host!=""`, and production alerts also match `environment="production"`. Kubernetes series could be excluded or unintentionally included by those selectors. Define an explicit cluster/runtime scope, adapt source selectors and drilldown links, and validate legacy and Kubernetes traffic together before enabling application ingestion. Preserve legacy alert scope, using an explicit legacy selector where necessary; do not fabricate a gateway host label to satisfy old queries. Verify that a request is counted once and collector scaling does not merge independent counters. Preserve the configured Sentry trace path and validate compatibility with the pinned collector.
+Reuse the existing AMG data source and query role. Check the live plugin before provisioning: the repo targets AMG 12.4 but declares the core Prometheus plugin with SigV4, while AWS documents a migration to the AMP plugin starting with AMG 12. Make only a necessary compatibility adjustment, preserving identifiers and existing consumers; a wider workspace migration is separate work. [AWS plugin migration](https://docs.aws.amazon.com/grafana/latest/userguide/prometheus-manually-adding.html)
 
-Reuse CloudWatch ActiveJob signals and the existing dashboard before adding metrics. Check Kubernetes worker `PutMetricData` access, backend compatibility, scheduled queue reporting, and dimensions. Environment-only dimensions can merge independent deployments, while a queue shared with EC2 intentionally represents both runtimes. Document queue versus worker scope and avoid duplicate scheduled reporters for the same queue. Replace local-process-derived worker totals and EC2-only resource panels with correctly scoped Kubernetes signals. Add only missing backlog, age, failure, or processing-duration coverage; there is no requirement to duplicate suitable CloudWatch signals into AMP. Keep database-backed measurements bounded in query cost and permissions. Telemetry failures must not prevent requests or jobs from completing.
+### 5. Use bounded ephemeral storage and accept gaps
 
-### 5. Send selected logs and events to CloudWatch
+Set CPU/memory and ephemeral-storage requests/limits. Mount Alloy's write-ahead log (WAL), its disk buffer for unsent metrics, on a size-limited `emptyDir` and configure finite retention. Do not provision persistent volumes. The WAL may retain data across a container restart within the same pod, but pod replacement loses unsent data. Outages or exhausted storage can cause missing samples; v1 offers no lossless-delivery or availability guarantee. [Alloy buffering](https://grafana.com/docs/alloy/latest/reference/components/prometheus/prometheus.remote_write/)
 
-Inventory current log shipping before adding agents. Use a pinned, AWS-supported CloudWatch log shipper compatible with Auto Mode for selected pod stdout/stderr logs, and a single active Kubernetes event collection path. Verify the concrete shipper and event-export mechanism during implementation; the metrics chart's log destination must not be assumed to support CloudWatch automatically.
+Expose freshness and delivery health in the dashboard and document how to inspect collector logs. Collector readiness alone is not proof that AMP is receiving data. No new paging or external monitoring-loss check is part of v1.
 
-Start with explicit infrastructure and staging namespace allowlists. Apply agreed redaction before export, preserve source metadata, and set finite retention on owned log groups. Keep event collection distinct from EKS audit/control-plane log settings. Do not enable broad Container Insights collection or change existing audit logging as a side effect.
+### 6. Add one dashboard through the existing owner
 
-Alternative: self-hosted Loki. CloudWatch integrates with the existing AWS workspace and avoids a new log storage service to operate.
+Add one Kubernetes overview builder/registry entry in `infrastructure/observability/dashboards/grafana` and its resource in the Grafana OpenTofu module, with a stable dashboard identifier and an appropriate managed folder. Query raw metrics directly; no new AMP recording-rule namespaces, alert groups, or notification policies.
 
-### 6. Bound collection and verify delivery
+Provide node readiness/capacity, workload availability, pod status/restarts, container CPU/memory, and collection-health sections. Use the cluster label throughout and namespace/pod filters where applicable. Show missing/stale data explicitly. Container usage and node allocatable capacity must be labeled distinctly; v1 does not promise detailed host CPU, disk, or network diagnostics.
 
-Start infrastructure scraping at 60 seconds, with a metric allowlist derived from the dashboards and rules actually provisioned. Record the collection scope, estimated series/sample volume, log volume, retention, collector resources, and query assumptions in the rollout plan. The chosen allowlist must retain required recording-rule inputs.
+Use the existing manual process: install dependencies from the lockfile, run `yarn typecheck` and `yarn build`, review the shared OpenTofu plan, then apply. Observability is currently excluded from the CI workspace matrices; enabling CI and redesigning token rotation are separate improvements. Reuse existing authentication and verify it works.
 
-Use remote-write buffering with an explicit storage path, capacity, and retry/retention window. Select persistent storage for critical buffers when restart survival is required. For each signal, document which restarts or node replacements can lose data; local node storage is not durable across node deletion. Monitor queue pressure, export errors, dropped data, and ingestion freshness.
+### 7. Keep application observability independent
 
-Configure finite memory and disk use. Application exporters remain asynchronous and fail independently of application readiness. Restrict OTLP receiver access to intended workloads and use TLS for external delivery.
+Only `k8s-gitops` and the existing infrastructure dashboard owner need implementation changes. No edits, release dependency, instrumentation injection, or application telemetry overrides in `code-dot-org` or `apps/codeai/`. Preserve existing Rails/worker collectors, Sentry routing, dashboards, and alerts. Missing request/queue signals are outside v1; worker pods are visible through ordinary Kubernetes resource and availability metrics.
 
-### 7. Provision useful dashboards and alerts
+## Deferred Deployment Inputs
 
-Add Kubernetes dashboard/alert builders to the existing TypeScript package and matching folders/resources to the Grafana module. Reuse Rack/Auth and ActiveJob components where their signal semantics fit; retain established UIDs and explicit source filters. Start Kubernetes views from versioned assets compatible with the collected metric names. Add required AMP recording-rule namespaces through the existing Prometheus OpenTofu module. Use AMG-managed alerts with one evaluation owner per alert, preserving unrelated rules.
+Resolve during a separately authorized rollout, before live ingestion. These are
+not inputs the user must provide to write or validate the local files:
 
-Dashboards cover node resources, workload availability and restarts, request rate/errors/duration, worker queue health, collection health, and scoped log queries. Alerts include an owner, severity, runbook, and notification destination. Configure missing-data behavior and delays deliberately. `notifications.tf` owns the single root routing policy; extend it with a scoped Kubernetes child route. Contact points are manually created in AMG, with webhook URLs kept outside state. Confirm the designated test contact point and authorization to send test notifications; its current name `test` alone does not grant authorization. An administrator supplies any missing contact point before a plan referencing it is applied. Preserve other child routes and SAML settings. Add an external availability check or reuse an existing one so total loss of cluster telemetry is detectable.
+1. Existing AMP/AMG identity, working query/provisioning access, and the collector's workload IAM path.
+2. Existing collection and authenticated kubelet access on all expected nodes.
+3. A rough ingestion/compute cost estimate and the user's acceptable incremental spending limit.
 
-## Risks / Trade-offs
+Log retention, alert recipients, queue topology, CI credentials, and high-availability targets are not v1 questions. Existing AMP retention remains unchanged.
 
-- Declared resources differ from deployed state -> Verify infrastructure outputs, Chef destination, and live AMG/AMP configuration; confirm incremental budget before ingestion starts.
-- AMG 12 plugin migration differs from HCL/SDK references -> Reconcile the existing data source and all managed consumer types without changing its UID before shared provisioning.
-- Generated dashboards or provider credentials are unavailable at apply -> Build before planning, verify the service-account token lifecycle, and document the manual deployment path while observability CI remains disabled.
-- Legacy selectors or host-based worker metrics misrepresent Kubernetes -> Validate mixed-runtime queries, scheduled reporters, worker totals, and alert scope before application rollout.
-- Auto Mode host access and taints leave gaps -> Verify actual nodes and exporter targets, including frontend nodes, before declaring coverage complete.
-- Chart operator hooks interfere with Argo deletion -> Render and inspect the selected chart and exercise install/removal in an isolated test environment.
-- Shared collectors misattribute or duplicate application metrics -> Test with multiple pods and collectors; preserve producer identity and distinct aggregation writers.
-- Full-span receipt consumes resources -> Measure app and collector overhead; generate request metrics before sampling and revisit direct metrics if full-span processing becomes too expensive.
-- Buffer exhaustion or node replacement loses telemetry -> Define finite outage tolerance, use appropriate persistent storage, and alert on loss and stale data.
-- Excessive labels or log volume increase charges -> Use bounded dimensions, namespace allowlists, finite retention, and a pilot usage report.
-- AMG provisioning support varies by version -> Inventory the workspace and verify data-source and alert APIs before selecting provisioning assets.
-- A collector outage hides the cluster -> Use missing-data alerts evaluated outside the cluster and an external availability check.
+## Future Rollout and Acceptance
 
-## Migration Plan
+This section describes operational acceptance after a separately authorized
+deployment. Local implementation completion is based on code review and offline
+validation; it does not claim these live checks have run.
 
-1. Verify the infrastructure repository's AMG/AMP outputs against live state, existing Chef ingestion, query plugins, notification contact points, token lifecycle, and current rules. Inventory EKS collection and IAM, resolve deployment inputs, and estimate incremental cost.
-2. Prepare the monitoring chart and writer roles in GitOps; extend dashboard builders and OpenTofu in infrastructure, and application instrumentation only where needed. Resolve the AMG plugin compatibility check, build/typecheck dashboards, render manifests, and inspect the shared OpenTofu plan and deletion behavior.
-3. Apply required AWS access/recording rules and AMG views using the documented infrastructure workflow, then deploy cluster metrics through ArgoCD. Verify freshness and node/workload coverage. Reconcile application selectors before Kubernetes application metrics start reaching shared stores.
-4. Enable staging application telemetry and selected logs/events. Validate request counts, worker metrics, source attribution, filtering, and Sentry behavior.
-5. Exercise collector restart and a bounded export interruption in the pilot environment. Test notifications using the designated test destination. Observe at least 24 hours of pilot usage and report extrapolated costs with traffic assumptions.
-6. Expand to agreed production namespaces after reviewing the pilot against the budget and coverage criteria. Publish operations, upgrade, rotation, and removal instructions.
+1. Render/validate the chart and Alloy configuration; build the dashboard and inspect the shared OpenTofu plan. Confirm the application boundary and absence of deferred components.
+2. Apply the reviewed `cluster-infra` plan to publish the generated AMP values to `main` before merging the monitoring application. Provision the dashboard through the separate infrastructure OpenTofu workflow. The monitoring app values enable Alloy and the bundled kube-state-metrics exporter, so merging the approved PR to `main` lets app-of-apps discover monitoring and ArgoCD sync it automatically. No second enablement change is required. A dashboard apply can also follow collector deployment; it is not required for ingestion.
+3. Compare dashboard nodes/workloads against Kubernetes inventory, including frontend nodes. Confirm changing CPU/memory data, correctly scoped queries, and current sample timestamps across several scrape intervals.
+4. Perform one controlled collector restart/update. Verify fresh collection resumes and document any gap. Check resource usage, sample rate/series volume, and existing dashboard compatibility; report an initial cost estimate with its assumptions.
+5. Document the dashboard URL, ownership, known limitations, and rollback. V1 is complete after these checks; no mandatory 24-hour soak, notification test, backend fault-injection suite, or staged application promotion is required.
 
-After pushing Argo-managed changes, refresh affected Applications and sync if they have not moved to the intended revision. If an app-of-apps bootstrap/destroy test is needed, use the repository's event and argo-trace logging lifecycle.
+Rollback disables or reverts only the monitoring application and its owned dashboard as needed. Application operation, shared stores, and existing observability must remain intact. Validate that boundary without destroying app-of-apps; any separately requested bootstrap/destroy exercise follows the repository's logging procedure.
 
-Rollback restores the previous Git configuration, disables new application telemetry settings, and stops new collection. Remove only dashboards, rules, and routing owned by this change when needed. Collector removal must preserve shared AMG/AMP workspaces, CloudWatch history, and unrelated Sentry configuration. Stored telemetry expires according to its configured retention.
+## Risks and Follow-ups
 
-## Open Questions
-
-- Do the deployed AMG/AMP resources match the infrastructure outputs and configured AMG 12.4 version? Has the AMP plugin migration occurred, and can the existing provider token authenticate?
-- Does the Chef AMP destination match the infrastructure-managed workspace, and does it have capacity/budget for cluster ingestion?
-- Who runs the current manual observability build/plan/apply, or should its disabled CI path be enabled as part of rollout?
-- What monthly incremental budget and metrics/log retention are acceptable? Which infrastructure and staging namespaces are in the initial log scope?
-- Who receives alerts, which route is suitable for testing, and which existing external checks can be reused?
-- What collection already runs in EKS, and what host-access, network, and storage constraints apply to its Auto Mode nodes?
-- Which CloudWatch pod-log and event collectors satisfy the pinned-version and Auto Mode checks without duplicating existing shipping?
-- Which queues are shared between EC2 and Kubernetes, which existing CloudWatch dimensions distinguish deployments, and what Kubernetes-safe worker-count and scheduled reporting paths are needed?
+- A single collector and ephemeral storage allow gaps. Add redundancy or persistence only when the required reliability justifies them.
+- Direct dashboard queries may become expensive at larger scale. Add recording rules based on measured query needs.
+- V1 is for inspection, not automatic incident notification. Alerting, contact points, and monitoring-loss detection are a separate iteration.
+- Metric volume can exceed the estimate. Keep the allowlist and interval explicit, review initial usage, and reduce scope or disable collection if the agreed budget is exceeded.
+- Auto Mode access or shared data-source compatibility may block required panels. Resolve these targeted prerequisites; do not expand into application changes or a platform migration.
 
 ## Repository Evidence
 
-Paths below are relative to the common parent of the three repositories; definitions were inspected without reading live state or secrets.
-
-- `infrastructure/observability/opentofu/environments/prod/{main,variables,outputs}.tf`: composed AMG/AMP resources, configured version, and destination outputs.
-- `infrastructure/observability/opentofu/modules/grafana/{main,dashboards,alerts,notifications}.tf`: provider identity, stable data sources, JSON loaders, and routing/contact-point ownership.
-- `infrastructure/observability/opentofu/modules/prometheus/{main,outputs}.tf`: existing workspace and remote-write URL.
-- `infrastructure/observability/dashboards/grafana/src/{index.ts,lib/config.ts,lib/datasources.ts}`: generated artifact registry and shared data-source references.
-- `infrastructure/observability/dashboards/grafana/src/dashboards/backend/rails/`: Rack/Auth metric selectors and ActiveJob CloudWatch/EC2 panels.
-- `infrastructure/.github/workflows/opentofu-{plan,apply}.yml`: observability excluded from the current workspace matrices; no dashboard build step.
-- `code-dot-org/dashboard/app/jobs/concerns/active_job_metrics.rb` and `code-dot-org/bin/cron/report_activejob_metrics`: existing worker signals, environment dimensions, and host-process counting.
-
-## References
-
-- [AWS EKS monitoring architecture and costs](https://docs.aws.amazon.com/grafana/latest/userguide/solution-eks.html)
-- [AMG 12 Prometheus SigV4 plugin migration](https://docs.aws.amazon.com/grafana/latest/userguide/prometheus-manually-adding.html)
-- [Grafana Alloy and compatible backends](https://grafana.com/docs/alloy/latest/introduction/)
-- [Alloy remote write, SigV4, and buffering](https://grafana.com/docs/alloy/latest/reference/components/prometheus/prometheus.remote_write/)
-- [Alloy span metrics and collector identity](https://grafana.com/docs/alloy/latest/reference/components/otelcol/otelcol.connector.spanmetrics/)
-- [OpenTelemetry collector scaling](https://opentelemetry.io/docs/collector/scaling/)
-- [Prometheus alerting practices](https://prometheus.io/docs/practices/alerting/)
+- `infrastructure/observability/opentofu/environments/prod/{main,variables,outputs}.tf`: existing workspace definitions and outputs.
+- `infrastructure/observability/opentofu/modules/grafana/{main,dashboards}.tf`: data source and dashboard provisioning.
+- `infrastructure/observability/dashboards/grafana/src/index.ts`: dashboard build registry.
+- `infrastructure/.github/workflows/opentofu-{plan,apply}.yml`: observability excluded from current CI.

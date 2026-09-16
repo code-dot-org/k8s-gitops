@@ -1,71 +1,62 @@
 ## ADDED Requirements
 
-### Requirement: Collect Kubernetes infrastructure metrics
+### Requirement: Collect the v1 infrastructure metric set
 
-The system SHALL collect the node, pod, container, and workload metrics required by its provisioned dashboards and recording rules from `codeai-k8s`, including kube-state-metrics and available kubelet/cAdvisor and node-exporter signals. The rollout SHALL document coverage and any unavailable managed-control-plane signals.
+The system SHALL collect node readiness/allocatable capacity, workload desired/ready counts, pod state/restarts, container CPU/memory, and basic collection-health metrics for `codeai-k8s`. Sources SHALL be kube-state-metrics, kubelet/cAdvisor, and scrape/collector self-metrics. Collection SHALL start at 60-second intervals with an explicit metric allowlist and cluster/source labels. V1 SHALL NOT require node-exporter, application endpoints, logs, or traces.
 
-#### Scenario: Cover frontend and system nodes
+#### Scenario: Verify cluster coverage
 
 - **WHEN** monitoring is enabled on a cluster containing frontend-tainted and system nodes
-- **THEN** the required collectors run on or reach every in-scope node
-- **AND** Amazon Managed Service for Prometheus (AMP) queries identify the expected nodes and workloads using the configured cluster label
+- **THEN** Amazon Managed Service for Prometheus (AMP) queries contain the expected nodes and workloads with the configured cluster identity
+- **AND** required container CPU/memory and workload signals are available without treating missing collection as healthy
 
-### Requirement: Export to a confirmed AMP workspace with scoped identity
+### Requirement: Reuse AMP with scoped identity
 
-The system SHALL send metrics to the configured AMP workspace using SigV4 and workload IAM credentials. Runtime writers SHALL have write access scoped to that workspace and SHALL NOT require static AWS keys or Grafana Cloud credentials. Live ingestion SHALL require a confirmed workspace and documented collection budget.
+The collector SHALL use the confirmed infrastructure-managed AMP destination, authenticated TLS, and workload IAM credentials with remote-write access scoped to that workspace. Kubernetes access SHALL be limited to required discovery and metric reads. Grafana administrative credentials and static AWS keys SHALL NOT be required in the cluster. The rollout SHALL document its cost estimate and agreed incremental spending limit before ingestion.
 
-The destination SHALL be verified against the infrastructure-managed AMP outputs and current application ingestion. GitOps SHALL consume only required nonsecret identifiers and endpoints; the infrastructure repository SHALL retain ownership of the shared AMP workspace and its rule namespaces.
+Workspace ARNs and endpoints SHALL be resolved from the infrastructure owner's OpenTofu outputs and passed through generated GitOps values. Hand-maintained monitoring configuration SHALL NOT require literal workspace ARNs or IDs. Account and OIDC identity SHALL continue to use the existing OpenTofu-generated cluster values.
 
-#### Scenario: Reject incomplete destination configuration
+#### Scenario: Regenerate the workspace configuration
 
-- **WHEN** the enabled deployment lacks a confirmed AMP destination or region
-- **THEN** configuration validation fails with the missing input identified
-- **AND** deployment does not create a replacement workspace or select an implicit destination
+- **WHEN** cluster configuration is regenerated from the existing observability state
+- **THEN** the AMP ARN, remote-write endpoint, and derived region follow that state's outputs
+- **AND** no operator must copy resource identifiers into monitoring configuration
+- **AND** the generated values do not enable monitoring or publish credentials
 
-#### Scenario: Restrict collector permissions
+#### Scenario: Validate destination and permissions
 
-- **WHEN** collector IAM policies are evaluated
-- **THEN** metric writes are permitted for the configured AMP workspace
-- **AND** the collector is not granted workspace administration or write access to unrelated workspaces
+- **WHEN** the enabled collector configuration is validated
+- **THEN** a missing workspace destination or region is reported as an error
+- **AND** the writer identity grants no workspace administration or writes to unrelated workspaces
+- **AND** no replacement workspace is created
 
-### Requirement: Maintain one intended scrape owner per target
+### Requirement: Use one collector with bounded ephemeral buffering
 
-The system SHALL coordinate scrape ownership across metric collectors and avoid a second collection path for targets already covered by the selected pipeline. Enabled dashboard and rule inputs SHALL survive metric filtering.
+V1 SHALL use one Alloy Deployment replica, a Recreate update strategy, and no clustering/autoscaling or operator. It SHALL avoid scraping targets already owned by another collection path. The collector SHALL have explicit resource limits, an ephemeral write-ahead log (WAL) with finite retention and storage limits, and observable delivery errors/freshness. Persistent storage and uninterrupted delivery SHALL NOT be v1 requirements; pod replacement may lose unsent samples.
 
-#### Scenario: Scale metric collection
+#### Scenario: Replace the collector pod
 
-- **WHEN** a second metric collector joins the configured collector group
-- **THEN** targets are distributed according to the collection policy
-- **AND** the backend does not receive duplicate collection streams for the same target and labels after ownership stabilizes
+- **WHEN** a controlled collector update or restart occurs
+- **THEN** fresh collection resumes after the collector becomes operational
+- **AND** the observed gap and possible loss of buffered samples are documented
+- **AND** the deployment does not deliberately overlap two scrape owners during an update
 
-### Requirement: Bound and observe delivery buffering
+### Requirement: Preserve independent application observability
 
-The system SHALL define finite memory and disk budgets, a metric-buffer retention window, and an explicit persistence policy. It SHALL expose export errors, dropped samples, buffer pressure, and ingestion freshness. The documented policy SHALL distinguish process restart from pod rescheduling and node deletion.
+The deployment SHALL require no edits or release in `code-dot-org`, no application telemetry overrides in GitOps, and no instrumentation injection. Existing Rails/worker collectors, request/span metrics, scheduled reporters, and Sentry routing SHALL remain independently managed. Missing application-level signals SHALL NOT block v1 acceptance.
 
-#### Scenario: Recover within the supported outage window
+#### Scenario: Add cluster monitoring
 
-- **WHEN** the AMP connection is interrupted in the pilot for less than the configured buffer capacity and retention allow
-- **THEN** collected metrics remain buffered and are exported after connectivity returns
-- **AND** measured recovery and any data loss are recorded against the declared persistence policy
+- **WHEN** the monitoring application is deployed
+- **THEN** cluster metrics arrive without an application release or telemetry reconfiguration
+- **AND** existing application inputs, destinations, and behavior are preserved
 
-#### Scenario: Exceed buffer capacity
+### Requirement: Keep the monitoring lifecycle independent
 
-- **WHEN** an outage exceeds the configured buffering limits
-- **THEN** resource use remains bounded
-- **AND** sample loss or stale ingestion is observable to monitoring operators
+The application SHALL be managed by ArgoCD outside the infra bootstrap group with pinned chart dependencies. Monitoring availability SHALL NOT gate application startup. Rollback/removal SHALL preserve existing shared telemetry stores and application observability.
 
-### Requirement: Deploy independently of application startup
+#### Scenario: Disable monitoring
 
-The monitoring application SHALL be managed by ArgoCD outside the `infra` bootstrap group, with pinned chart dependencies. An unavailable monitoring backend SHALL NOT prevent codeai application startup. Collector removal SHALL preserve existing shared telemetry stores.
-
-#### Scenario: Backend unavailable during deployment
-
-- **WHEN** the AMP endpoint is unavailable during application deployment
-- **THEN** monitoring reports its delivery failure
-- **AND** codeai application deployment is not gated on monitoring health
-
-#### Scenario: Remove monitoring collectors
-
-- **WHEN** the monitoring application is removed through its documented lifecycle
-- **THEN** its collectors and owned Kubernetes resources are removed without stuck operator finalizers
-- **AND** shared Amazon Managed Grafana (AMG) and AMP workspaces and previously stored telemetry remain intact
+- **WHEN** the monitoring application is disabled or removed
+- **THEN** its new collection stops without preventing application operation
+- **AND** existing Amazon Managed Grafana (AMG)/AMP resources and stored metrics remain under their current owners

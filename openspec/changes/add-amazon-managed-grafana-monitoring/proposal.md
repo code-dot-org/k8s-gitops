@@ -1,27 +1,34 @@
 ## Why
 
-The checked Kubernetes manifests do not provide a shared monitoring pipeline for `codeai-k8s`. The adjacent `infrastructure/observability` repository already defines Amazon Managed Grafana (AMG), Amazon Managed Service for Prometheus (AMP), data sources, dashboards, and alerts; `code-dot-org` supplies Rails instrumentation and CloudWatch worker metrics. Extend that existing system to Kubernetes. Grafana Cloud is outside the budget and is excluded from this change.
+`codeai-k8s` needs a basic view of cluster and workload health. The adjacent `infrastructure/observability` repository already defines Amazon Managed Grafana (AMG) for dashboards and Amazon Managed Service for Prometheus (AMP) for storing and querying metrics. Reuse these services for a small, metrics-only first iteration.
 
-AMG provides dashboards and alerting; AMP stores and queries Prometheus metrics collected from the cluster and applications.
+The v1 outcome is one Kubernetes overview dashboard showing node readiness/capacity, workload availability, pod restarts, container CPU/memory, and collection health. It must deploy independently of the application observability project.
+
+The current task is to write and validate local implementation files. Live AWS
+discovery, plans against real state, publication, deployment, and operational
+verification are deferred to a separately authorized rollout. They are not
+prerequisites for completing these code changes.
 
 ## What Changes
 
-- Add an ArgoCD-managed monitoring application using Grafana Alloy for Prometheus-compatible Kubernetes metrics collection and export to AMP. Choose Alloy for its Kubernetes chart integration and built-in distribution of scrape targets across replicas; the design records the tradeoff against upstream OpenTelemetry Collector Contrib and the validation required before consolidating Rails telemetry on Alloy.
-- Reuse the AMG and AMP workspaces managed by `infrastructure/observability/opentofu/environments/prod`, including existing data-source identifiers. Confirm deployed state and incremental ingestion budget before rollout; reconcile the configured AMG 12.4 version with the declared Prometheus plugin before reapplying shared resources.
-- Adapt the existing Rails OpenTelemetry and request-metrics pipeline for Kubernetes, preserving metric generation before trace sampling and the existing Sentry integration.
-- Collect selected Kubernetes pod logs and events into CloudWatch Logs with explicit scope and retention, and expose them through AMG.
-- Extend the existing TypeScript dashboard/alert builders and OpenTofu resources in `infrastructure/observability`; retain one provisioning owner for shared Grafana configuration. Reuse Rack/Auth and CloudWatch ActiveJob views with explicit Kubernetes source selection and preserve existing alert behavior.
-- Manage collectors and application deployment settings in GitOps. Validate node coverage, telemetry freshness, delivery failure behavior, and incremental cost during a staging pilot.
-- Keep monitoring outside the infrastructure bootstrap gate so an unavailable monitoring backend cannot prevent application deployment.
+- Add one ArgoCD-managed monitoring application outside the infrastructure bootstrap gate, with pinned standalone Alloy and kube-state-metrics charts. Reuse a compatible existing kube-state-metrics deployment if one is present.
+- Run one Alloy collector that scrapes the required Kubernetes metrics every 60 seconds and writes an explicit metric allowlist to the existing AMP workspace using scoped workload IAM credentials.
+- Resolve the AMP ARN/endpoint from infrastructure's existing OpenTofu outputs and publish them through the existing generated cluster-values handoff; do not manually configure workspace ARNs or IDs.
+- Add one versioned dashboard through the existing TypeScript/OpenTofu workflow in `infrastructure`, using direct Prometheus queries and the existing AMG data source.
+- Validate collection coverage, dashboard queries, a collector restart, basic resource/ingestion usage, and the removal procedure. Accept collection gaps and loss of unsent metrics when the collector pod is replaced.
+
+## Scope Boundary and Deferred Work
+
+No changes or required release in `../code-dot-org`. Rails/worker instrumentation, existing collectors, application metrics, and Sentry routing remain independently managed. No application telemetry redirects through GitOps overrides.
+
+Defer log/event shipping, new alerts and notification routes, recording rules, node-exporter and detailed host diagnostics, application telemetry, collector clustering/high availability, persistent buffering, and observability CI automation. These are separate follow-ups, not v1 acceptance dependencies. Grafana Cloud is excluded.
 
 ## Capabilities
 
 ### New Capabilities
 
-- `kubernetes-metrics-collection`: Discover and collect cluster, node, and workload metrics; send them to AMP with scoped IAM access and bounded buffering; deploy independently of application startup.
-- `managed-grafana-observability`: Connect the existing AMG workspace to AWS telemetry stores and provision reproducible dashboards, rules, and alert routing.
-- `application-telemetry`: Receive Kubernetes application OTLP, preserve source identity, derive accurate request metrics, and expose background-worker health.
-- `kubernetes-log-collection`: Forward selected pod logs and Kubernetes events to CloudWatch with filtering, retention, and correlation metadata.
+- `kubernetes-metrics-collection`: Collect a bounded set of Kubernetes infrastructure metrics with one collector and send them to the existing AMP workspace independently of application deployments.
+- `managed-grafana-observability`: Provision one Kubernetes overview dashboard in the existing AMG workspace through its current infrastructure owner.
 
 ### Modified Capabilities
 
@@ -29,9 +36,7 @@ None. No existing OpenSpec capability specifications are present.
 
 ## Impact
 
-- `k8s-gitops`: new `apps/monitoring/` application and chart, cluster-local service-account IAM integration using existing patterns, and environment-specific configuration under `apps/codeai/`.
-- `infrastructure`: extend `observability/dashboards/grafana` builders and `observability/opentofu` resources for dashboards, rules, notification routing, and owned AWS telemetry stores. Reuse existing outputs and provider authentication. Observability is commented out of the current CI workspace matrices; document a reproducible manual deployment or enable the build/plan/apply path before relying on CI.
-- `code-dot-org`: reuse `dashboard/engines/observability/`; extend application configuration or instrumentation where needed and maintain relevant Helm/Kustomize parity. The Chef collector remains the reference for existing request metrics.
-- AWS: the existing AMG/AMP resources declared in the infrastructure repository, CloudWatch metrics/log groups, and scoped writer/query IAM permissions. Existing shared workspaces and stored telemetry survive collector removal.
-- Dependencies: pinned Grafana Alloy and Kubernetes exporters; a supported CloudWatch log/event collection path. No Grafana Cloud subscription, self-hosted Grafana, Loki, or Tempo is required.
-- Operations: additional metric ingestion, storage, queries, logs, networking, and collector compute must fit a documented budget. Confirm live workspace outputs, retention, log scope, and alert ownership. OpenTofu owns notification routing; contact points are currently created manually by the AMG administrator.
+- `k8s-gitops`: monitoring application/chart, collector configuration, scoped workload IAM integration, and the OpenTofu-generated AMP configuration handoff.
+- `infrastructure`: one dashboard builder/registration and OpenTofu dashboard resource; minimal data-source compatibility adjustments only if required for the existing workspace to work correctly.
+- `code-dot-org`: no changes or release dependency.
+- Operations: incremental AMP ingestion/query and collector costs; a single collector with ephemeral storage and no new alerting. Existing workspace retention, CloudWatch configuration, dashboards, and notification routing remain under their current owners.

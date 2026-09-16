@@ -1,61 +1,45 @@
-## 1. Inventory and deployment inputs
+# Scope of the current work
 
-- [ ] 1.1 [Agent] Verify the infrastructure-managed Amazon Managed Grafana (AMG) workspace against live state, including version, data-source UIDs/types, dashboards, alerts, query role, and OpenTofu service-account access; resolve the configured AMG 12.4/core-Prometheus SigV4 compatibility check without exposing secrets.
-- [ ] 1.2 [Agent] Read the named nonsecret outputs for Amazon Managed Service for Prometheus (AMP) from `infrastructure/observability/opentofu/environments/prod`, compare them to Chef's destination, and verify live ingestion/capacity and rule ownership. Record AMP ARN, remote-write URL, and region for GitOps; resolve discrepancies without automatically creating another workspace.
-- [ ] 1.3 [Agent] Inventory EKS nodes, taints, exporters, collectors, log shipping, IAM patterns, network access, storage classes, and available control-plane metrics; identify collection gaps and duplicates.
-- [ ] 1.4 [Agent] Estimate incremental AMP, CloudWatch, collector, and network costs for the proposed collection scope; compare Alloy with an AMP managed scraper and record the collector choice.
-- [ ] 1.5 [User] Supply missing AWS/AMG/OpenTofu access; resolve incremental budget, retention, pilot log scope, and alert owners using the inventory and estimate. Confirm the manual infrastructure deployment operator or supply credentials for a deliberately enabled CI workflow. Confirm the test recipient and authorize test notifications; create any missing AMG contact point before routing references it.
-- [ ] 1.6 [Agent] Record the resolved deployment inputs and choose the compatible CloudWatch pod-log and event collection mechanisms before implementing live ingestion.
+Write and validate local files in `k8s-gitops` and `infrastructure`. Repository
+definitions and OpenTofu output references supply the configuration inputs.
+Live AWS identity, workspace inventory, scraper inventory, and EKS details are
+not prerequisites for this implementation. No AWS commands, live plans, applies,
+pushes, merges, or Argo refreshes/syncs are authorized for this work.
 
-## 2. Shared metrics collection
+The original task IDs are retained below. All eight local implementation tasks
+are complete; six future rollout tasks remain unchecked and explicitly deferred.
 
-- [ ] 2.1 [Agent] Add `apps/monitoring/application.yaml` and a wrapper chart with pinned dependencies, outside the `infra` bootstrap group and discoverable by the existing root ApplicationSet.
-- [ ] 2.2 [Agent] Add scoped service-account writer permissions using the existing cluster OIDC/IAM pattern and the infrastructure-managed AMP ARN. Record one owner per IAM resource, keep shared stores in infrastructure OpenTofu, and keep Grafana administrative credentials out of the cluster.
-- [ ] 2.3 [Agent] Configure Kubernetes metric collection and required exporters, with coordinated target ownership, cluster labels, a 60-second starting interval, and an allowlist covering selected dashboard/rule inputs.
-- [ ] 2.4 [Agent] Configure node selectors/tolerations, collector resources and placement, buffer storage/capacity/retention, and restricted receiver access; document restart and node-replacement loss boundaries.
-- [ ] 2.5 [Agent] Verify the pinned chart's CRDs, Alloy Operator resources, Helm hooks, and ArgoCD installation/removal behavior in an isolated test environment; resolve any stuck-finalizer or ordering issues.
-- [ ] 2.6 [Agent] Render and validate enabled/disabled configurations, missing destination errors, IAM scope, metric destinations, and absence of Grafana Cloud dependencies; bump chart versions for changed packages.
+## 2. Implement the metrics collector in k8s-gitops
 
-## 3. Application telemetry
+- [x] 2.1 [Agent] Add the monitoring Argo application outside the infra bootstrap group and a wrapper chart with pinned standalone Alloy/kube-state-metrics dependencies. Support reusing an existing exporter through configuration; configure single-replica Deployments with Recreate updates for newly installed components and no clustering, autoscaling, or operator. Bump chart versions as required.
+- [x] 2.2 [Agent] Add scoped collector workload IAM and Kubernetes read access using existing patterns. Write the OpenTofu handoff that resolves the AMP destination from infrastructure's existing outputs and includes it in generated cluster values, with no manually configured ARNs or IDs. Configure authenticated TLS, validate missing inputs, and keep static AWS keys and Grafana administrative credentials out of the cluster. Leave publication and live verification for rollout.
+- [x] 2.3 [Agent] Configure kube-state-metrics, kubelet/cAdvisor, and collector-health scraping with a 60-second interval, explicit metric allowlist, and cluster/source labels. Avoid duplicate targets and application endpoints; exclude logs, traces, node-exporter, and application instrumentation.
+- [x] 2.4 [Agent] Set collector/exporter resource requests and limits, scheduling, and a size-limited ephemeral write-ahead log (WAL) with finite retention. Document update/outage data gaps and pod-replacement loss; provision no persistent storage.
 
-- [ ] 3.1 [Agent] Add an internal OTLP receiver and staging application/worker endpoint values, reusing the existing Rails OpenTelemetry instrumentation and separate worker environment settings.
-- [ ] 3.2 [Agent] Implement source-resource enrichment and the OpenTelemetry-to-query-label mapping; verify attribution from two pods in different namespaces.
-- [ ] 3.3 [Agent] Adapt Rack span metrics before trace sampling, preserve Sentry export, and validate `rack_calls_total` / `rack_duration_milliseconds_bucket` names, millisecond units, buckets, and bounded labels against existing Rack/Auth queries. Define explicit Kubernetes versus legacy source selection before ingestion.
-- [ ] 3.4 [Agent] Configure distinct aggregation writers and verify known request/error counts with two collectors, sampled trace export, and a collector restart.
-- [ ] 3.5 [Agent] Reuse `ActiveJobMetrics` and `code-dot-org/ActiveJob` CloudWatch signals: verify worker metric-write IAM, queue backend, dimensions, and scheduled reporting. Distinguish shared queues from independent deployments, avoid duplicate reporters, replace local-process worker totals with Kubernetes-safe signals, and add only missing coverage; preserve relevant Helm/Kustomize parity.
-- [ ] 3.6 [Agent] Verify that unavailable telemetry collectors do not block requests, job execution, or readiness, and that controlled staging Sentry events still follow the configured integration.
-- [ ] 3.7 [Agent] Verify mixed EC2/Kubernetes request queries and alert scope, including `host`/`process_pid` selectors and source-preserving drilldown links; verify worker totals across two pods and explicitly shared versus separate queue dimensions. Coordinate query changes in infrastructure before enabling application ingestion.
+## 3. Add one dashboard in infrastructure
 
-## 4. Selected CloudWatch logs and events
+- [x] 3.1 [Agent] Add one Kubernetes overview builder/registry entry and OpenTofu dashboard resource with a stable identifier, direct Prometheus queries, and cluster/namespace/pod filtering. Cover the agreed v1 signals and explicit missing/stale data; add no recording rules, alerts, or notification routes.
+- [x] 3.2 [Agent] Run lockfile-based dependency installation, type checking, dashboard generation, and local OpenTofu validation without accessing live state or AWS. Preserve existing data-source references and shared consumers; leave CI and shared workspace lifecycle unchanged. Defer the live plan and deployed-plugin compatibility checks to rollout.
 
-- [ ] 4.1 [Agent] Provision or reference selected CloudWatch groups with finite retention through `infrastructure/observability/opentofu`, referencing them from GitOps with separate ingestion/query permissions and lifecycle independent of collector removal.
-- [ ] 4.2 [Agent] Deploy the selected pod-log shipper with namespace/workload selection, Auto Mode scheduling, source metadata, redaction, resource limits, and bounded buffering.
-- [ ] 4.3 [Agent] Configure one active event-collection owner per scope and CloudWatch delivery with involved-object identity; preserve existing EKS audit/control-plane logging settings.
-- [ ] 4.4 [Agent] Verify inclusion/exclusion and redaction with distinguishable test records, confirm no duplicate shipping path, and check that disabling collection preserves stored history.
+## 4. Validate and document the local implementation
 
-## 5. AMG dashboards, recording rules, and alerts
+- [x] 4.1 [Agent] Render and validate the chart/collector configuration and review both repository changes for the v1 boundary: no code-dot-org edits or application overrides, deferred components, or application startup dependency. Confirm normal monitoring removal preserves shared stores.
+- [x] 4.5 [Agent] Document the expected dashboard URL, owners, future deployment commands, metric inputs, rough cost scenarios, single-collector/no-alerting limitations, and rollback procedure. Record logs/events, alerting, reliability improvements, and CI as separate follow-ups. Label all live checks as deferred rather than prerequisites for writing files.
 
-- [ ] 5.1 [Agent] Extend the existing Foundation SDK builders and `src/index.ts` registry in `infrastructure/observability/dashboards/grafana`, plus Grafana folders/`dashboards.tf`/`alerts.tf` in OpenTofu. Reuse stable identifiers and the current provider/token lifecycle; keep new transforms in `locals.tf` and avoid a second provisioning owner in GitOps.
-- [ ] 5.2 [Agent] Reconcile the existing AMP plugin and SDK data-source references with the live AMG version while preserving UID `effqou9gjnlkwa`; reuse CloudWatch UID `managed-cloudwatch`, verify query access, and test existing consumers as well as new Kubernetes views.
-- [ ] 5.3 [Agent] Add required AMP recording-rule namespaces through the existing Prometheus OpenTofu module and validate rule input metrics against the collection allowlist.
-- [ ] 5.4 [Agent] Add cluster/node, workload, collection-health, and log views; adapt existing Rack/Auth and ActiveJob views with source filters and visible missing-data states. Replace EC2-only worker resource panels for Kubernetes selections and preserve legacy dashboard identifiers and behavior.
-- [ ] 5.5 [Agent] Extend the existing alert-group loader and single root notification policy with scoped Kubernetes alerts/routes, explicit missing-data behavior, severity, runbook, team, and confirmed contact points. Preserve existing routes and SAML; reuse or add an external availability check.
-- [ ] 5.6 [Agent] Run lockfile-based dependency installation, `yarn typecheck`, and `yarn build` before OpenTofu validation/plan. Document a reproducible manual build/plan/apply, or deliberately enable observability CI with dashboard path triggers, complete generated artifacts, credentials, and separate plan/apply environments; verify the shared plan before rollout.
-- [ ] 5.7 [Agent] Apply the reviewed provisioning plan and verify that a subsequent build/plan has no unintended dashboard/rule changes or duplicates; account for scheduled provider-token rotation and preserve unrelated AMG/AMP configuration.
+## Deferred rollout work — outside the current task
 
-## 6. Pilot rollout and acceptance
+These tasks require a separately authorized rollout. They are not requests for
+the user to gather data now and do not block completion of the local files.
 
-- [ ] 6.1 [Agent] Deploy the metrics baseline through the normal Git/ArgoCD workflow; after pushing, refresh affected Applications and sync if they have not moved to the intended revision.
-- [ ] 6.2 [Agent] Verify expected node/workload coverage and ingestion freshness, including frontend nodes, and exercise dashboard queries before enabling staging application telemetry and selected logs/events.
-- [ ] 6.3 [Agent] In the pilot environment, test bounded backend interruption and collector restart, compare recovery to the declared buffering policy, and verify failure/drop metrics and application independence.
-- [ ] 6.4 [Agent] After test notifications are authorized in task 1.5, trigger and resolve a controlled alert through the designated route; verify an externally evaluated missing-telemetry condition and source/runbook details without invoking unrelated notification routes.
-- [ ] 6.5 [Agent] Start a pilot observation window of at least 24 hours and record its collection settings, traffic assumptions, and metrics needed for the usage report.
-- [ ] 6.6 [Agent] After the observation window, report coverage, errors/drops, collector overhead, series/sample volume, log volume, and projected incremental spend against the agreed budget.
-- [ ] 6.7 [User] Resolve any remaining production log-scope, alert-routing, or budget decisions using the pilot results.
-- [ ] 6.8 [Agent] Expand to the agreed production scope through GitOps and verify the same coverage, identity, ingestion, and alert acceptance criteria.
+- [ ] 1.1 [Deferred] Verify Amazon Managed Grafana (AMG) query/provisioning access and deployed-plugin compatibility with the existing Amazon Managed Service for Prometheus (AMP) data source. Review the live infrastructure and cluster-config plans, preserving existing consumers.
+- [ ] 1.2 [Deferred] Check existing collectors/exporters, workload IAM, and authenticated kubelet/cAdvisor access across expected nodes. Select exporter reuse or installation and refine the rough cost scenarios with actual inventory.
+- [ ] 1.3 [Deferred] Resolve any access gaps and agree an incremental spending limit before enabling ingestion.
+- [ ] 4.2 [Deferred] Apply reviewed plans, publish generated values, and deploy monitoring through Git/ArgoCD. After an authorized push, refresh the affected Application and sync if it has not reached the intended revision.
+- [ ] 4.3 [Deferred] Verify dashboard coverage against Kubernetes inventory, including frontend nodes; check container CPU/memory, workload availability/restarts, filters, freshness across several scrape intervals, and existing dashboard compatibility.
+- [ ] 4.4 [Deferred] Exercise one controlled collector restart/update and verify collection resumes. Record any gap, collector resource use, initial series/sample volume, and projected incremental cost with assumptions; reduce scope or disable collection if it exceeds the agreed budget.
 
-## 7. Operations and completion
+## Implementation checkpoint (2026-09-16)
 
-- [ ] 7.1 [Agent] Document ownership across all three repositories, destination-output handoff, dashboard build/OpenTofu deployment, contact-point administration, upgrades, provider-token rotation, budget review, telemetry-loss diagnosis, and rollback/removal while preserving shared AWS stores.
-- [ ] 7.2 [Agent] Verify application startup with monitoring unavailable and isolated monitoring removal; if app-of-apps lifecycle testing is required, follow the prescribed event/argo-trace logger start, raw-output reporting, and stop procedure.
-- [ ] 7.3 [Agent] Complete relevant repository validation and Helm/Kustomize parity checks for changed files; mirror any necessary root app-tree structural changes in the mimic tree and record remaining limitations.
+8/8 local implementation tasks complete. The full lifecycle checklist is 8/14;
+the remaining six tasks are deferred rollout work, not implementation blockers.
+See [validation.md](validation.md) for local evidence and deferred live checks.

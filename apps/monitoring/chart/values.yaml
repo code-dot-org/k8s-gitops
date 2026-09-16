@@ -1,0 +1,122 @@
+codeai_cluster_config: {}
+# Populated by cluster-infra from infrastructure's existing OpenTofu outputs.
+# Empty defaults let disabled monitoring render before that handoff is published.
+amp:
+  workspaceArn: ""
+  remoteWriteUrl: ""
+  region: ""
+metrics:
+  # Set this to an existing compatible exporter and leave its dependency disabled
+  # when inventory finds one. Never scrape both a Service and its pod endpoints.
+  kubeStateMetricsAddress: monitoring-kube-state-metrics.monitoring.svc:8080
+
+alloy:
+  enabled: false
+  fullnameOverride: monitoring-alloy
+  crds:
+    create: false
+  rbac:
+    create: false
+  serviceAccount:
+    create: false
+    name: monitoring-alloy
+  alloy:
+    configMap:
+      create: false
+      name: monitoring-alloy
+      key: config.alloy
+    clustering:
+      enabled: false
+    enableReporting: false
+    storagePath: /var/lib/alloy
+    extraEnv:
+      - name: AWS_STS_REGIONAL_ENDPOINTS
+        value: regional
+    mounts:
+      extra:
+        - name: storage
+          mountPath: /var/lib/alloy
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 473
+      runAsGroup: 473
+      readOnlyRootFilesystem: true
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop: [ALL]
+      seccompProfile:
+        type: RuntimeDefault
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+        ephemeral-storage: 256Mi
+      limits:
+        cpu: "1"
+        memory: 512Mi
+        ephemeral-storage: 2Gi
+  global:
+    podSecurityContext:
+      fsGroup: 473
+  configReloader:
+    enabled: true
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+        ephemeral-storage: 16Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+        ephemeral-storage: 64Mi
+  controller:
+    type: deployment
+    replicas: 1
+    updateStrategy:
+      type: Recreate
+    nodeSelector:
+      kubernetes.io/os: linux
+    # No frontend taint toleration: run centrally and discover every node.
+    tolerations: []
+    volumes:
+      extra:
+        - name: storage
+          emptyDir:
+            sizeLimit: 1Gi
+
+kube-state-metrics:
+  enabled: false
+  fullnameOverride: monitoring-kube-state-metrics
+  replicas: 1
+  updateStrategy: Recreate
+  autosharding:
+    enabled: false
+  prometheusScrape: false
+  collectors: [nodes, pods, deployments, statefulsets, daemonsets]
+  metricAllowlist:
+    - kube_node_info
+    - kube_node_status_condition
+    - kube_node_status_allocatable
+    - kube_pod_info
+    - kube_pod_status_phase
+    - kube_pod_container_status_restarts_total
+    - kube_pod_container_resource_requests
+    - kube_pod_container_resource_limits
+    - kube_deployment_spec_replicas
+    - kube_deployment_status_replicas_available
+    - kube_statefulset_replicas
+    - kube_statefulset_status_replicas_ready
+    - kube_daemonset_status_desired_number_scheduled
+    - kube_daemonset_status_number_ready
+  nodeSelector:
+    kubernetes.io/os: linux
+  tolerations: []
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+      ephemeral-storage: 16Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+      ephemeral-storage: 64Mi

@@ -1,0 +1,49 @@
+{{- if and (index .Values "kube-state-metrics" "enabled") (not .Values.alloy.enabled) }}
+{{- fail "Enable Alloy when installing the monitoring exporter; disable both to stop monitoring" }}
+{{- end }}
+{{- if .Values.alloy.enabled }}
+{{- include "monitoring.validate" . }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: monitoring-alloy
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    eks.amazonaws.com/role-arn: {{ printf "%s:role/%s" .Values.codeai_cluster_config.iam_arn_prefix (include "monitoring.roleName" .) | quote }}
+    eks.amazonaws.com/sts-regional-endpoints: "true"
+automountServiceAccountToken: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: monitoring-alloy
+rules:
+  - apiGroups: [""]
+    resources: [nodes]
+    verbs: [get, list, watch]
+  - apiGroups: [""]
+    resources: [nodes/metrics]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: monitoring-alloy
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: monitoring-alloy
+subjects:
+  - kind: ServiceAccount
+    name: monitoring-alloy
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: monitoring-alloy
+  namespace: {{ .Release.Namespace }}
+data:
+  config.alloy: |
+{{ tpl (.Files.Get "files/config.alloy") . | indent 4 }}
+{{- end }}

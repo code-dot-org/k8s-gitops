@@ -1,0 +1,56 @@
+{{- if .Values.alloy.enabled }}
+{{- $issuer := trimPrefix "https://" .Values.codeai_cluster_config.cluster_oidc_issuer_url }}
+apiVersion: iam.aws.m.upbound.io/v1beta1
+kind: Role
+metadata:
+  name: monitoring-alloy
+  namespace: crossplane-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "-100"
+    crossplane.io/external-name: {{ include "monitoring.roleName" . | quote }}
+spec:
+  providerConfigRef:
+    name: default
+    kind: ClusterProviderConfig
+  forProvider:
+    tags:
+      code.ai/cluster: {{ .Values.codeai_cluster_config.cluster_name | quote }}
+    assumeRolePolicy: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [{
+          "Effect": "Allow",
+          "Action": "sts:AssumeRoleWithWebIdentity",
+          "Principal": {"Federated": {{ .Values.codeai_cluster_config.oidc_provider_arn | quote }}},
+          "Condition": {"StringEquals": {
+            "{{ $issuer }}:sub": "system:serviceaccount:{{ .Release.Namespace }}:monitoring-alloy",
+            "{{ $issuer }}:aud": "sts.amazonaws.com"
+          }}
+        }]
+      }
+---
+apiVersion: iam.aws.m.upbound.io/v1beta1
+kind: RolePolicy
+metadata:
+  name: monitoring-alloy
+  namespace: crossplane-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "-100"
+    crossplane.io/external-name: amp-remote-write
+spec:
+  providerConfigRef:
+    name: default
+    kind: ClusterProviderConfig
+  forProvider:
+    roleRef:
+      name: monitoring-alloy
+    policy: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [{
+          "Effect": "Allow",
+          "Action": "aps:RemoteWrite",
+          "Resource": {{ .Values.amp.workspaceArn | quote }}
+        }]
+      }
+{{- end }}
