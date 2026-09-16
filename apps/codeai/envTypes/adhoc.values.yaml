@@ -3,6 +3,7 @@ RAILS_ENV: development
 # chart-wide RAILS_ENV; override it here so the worker runs as this envType.
 activeJobWorker:
   RAILS_ENV: development
+  priorityMode: low
 healthChecks:
   enabled: false
 

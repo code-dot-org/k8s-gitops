@@ -3,6 +3,7 @@ RAILS_ENV: production
 # chart-wide RAILS_ENV; override it here so the worker runs as this envType.
 activeJobWorker:
   RAILS_ENV: production
+  priorityMode: low
 # dashboard_workers: 32
 healthChecks:
   enabled: true

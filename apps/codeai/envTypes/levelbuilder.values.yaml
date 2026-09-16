@@ -3,6 +3,7 @@ RAILS_ENV: levelbuilder
 # chart-wide RAILS_ENV; override it here so the worker runs as this envType.
 activeJobWorker:
   RAILS_ENV: levelbuilder
+  priorityMode: low
 # dashboard_workers: 27
 healthChecks:
   enabled: true

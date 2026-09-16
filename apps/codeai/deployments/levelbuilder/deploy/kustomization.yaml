@@ -6,6 +6,7 @@ resources:
   # vendored or copied locally instead.
   - git::https://github.com/code-dot-org/code-dot-org//k8s/kustomize/base?ref=staging
 components:
+  - git::https://github.com/code-dot-org/code-dot-org//k8s/kustomize/components/active-job-worker-low?ref=staging
   - ../../../envTypes/levelbuilder
 patches:
   - path: ingress.dns-name.patch.yaml
