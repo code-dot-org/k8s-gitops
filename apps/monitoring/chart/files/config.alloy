@@ -74,16 +74,62 @@ prometheus.scrape "alloy" {
 }
 
 prometheus.relabel "v1" {
-  // Only the metrics consumed by the overview and rollout checks reach AMP.
+  // Only metrics the Kubernetes dashboards and alerts read reach AMP
+  // (infrastructure: observability/dashboards/grafana/src/dashboards/kubernetes/).
+  // kube_* names must also be on the kube-state-metrics metricAllowlist in values.yaml.
   rule {
     source_labels = ["__name__"]
-    regex = "up|scrape_samples_scraped|scrape_samples_post_metric_relabeling|scrape_duration_seconds|kube_node_info|kube_node_status_condition|kube_node_status_allocatable|kube_pod_info|kube_pod_status_phase|kube_pod_container_status_restarts_total|kube_pod_container_resource_requests|kube_pod_container_resource_limits|kube_deployment_spec_replicas|kube_deployment_status_replicas_available|kube_statefulset_replicas|kube_statefulset_status_replicas_ready|kube_daemonset_status_desired_number_scheduled|kube_daemonset_status_number_ready|kubelet_node_name|container_cpu_usage_seconds_total|container_memory_working_set_bytes|process_resident_memory_bytes|process_cpu_seconds_total|prometheus_remote_storage_samples_pending|prometheus_remote_storage_samples_failed_total|prometheus_remote_storage_samples_retried_total|prometheus_remote_storage_samples_total|prometheus_remote_storage_queue_highest_sent_timestamp_seconds"
+    regex = string.join([
+      // Scrape health
+      "up",
+      "scrape_samples_post_metric_relabeling",
+      // kube-state-metrics: nodes
+      "kube_node_info",
+      "kube_node_labels",
+      "kube_node_status_condition",
+      "kube_node_status_allocatable",
+      // kube-state-metrics: pods
+      "kube_pod_info",
+      "kube_pod_status_phase",
+      "kube_pod_container_status_restarts_total",
+      "kube_pod_container_status_waiting_reason",
+      "kube_pod_container_status_last_terminated_reason",
+      "kube_pod_container_resource_requests",
+      "kube_pod_container_resource_limits",
+      // kube-state-metrics: workloads + autoscaling
+      "kube_deployment_spec_replicas",
+      "kube_deployment_status_replicas_available",
+      "kube_deployment_status_replicas_updated",
+      "kube_statefulset_replicas",
+      "kube_statefulset_status_replicas_ready",
+      "kube_statefulset_status_replicas_updated",
+      "kube_horizontalpodautoscaler_spec_max_replicas",
+      "kube_horizontalpodautoscaler_status_current_replicas",
+      "kube_horizontalpodautoscaler_status_desired_replicas",
+      // cAdvisor: usage, throttling, OOM kills (per container and node root cgroup)
+      "container_cpu_usage_seconds_total",
+      "container_memory_working_set_bytes",
+      "container_cpu_cfs_periods_total",
+      "container_cpu_cfs_throttled_periods_total",
+      "container_oom_events_total",
+      // kubelet
+      "kubelet_running_pods",
+      "kubelet_evictions",
+      // Alloy self: collector memory and remote-write health
+      "process_resident_memory_bytes",
+      "prometheus_remote_storage_samples_pending",
+      "prometheus_remote_storage_samples_failed_total",
+      "prometheus_remote_storage_samples_retried_total",
+      "prometheus_remote_storage_queue_highest_sent_timestamp_seconds",
+    ], "|")
     action = "keep"
   }
-  // Discard cgroup aggregates; keep real Kubernetes containers only.
+  // Discard intermediate cgroup aggregates (pod sandboxes, kubepods slices) so
+  // per-container sums count each container once. The node root cgroup
+  // (id="/") is kept: it is whole-node usage without needing node-exporter.
   rule {
-    source_labels = ["__name__", "container"]
-    regex         = "container_(cpu_usage_seconds_total|memory_working_set_bytes);(|POD)"
+    source_labels = ["__name__", "container", "id"]
+    regex         = "container_.*;(|POD);/.+"
     action        = "drop"
   }
   rule {
@@ -93,9 +139,11 @@ prometheus.relabel "v1" {
     replacement   = "$1"
   }
   // Preserve series identity (including cgroup id and cpu); no arbitrary pod labels.
+  // reason: waiting / last-terminated reason. horizontalpodautoscaler: HPA name.
+  // label_karpenter_sh_nodepool: from kube_node_labels. eviction_signal: kubelet_evictions.
   rule {
     action = "labelkeep"
-    regex = "__name__|job|instance|source|node|namespace|pod|uid|container|id|cpu|condition|status|phase|resource|unit|deployment|statefulset|daemonset|component_id|component_path|remote_name|url"
+    regex = "__name__|job|instance|source|node|namespace|pod|uid|container|id|cpu|condition|status|phase|reason|resource|unit|deployment|statefulset|horizontalpodautoscaler|label_karpenter_sh_nodepool|eviction_signal|component_id|component_path|remote_name|url"
   }
   forward_to = [prometheus.remote_write.amp.receiver]
 }

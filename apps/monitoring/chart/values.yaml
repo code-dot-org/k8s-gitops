@@ -92,22 +92,40 @@ kube-state-metrics:
   autosharding:
     enabled: false
   prometheusScrape: false
-  collectors: [nodes, pods, deployments, statefulsets, daemonsets]
+  # Every metric below must also be on the Alloy keep-list in files/config.alloy,
+  # and every label it introduces on the Alloy labelkeep, or it never reaches AMP.
+  # No DaemonSets run on Auto Mode (system daemons are AWS-managed), so that
+  # collector is off.
+  collectors: [nodes, pods, deployments, statefulsets, horizontalpodautoscalers]
   metricAllowlist:
+    # Nodes: inventory, Ready/pressure conditions, allocatable (capacity denominators), pool label.
     - kube_node_info
+    - kube_node_labels
     - kube_node_status_condition
     - kube_node_status_allocatable
+    # Pods: placement, phase, restarts, waiting/exit reasons, requests and limits.
     - kube_pod_info
     - kube_pod_status_phase
     - kube_pod_container_status_restarts_total
+    - kube_pod_container_status_waiting_reason
+    - kube_pod_container_status_last_terminated_reason
     - kube_pod_container_resource_requests
     - kube_pod_container_resource_limits
+    # Workloads: desired vs available/ready, and updated for rollout progress.
     - kube_deployment_spec_replicas
     - kube_deployment_status_replicas_available
+    - kube_deployment_status_replicas_updated
     - kube_statefulset_replicas
     - kube_statefulset_status_replicas_ready
-    - kube_daemonset_status_desired_number_scheduled
-    - kube_daemonset_status_number_ready
+    - kube_statefulset_status_replicas_updated
+    # Autoscaling: current vs desired vs ceiling.
+    - kube_horizontalpodautoscaler_spec_max_replicas
+    - kube_horizontalpodautoscaler_status_current_replicas
+    - kube_horizontalpodautoscaler_status_desired_replicas
+  # kube_node_labels only carries labels named here (as label_<sanitised_key>).
+  # karpenter.sh/nodepool → label_karpenter_sh_nodepool: system / general-purpose / frontend.
+  metricLabelsAllowlist:
+    - nodes=[karpenter.sh/nodepool]
   nodeSelector:
     kubernetes.io/os: linux
   tolerations: []

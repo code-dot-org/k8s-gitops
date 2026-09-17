@@ -14,8 +14,17 @@ existing **Amazon Managed Service for Prometheus (AMP)** workspace.
   IAM role managed through Crossplane, scoped to writing metrics to the selected
   AMP workspace.
 
-Collected metrics cover node readiness, workload replicas, pod status and
-restarts, container CPU and memory usage, and collector health.
+Collected metrics cover node readiness and pressure conditions, node pool
+labels, allocatable capacity, workload replicas and rollout progress, HPA
+state, pod phase, restarts, waiting and exit reasons, container CPU and memory
+usage against requests and limits, CPU throttling, OOM kills, kubelet pod
+counts and evictions, and collector health. The node root cgroup is kept from
+cAdvisor so whole-node usage is available without node-exporter.
+
+The Alloy keep-list and the kube-state-metrics allowlist are the contract with
+the Grafana dashboards in the `infrastructure` repo
+(`observability/dashboards/grafana/src/dashboards/kubernetes/`). Add a metric to
+both when a panel needs it; drop it from both when nothing reads it.
 
 ## Configuration
 
