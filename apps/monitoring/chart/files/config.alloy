@@ -54,8 +54,19 @@ prometheus.scrape "kube_state_metrics" {
 
 prometheus.exporter.self "alloy" {}
 
+// Exporter targets carry their own job label ("integrations/self"), which
+// overrides job_name below. Force the kubernetes/ prefix so the source label
+// and the dashboard's cluster variable (up{job="kubernetes/alloy"}) resolve.
+discovery.relabel "alloy" {
+  targets = prometheus.exporter.self.alloy.targets
+  rule {
+    target_label = "job"
+    replacement  = "kubernetes/alloy"
+  }
+}
+
 prometheus.scrape "alloy" {
-  targets         = prometheus.exporter.self.alloy.targets
+  targets         = discovery.relabel.alloy.output
   job_name        = "kubernetes/alloy"
   scrape_interval = "60s"
   scrape_timeout  = "10s"
