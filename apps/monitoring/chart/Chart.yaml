@@ -2,7 +2,7 @@ apiVersion: v2
 name: monitoring
 description: Kubernetes metrics sent to the existing Amazon Managed Service for Prometheus workspace
 type: application
-version: 0.1.1
+version: 0.1.2
 dependencies:
   - name: alloy
     repository: https://grafana.github.io/helm-charts
