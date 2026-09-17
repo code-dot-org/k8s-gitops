@@ -3,6 +3,10 @@
 
 
 # General codeai_cluster_config values, for use by charts that still consume them directly.
+"amp":
+  "region": "us-east-1"
+  "remoteWriteUrl": "https://aps-workspaces.us-east-1.amazonaws.com/workspaces/ws-79f7ef41-111a-4830-a15b-2d5250f0362a/api/v1/remote_write"
+  "workspaceArn": "arn:aws:aps:us-east-1:475661607190:workspace/ws-79f7ef41-111a-4830-a15b-2d5250f0362a"
 "codeai_cluster_config":
   "cluster_name": "codeai-k8s"
   "cluster_oidc_issuer_url": "https://oidc.eks.us-east-1.amazonaws.com/id/1EFBBA3175CCC5F01AE9A069BC529C47"
