@@ -74,3 +74,22 @@ module "eks" {
     node_pools = ["system", "general-purpose"]
   }
 }
+
+#============================================================
+# Kubelet scrape access across node security groups
+#============================================================
+#
+# The monitoring collector (Alloy) runs on Auto Mode general-purpose nodes,
+# which use the EKS primary security group. Frontend NodeClass nodes use the
+# module's node security group, which only admits 10250 from itself and the
+# control plane. Without this rule, kubelet/cAdvisor scrapes of frontend
+# nodes time out. Defined outside the module because referencing
+# module.eks.cluster_primary_security_group_id inside its inputs is a cycle.
+resource "aws_vpc_security_group_ingress_rule" "node_kubelet_from_cluster_primary" {
+  security_group_id            = module.eks.node_security_group_id
+  referenced_security_group_id = module.eks.cluster_primary_security_group_id
+  ip_protocol                  = "tcp"
+  from_port                    = 10250
+  to_port                      = 10250
+  description                  = "Kubelet metrics scraping from cluster-primary-SG nodes"
+}
