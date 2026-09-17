@@ -5,10 +5,19 @@ config values (mostly ARNs) for later gitops consumers as
 [codeai-cluster-config.values.yaml](https://github.com/code-dot-org/k8s-gitops/blob/main/apps/infra/codeai-cluster-config.values.yaml).
 
 Includes:
+
 - Dex bootstrap secrets and IAM wiring
 - Kargo writeback git credentials and GitHub org webhook bootstrap
+- AMP destination values read from the existing observability state and published
+  under `amp` in the generated cluster values file.
 
-Apply `../cluster/` first.
+Apply `../cluster/` first. The existing
+`observability/production/terraform.tfstate` must expose
+`prometheus_workspace_arn` and `prometheus_remote_write_url`; the cluster-infra
+runner needs read access to that state. This is a dependency when generating
+configuration, not an application runtime health check. The publisher commits
+directly to `main`, so applying this phase is a GitOps publication step and must
+not be run while deployment is on hold.
 
 ## Usage
 

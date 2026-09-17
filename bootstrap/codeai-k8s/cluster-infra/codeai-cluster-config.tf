@@ -2,9 +2,8 @@
 # Publish cluster facts for later Helm / GitOps consumers.
 #============================================================
 #
-# These values originate in cluster, but cluster-infra owns the consumer-facing
-# handoff file so later phases do not need raw remote-state outputs for this
-# cluster-shape metadata.
+# Cluster and observability state own these values. cluster-infra publishes the
+# non-secret values so Helm consumers do not need access to either state.
 
 # update+commit+push apps/infra/codeai-cluster-config.values.yaml to GitHub repo k8s-gitops
 # this is the form that will be used by ArgoCD apps.
@@ -24,6 +23,7 @@ resource "github_repository_file" "codeai_cluster_config_values" {
     "\n",
     "# General codeai_cluster_config values, for use by charts that still consume them directly.",
     yamlencode({
+      amp = local.monitoring_amp
       codeai_cluster_config = {
         cluster_name                       = local.cluster_name
         cluster_region                     = local.cluster_region

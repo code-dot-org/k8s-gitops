@@ -1,0 +1,6 @@
+# AMP settings come from the OpenTofu-generated cluster values file.
+# Collection starts when ArgoCD syncs the merged application configuration.
+alloy:
+  enabled: true
+kube-state-metrics:
+  enabled: true
