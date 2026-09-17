@@ -1,5 +1,3 @@
-# Reuse the observability owner's outputs, following the existing remote-state
-# handoff for cluster metadata. No workspace IDs or ARNs are configuration inputs.
 data "terraform_remote_state" "observability" {
   backend = "s3"
   config = {
