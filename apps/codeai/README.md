@@ -1,3 +1,6 @@
 This app's deployment definitions live under `deployments/`.
 
-Docker image tag writeback is done by the GitHub Actions workflow [`k8s-commit-image-ref-to-argocd.yml`](https://github.com/code-dot-org/code-dot-org/blob/staging/.github/workflows/k8s-commit-image-ref-to-argocd.yml).
+The `image:` line in each `deployments/*/values.yaml` is written by Kargo.
+Each Kargo Stage under [`apps/kargo/projects/codeai/stages/`](../kargo/projects/codeai/stages/)
+promotes a `ghcr.io/code-dot-org/cdo-rails` digest by committing it to the matching
+values file and then refreshing the `codeai-<deployment>` Argo Application.

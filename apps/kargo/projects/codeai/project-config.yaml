@@ -8,7 +8,7 @@ spec:
     - stage: staging
       autoPromotionEnabled: true
     - stage: test
-      autoPromotionEnabled: false
+      autoPromotionEnabled: true
     - stage: production
       autoPromotionEnabled: false
     - stage: levelbuilder
