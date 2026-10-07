@@ -4,6 +4,9 @@ RAILS_ENV: production
 activeJobWorker:
   RAILS_ENV: production
   priorityMode: low
+  # Covers the 30 minute AnonymousGeoBackfillingJob cap with margin. The pod
+  # waits only as long as its current job runs; an idle worker exits in seconds.
+  terminationGracePeriodSeconds: 2100
 # dashboard_workers: 32
 healthChecks:
   enabled: true
