@@ -1,3 +1,12 @@
+{{/*
+Legacy CloudFormation stack name for an env type: the entry in
+.Values.cfn_stack_name_overrides when present, else the env type itself.
+Usage: include "standard-envtypes.cfnStackName" (dict "Values" $.Values "env" $env)
+*/}}
+{{- define "standard-envtypes.cfnStackName" -}}
+{{- index (.Values.cfn_stack_name_overrides | default dict) .env | default .env -}}
+{{- end -}}
+
 {{- define "eso-per-envtype.render" -}}
 {{- if .single_namespace_environment_type }}
 apiVersion: v1
@@ -129,12 +138,19 @@ spec:
     # CloudFormation stack per adhoc, so there is no CfnStack/adhoc/* path, and
     # the multi-namespace IAM policy does not grant one.
     #
-    # Matched on the db_ prefix rather than the whole path: every key dashboard
-    # needs from here starts with db_ (db_cluster_id, db_endpoint_*,
-    # db_credential_*), and CfnStack/<env>/ also holds unrelated keys such as
-    # `chef` that would otherwise be swept in. RE2 has no negative lookahead, so
-    # a positive match is the way to express this -- and it stays correct as
-    # other things get filed under this prefix.
+    # The path is CfnStack/<stack>/, where <stack> is the legacy CloudFormation
+    # stack name: the env type itself unless cfn_stack_name_overrides in
+    # values.yaml says otherwise (production's stack is autoscale-prod).
+    #
+    # Matched on an explicit key list rather than the whole db_ prefix. The
+    # keys dashboard needs from here are db_cluster_id, db_endpoint_* and the
+    # writer/reader db_credential_* pair. CfnStack/<stack>/ also holds keys
+    # that must NOT land in the namespace Secret: `chef`, per-person
+    # db_credential_employee_* secrets, and db_credential_admin, which
+    # code-dot-org config/production.yml.erb sets to ACCESS_DISABLED on every
+    # non-console production server. A synced CDO_db_credential_admin env var
+    # would override that. RE2 has no negative lookahead, so a positive match
+    # is the way to express this.
     #
     # NOTE: dataFrom entries merge in order, so a key present under both paths
     # takes its value from this second entry. The db_credential_* keys ARE
@@ -145,12 +161,12 @@ spec:
     - find:
         conversionStrategy: Default
         decodingStrategy: None
-        path: {{ printf "CfnStack/%s/" .environment_type | quote }}
+        path: {{ printf "CfnStack/%s/" .cfn_stack_name | quote }}
         name:
-          regexp: {{ printf "^CfnStack/%s/db_.*$" .environment_type | quote }}
+          regexp: {{ printf "^CfnStack/%s/db_(cluster_id|endpoint_.*|credential_(writer|reader))$" .cfn_stack_name | quote }}
       rewrite:
         - regexp:
-            source: {{ printf "^CfnStack/%s/(.*)$" .environment_type | quote }}
+            source: {{ printf "^CfnStack/%s/(.*)$" .cfn_stack_name | quote }}
             target: "$1"
 {{- else }}
 #==============================================================================

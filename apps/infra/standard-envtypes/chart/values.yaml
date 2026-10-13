@@ -12,18 +12,26 @@ adhoc:
   multi_namespace_regexes:
     - "^adhoc-.*"
 
+# Legacy CloudFormation stack name per env type. It names the
+# CfnStack/<stack>/ Secrets Manager path used by the ExternalSecret find and
+# the IAM resource ARN. Env types not listed here use their own name as the
+# stack name (CfnStack/staging/, CfnStack/test/, ...).
+#
+# production's legacy stack is autoscale-prod; CfnStack/production/* does not
+# exist.
+cfn_stack_name_overrides:
+  production: autoscale-prod
+
 # Env types whose db_writer / db_reader URLs are composed (via the
 # ExternalSecret's target.template) from the CloudFormation-provisioned
-# CfnStack/<env>/db_* secrets, overriding the frozen <env>/cdo/ values.
+# CfnStack/<stack>/db_* secrets, overriding the frozen <env>/cdo/ values.
 #
-# Only list env types verified to have CfnStack/<env>/db_credential_writer,
+# Only list env types verified to have CfnStack/<stack>/db_credential_writer,
 # db_credential_reader, db_endpoint_writer, and db_endpoint_writer_port in
 # Secrets Manager: an ESO template that references a missing key fails the
 # entire cdo-external-secrets sync for that env type.
-#
-# production is deliberately absent: no CfnStack/production/* secrets exist
-# (its legacy CloudFormation stack is not named "production").
 compose_db_url_environment_types:
   - levelbuilder
+  - production
   - staging
   - test
