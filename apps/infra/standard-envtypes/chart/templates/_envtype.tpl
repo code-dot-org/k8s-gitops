@@ -145,12 +145,7 @@ spec:
     # Matched on an explicit key list rather than the whole db_ prefix. The
     # keys dashboard needs from here are db_cluster_id, db_endpoint_* and the
     # writer/reader db_credential_* pair. CfnStack/<stack>/ also holds keys
-    # that must NOT land in the namespace Secret: `chef`, per-person
-    # db_credential_employee_* secrets, and db_credential_admin, which
-    # code-dot-org config/production.yml.erb sets to ACCESS_DISABLED on every
-    # non-console production server. A synced CDO_db_credential_admin env var
-    # would override that. RE2 has no negative lookahead, so a positive match
-    # is the way to express this.
+    # that shouldn't land in the namespace.
     #
     # NOTE: dataFrom entries merge in order, so a key present under both paths
     # takes its value from this second entry. The db_credential_* keys ARE
