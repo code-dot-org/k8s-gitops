@@ -33,10 +33,70 @@ listed there; do not rename `deployment.yaml.disabled` before they are met.
 
 These were inferred from code only. Record the answer next to each item.
 
-- [ ] **V1 (P0)** List which `production/cdo/db_*`, `db_endpoint_*`, and
+- [x] **V1 (P0)** List which `production/cdo/db_*`, `db_endpoint_*`, and
       `db_credential_*` keys exist in Secrets Manager and whether
       `CfnStack/autoscale-prod/*` holds the RDS Proxy endpoints.
       Unblocks: B2. See 4.3.
+
+      **Result (2026-10-07, read-only `aws secretsmanager list-secrets` in
+      475661607190 / us-east-1; no values read, no secrets modified):**
+
+      `production/cdo/` has exactly six `db_*` secrets and **no**
+      `db_endpoint_*` or `db_credential_*` keys at all:
+
+      | Secret                              | Created    | LastChanged | Status |
+      |-------------------------------------|------------|-------------|--------|
+      | `production/cdo/db_writer`          | 2019-07-23 | 2019-07-23  | frozen; same vintage as the retired non-prod ones |
+      | `production/cdo/db_reader`          | 2019-07-23 | 2019-07-23  | frozen |
+      | `production/cdo/db_admin`           | 2019-07-23 | 2019-07-23  | frozen |
+      | `production/cdo/db_writer_password` | 2022-10-15 | 2022-10-15  | frozen |
+      | `production/cdo/db_reader_password` | 2022-10-15 | 2022-10-15  | frozen |
+      | `production/cdo/db_admin_password`  | 2022-10-15 | 2022-10-15  | frozen |
+
+      Frozen does not mean dead: legacy production EC2 resolves
+      `db_writer: !Secret` from `production/cdo/db_writer`, so these stay
+      untouched. All six show LastAccessed = yesterday, but that is explained
+      by the production `cdo-external-secrets` ExternalSecret, which `find`s
+      `production/cdo/` every 5 minutes and GetSecretValue's each match; it is
+      not evidence of (or against) legacy use.
+
+      `CfnStack/autoscale-prod/` has 16 secrets and **does** hold the full RDS
+      Proxy set:
+
+      | Key                                  | LastChanged | Note |
+      |--------------------------------------|-------------|------|
+      | `db_endpoint_proxy_writer` / `_port` | 2026-09-25 / 2025-06-12 | proxy hostname changed 12 days ago |
+      | `db_endpoint_proxy_reader` / `_port` | 2026-09-25 / 2025-06-12 | proxy hostname changed 12 days ago |
+      | `db_endpoint_proxy_reporting` / `_port` | 2025-05-16 / 2025-06-12 | |
+      | `db_endpoint_writer` / `_port`       | 2025-05-16 / 2025-06-12 | Aurora cluster writer endpoint (non-proxy) |
+      | `db_cluster_id`                      | 2025-05-16  | |
+      | `db_credential_writer`, `db_credential_reader` | 2025-05-16 | RDS Proxy JSON format |
+      | `db_credential_admin`                | 2025-08-05  | not needed by a worker |
+      | `db_credential_employee_emily.eastlake`, `_natalia`, `_seth.nickell` | 2024 | personal DB creds; must not be synced to k8s |
+      | `chef`                               | 2025-05-16  | not `db_*`, already excluded by the regex |
+
+      There is no `db_endpoint_reader` (cluster reader endpoint); staging has
+      none either. The 13 `db_*` keys staging's `cdo-external-secrets`
+      receives from `CfnStack/staging/` all exist under `autoscale-prod`, so
+      production has parity with staging plus the three employee credentials.
+      The four keys the chart's compose template needs
+      (`db_credential_writer`, `db_credential_reader`, `db_endpoint_writer`,
+      `db_endpoint_writer_port`) all exist. Daily LastAccessed on every
+      `autoscale-prod` key is expected: RDS Proxy reads the `db_credential_*`
+      secrets for auth and legacy EC2 resolves `!StackSecret` at boot; k8s
+      reads none of them today because the production find path is
+      `CfnStack/production/`.
+
+      Live confirmation (`kubectl get secret cdo-external-secrets -n
+      production`, key names only): the Secret contains exactly the six
+      `production/cdo` keys above and nothing from the CfnStack find. So a
+      production worker today would get the 2019 `db_writer`/`db_reader` and
+      would be missing every `!StackSecret` key. `database.yml` reads
+      `db_endpoint_proxy_reporting`, `db_endpoint_proxy_reporting_port`, and
+      `db_credential_reader` unconditionally for the `primary_reporting` pool,
+      so the worker would fall through to Secrets Manager at boot for names
+      (`production/cdo/db_endpoint_proxy_reporting`, ...) that do not exist.
+      B2 can be designed from this; see the design notes under B2.
 - [ ] **V2 (P0)** In staging, check whether worker CloudWatch metric pushes and
       DCDO (DynamoDB) reads succeed with no pod credentials, and what else fails.
       Unblocks: B1. See 4.2.
@@ -156,6 +216,40 @@ Most of these land in `apps/infra/standard-envtypes/chart`, which renders the
       `templates/_envtype.tpl`, `templates/aws/single-namespace-envtypes-iam.yaml`.
       Depends on: V1. Done when: `cdo-external-secrets` in `production` contains
       composed `db_writer` and `db_reader` and the ESO sync is Ready. See 4.3.
+      Implemented 2026-10-08 (chart 0.1.6 -> 0.1.7, pending merge to main and
+      the live check below): `cfn_stack_name_overrides` (production ->
+      autoscale-prod) in `values.yaml`, resolved by the
+      `standard-envtypes.cfnStackName` helper and used by the CfnStack find
+      path and the IAM `GetSecretValue` ARN; CfnStack find regex narrowed to
+      `db_(cluster_id|endpoint_.*|credential_(writer|reader))` for all env
+      types; `production` added to `compose_db_url_environment_types`. The
+      composed URLs use the cluster writer endpoint, same as staging; the RDS
+      Proxy switch is a separate follow-up. Local `helm template` diff against
+      HEAD: only the production find path/ARN, the regex, and the production
+      compose template changed. Tick this box once `cdo-external-secrets` in
+      `production` is Ready with the composed keys.
+      Design notes from V1 (2026-10-07):
+      - `CfnStack/autoscale-prod/` has every key staging gets today, so
+        pointing the find path and the IAM ARN at `autoscale-prod` and adding
+        `production` to `compose_db_url_environment_types` is sufficient; no
+        new secrets need to be created.
+      - Narrow the CfnStack find regex before enabling it for production. The
+        current `^CfnStack/<env>/db_.*$` would also sweep
+        `db_credential_admin` and three personal
+        `db_credential_employee_*` secrets into the production namespace
+        Secret. Match only `db_cluster_id`, `db_endpoint_*`,
+        `db_credential_writer`, and `db_credential_reader` (apply the same
+        regex to all env types so staging parity holds).
+      - Decide whether the composed URLs use the RDS Proxy writer/reader
+        (`db_endpoint_proxy_writer`/`_reader` + `_port`) instead of the raw
+        cluster writer endpoint that staging composes today. V1 confirms both
+        exist. If using the proxies, note the proxy hostnames last changed
+        2026-09-25: ESO will re-render the Secret within 5 minutes of a
+        change, but running pods only pick up new env vars on a rollout.
+      - `apps/codeai/deployments/production/values.yaml` already sets
+        `locals.yml.stack_name: autoscale-prod`; V9 determines whether that
+        makes the app's own `!StackSecret` resolution work without IMDS, which
+        would make the two mechanisms agree on the stack name.
 - [ ] **B3 (P1)** Add Pod Security Admission labels to the Namespace:
       `enforce: baseline`, `warn: restricted`, `audit: restricted`. Move
       `enforce` to `restricted` after A8.
