@@ -5,6 +5,8 @@
 {{- $oidcHost := trimPrefix "https://" .Values.codeai_cluster_config.cluster_oidc_issuer_url -}}
 {{- $accountID := index (splitList ":" $oidcProviderArn) 4 -}}
 {{- range $env := .Values.codeai_cluster_config.single_namespace_environment_types }}
+{{- /* Legacy CloudFormation stack name; see cfn_stack_name_overrides in values.yaml. */}}
+{{- $stack := include "standard-envtypes.cfnStackName" (dict "Values" $.Values "env" $env) }}
 ---
 apiVersion: iam.aws.m.upbound.io/v1beta1
 kind: Role
@@ -73,7 +75,7 @@ spec:
             "Action": "secretsmanager:GetSecretValue",
             "Resource": [
               "arn:aws:secretsmanager:{{ $clusterRegion }}:{{ $accountID }}:secret:{{ $env }}/cdo/*",
-              "arn:aws:secretsmanager:{{ $clusterRegion }}:{{ $accountID }}:secret:CfnStack/{{ $env }}/*"
+              "arn:aws:secretsmanager:{{ $clusterRegion }}:{{ $accountID }}:secret:CfnStack/{{ $stack }}/*"
             ]
           }
         ]

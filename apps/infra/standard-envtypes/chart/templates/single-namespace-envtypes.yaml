@@ -7,6 +7,7 @@
 {{- end }}
 {{ include "eso-per-envtype.render" (dict
   "environment_type" $env
+  "cfn_stack_name" (include "standard-envtypes.cfnStackName" (dict "Values" $.Values "env" $env))
   "single_namespace_environment_type" true
   "multi_namespace_regexes" nil
   "iam_role_arn" (printf "%s:role/%s-eso-%s" $iamArnPrefix $clusterName $env)
