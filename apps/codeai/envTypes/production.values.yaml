@@ -8,6 +8,13 @@ activeJobWorker:
   # waits only as long as its current job runs; an idle worker exits in seconds.
   terminationGracePeriodSeconds: 2100
 # dashboard_workers: 32
+
+# IRSA role for the app pods, created by the standard-envtypes chart
+# (apps/infra/standard-envtypes/chart/templates/aws/single-namespace-envtypes-app-iam.yaml).
+# Its trust policy names system:serviceaccount:production:cdo-app.
+serviceAccount:
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::475661607190:role/codeai-k8s-app-production
 healthChecks:
   enabled: true
 require_external_secrets: true

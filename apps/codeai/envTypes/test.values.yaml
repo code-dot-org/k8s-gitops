@@ -5,6 +5,13 @@ activeJobWorker:
   RAILS_ENV: test
   priorityMode: low
 # dashboard_workers: 65
+
+# IRSA role for the app pods, created by the standard-envtypes chart
+# (apps/infra/standard-envtypes/chart/templates/aws/single-namespace-envtypes-app-iam.yaml).
+# Its trust policy names system:serviceaccount:test:cdo-app.
+serviceAccount:
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::475661607190:role/codeai-k8s-app-test
 healthChecks:
   enabled: true
 require_external_secrets: true

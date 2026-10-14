@@ -4,6 +4,12 @@ RAILS_ENV: development
 activeJobWorker:
   RAILS_ENV: development
   priorityMode: low
+# IRSA role shared by the app pods of every adhoc-* namespace, created by the
+# standard-envtypes chart
+# (apps/infra/standard-envtypes/chart/templates/aws/adhoc-envtype-app-iam.yaml).
+# Its trust policy matches system:serviceaccount:adhoc-*:cdo-app.
+serviceAccount:
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::475661607190:role/codeai-k8s-app-adhoc
 healthChecks:
   enabled: false
-
