@@ -378,12 +378,17 @@ What to do:
 - Confirm `k8s-gitops: apps/codeai/deployments/production/values.yaml` and
   `apps/codeai/envTypes/production.values.yaml` do not set `user.uid: 0` or
   `user.gid: 0`.
-- Add a CI invariant that renders the production deployment with
-  `helm template` and fails if the worker's `runAsUser` is 0. Put it in the
-  repo CI described by F3 (P1); if F3 has not landed yet, add it as a
-  standalone GitHub Actions check so it exists before launch.
+- Guard it in the chart: make
+  `code-dot-org: k8s/helm/templates/dashboard/_dashboard.yaml` fail the render
+  when `RAILS_ENV` is `production` and `user.uid` or `user.gid` is 0, and bump
+  the chart version. Argo CD then refuses the change on every render, whether
+  it arrived by PR, direct push, or bot commit, and keeps the last good
+  manifests running. (Decided 2026-10-14: this repo has no CI and F3 is P1, so
+  the CI form of this invariant moves to F3.)
 
-Done when: CI fails on a uid 0 in production values.
+Done when: `helm template` of the production deployment fails with
+`--set user.uid=0`, and the chart change is merged to the `code-dot-org`
+branch that production pins.
 
 Unblocks: F2.
 

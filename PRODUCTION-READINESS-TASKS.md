@@ -143,9 +143,49 @@ Chart: `../code-dot-org/k8s/helm`. Values: `apps/codeai/envTypes/production.valu
       Where: `../code-dot-org/lib/cdo/active_job_backend.rb`.
       Done when: the decision is written here with its date. See 3.8.
 - [ ] **A4 (P0)** Confirm production values never set `user.uid: 0` (staging
-      and test do). Add the invariant to F3's CI checks.
-      Where: `apps/codeai/deployments/production/values.yaml`.
-      Done when: CI fails on a uid 0 in production values. See 3.5.
+      and test do). Guard it in the chart; the CI invariant moves to F3.
+      Where: `apps/codeai/deployments/production/values.yaml`,
+      `../code-dot-org/k8s/helm/templates/dashboard/_dashboard.yaml`.
+      Done when: the production render fails on a uid or gid of 0. See 3.5.
+
+      **Confirmed (2026-10-14):** neither
+      `apps/codeai/deployments/production/values.yaml` nor
+      `apps/codeai/envTypes/production.values.yaml` sets a `user:` key.
+      `helm template` with the ApplicationSet's value layering, against the
+      chart at the branch production pins (`staging`, chart 0.2.0), renders
+      the only production pod template, `production-cdo-active-job-worker`,
+      with `runAsUser`/`runAsGroup`/`fsGroup` 1000; `--set user.uid=0` flips
+      it to 0, so the copy-paste exposure is real.
+      Decision (2026-10-14): this repo has no CI and F3 (the CI) is P1, so the
+      guard lives in the chart instead of a standalone workflow. Argo CD
+      enforces it on every render no matter how the change arrived (PR, direct
+      push, bot commit), which CI cannot do until F4 makes it a required check.
+      Implemented 2026-10-14 (chart 0.3.1 -> 0.3.2 on top of origin/staging
+      bb8da65b94d, pending merge to code-dot-org `staging`):
+      `templates/dashboard/_dashboard.yaml` `fail`s
+      the render when the chart-wide or per-component `RAILS_ENV` is
+      `production` and `user.uid` or `user.gid` is 0, naming the k8s-gitops
+      values files in the message. It sits in the shared pod template, so it
+      covers every workload the chart renders (worker, dashboard Deployment,
+      dashboardJob). A failed render leaves the last good manifests running.
+      Keyed on `RAILS_ENV`, so Skaffold's root override for local dev is
+      unaffected. Local checks: the production render is unchanged apart from
+      the chart label; `--set user.uid=0`, `--set user.gid=0`, and the string
+      `"0"` that Skaffold passes each fail; staging, test, levelbuilder, adhoc,
+      and `development.values.yaml` with uid/gid 0 all still render; `helm
+      lint` is clean.
+      Found while verifying (2026-10-14): chart 0.3.0 added
+      `values.schema.json` (code-dot-org #75664), and
+      `apps/codeai/deployments/production/values.yaml` failed it with
+      `/resources: additional properties 'requests' not allowed`. The block
+      used `resources.requests.ephemeralStorage`, a key the chart never read
+      (the worker pins `activeJobWorker.resources` anyway, and the chart
+      default is already 30Gi). Flattened to `resources.ephemeralStorage` in
+      this branch so the production deployment renders at all on chart
+      >= 0.3.0; staging, test, and levelbuilder values already pass the
+      schema. Tick this box once the chart change is on code-dot-org
+      `staging` and the `codeai-staging` Argo app (uid 0, `RAILS_ENV` staging)
+      is still Healthy on chart 0.3.2.
 - [ ] **A5 (P1)** Send delayed_job logs to stdout when an env switch is set,
       and set it in the chart.
       Where: `../code-dot-org/dashboard/config/initializers/delayed_job_config.rb`,
@@ -491,6 +531,10 @@ build` the parity overlays, `kubeconform`, and invariants (production worker
       in step with `apps/app-of-apps`).
       Where: new `.github/workflows/`.
       Done when: each invariant has a failing test case. See 8.4.
+      Note (2026-10-14, from A4): the chart itself now fails a production
+      render with `user.uid` or `user.gid` 0, so the CI invariant for it is
+      "render production with `--set user.uid=0` and expect `helm template` to
+      fail", which also proves the chart guard is still in place.
 - [ ] **F4 (P1)** Branch protection on `main` with required checks and a
       ruleset bypass for the Kargo and tofu bot identities; `CODEOWNERS` requiring
       infrastructure review on `apps/codeai/deployments/production/**`,
