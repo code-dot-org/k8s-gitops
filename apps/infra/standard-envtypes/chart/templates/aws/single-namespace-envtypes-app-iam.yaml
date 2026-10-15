@@ -1,0 +1,212 @@
+{{- if eq .Values.provider "aws" }}
+{{- $clusterName := .Values.codeai_cluster_config.cluster_name -}}
+{{- $clusterRegion := .Values.codeai_cluster_config.cluster_region -}}
+{{- $oidcProviderArn := .Values.codeai_cluster_config.oidc_provider_arn -}}
+{{- $oidcHost := trimPrefix "https://" .Values.codeai_cluster_config.cluster_oidc_issuer_url -}}
+{{- $accountID := index (splitList ":" $oidcProviderArn) 4 -}}
+{{- range $env := .Values.codeai_cluster_config.single_namespace_environment_types }}
+{{- /* Legacy CloudFormation stack name; see cfn_stack_name_overrides in values.yaml. */}}
+{{- $stack := include "standard-envtypes.cfnStackName" (dict "Values" $.Values "env" $env) }}
+{{- /* cdo-v3-* key prefixes are sources/, assets/ in production and sources_<env>/, assets_<env>/ elsewhere (code-dot-org: config.yml.erb). */}}
+{{- $envSuffix := ternary "" (printf "_%s" $env) (eq $env "production") }}
+---
+# IRSA role for the code-dot-org app pods (ActiveJob worker, dashboard, jobs)
+# in the {{ $env }} namespace. The cdo chart (code-dot-org: k8s/helm) creates
+# the ServiceAccount; apps/codeai/envTypes/{{ $env }}.values.yaml points it at
+# this role.
+apiVersion: iam.aws.m.upbound.io/v1beta1
+kind: Role
+metadata:
+  name: standard-envtypes-app-{{ $env }}
+  namespace: crossplane-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "-100"
+    crossplane.io/external-name: {{ printf "%s-app-%s" $clusterName $env | quote }}
+spec:
+  providerConfigRef:
+    name: default
+    kind: ClusterProviderConfig
+  forProvider:
+    tags:
+      code.ai/cluster: {{ $clusterName | quote }}
+    assumeRolePolicy: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": "sts:AssumeRoleWithWebIdentity",
+            "Principal": {
+              "Federated": {{ $oidcProviderArn | quote }}
+            },
+            "Condition": {
+              "StringEquals": {
+                "{{ $oidcHost }}:sub": "system:serviceaccount:{{ $env }}:cdo-app",
+                "{{ $oidcHost }}:aud": "sts.amazonaws.com"
+              }
+            }
+          }
+        ]
+      }
+---
+# The legacy CDOPolicy (code-dot-org: aws/cloudformation/cloud_formation_stack.yml.erb)
+# minus what a pod never does: no EC2 bootstrap (cdo-dist, cloudformation:SignalResource,
+# ec2:DescribeTags, pricing), no stack-scoped CfnStack/* secrets (those arrive as env
+# vars through ESO), no CloudWatch Logs (the app writes stdout; nothing ships it yet),
+# no AMP remote write (alloy ships metrics), and named buckets instead of s3:* on
+# every bucket. Inline role policies are capped at 10240 non-whitespace characters.
+apiVersion: iam.aws.m.upbound.io/v1beta1
+kind: RolePolicy
+metadata:
+  name: standard-envtypes-app-{{ $env }}
+  namespace: crossplane-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "-100"
+    crossplane.io/external-name: app-runtime
+spec:
+  providerConfigRef:
+    name: default
+    kind: ClusterProviderConfig
+  forProvider:
+    roleRef:
+      name: standard-envtypes-app-{{ $env }}
+    policy: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Sid": "Metrics",
+            "Effect": "Allow",
+            "Action": "cloudwatch:PutMetricData",
+            "Resource": "*"
+          },
+          {
+            "Sid": "RuntimeSecrets",
+            "Effect": "Allow",
+            "Action": "secretsmanager:GetSecretValue",
+            "Resource": "arn:aws:secretsmanager:{{ $clusterRegion }}:{{ $accountID }}:secret:{{ $env }}/cdo/*",
+            "Condition": {
+              "StringEquals": {
+                "secretsmanager:VersionStage": "AWSCURRENT"
+              }
+            }
+          },
+          {
+            "Sid": "DynamicConfig",
+            "Effect": "Allow",
+            "Action": [
+              "dynamodb:GetItem",
+              "dynamodb:PutItem",
+              "dynamodb:Scan"
+            ],
+            "Resource": [
+              "arn:aws:dynamodb:{{ $clusterRegion }}:{{ $accountID }}:table/dcdo_{{ $env }}",
+              "arn:aws:dynamodb:{{ $clusterRegion }}:{{ $accountID }}:table/gatekeeper_{{ $env }}"
+            ]
+          },
+          {
+            "Sid": "Firehose",
+            "Effect": "Allow",
+            "Action": [
+              "firehose:PutRecord",
+              "firehose:PutRecordBatch"
+            ],
+            "Resource": [
+              "arn:aws:firehose:{{ $clusterRegion }}:{{ $accountID }}:deliverystream/analysis-events",
+              "arn:aws:firehose:{{ $clusterRegion }}:{{ $accountID }}:deliverystream/i18n-string-tracking-events"
+            ]
+          },
+          {
+            "Sid": "UserContentObjects",
+            "Effect": "Allow",
+            "Action": [
+              "s3:GetObject",
+              "s3:PutObject",
+              "s3:DeleteObject"
+            ],
+            "Resource": "arn:aws:s3:::org.code.{{ $stack }}-studio.user-content/*"
+          },
+          {
+            "Sid": "UserContentBucket",
+            "Effect": "Allow",
+            "Action": "s3:ListBucket",
+            "Resource": "arn:aws:s3:::org.code.{{ $stack }}-studio.user-content"
+          },
+          {
+            "Sid": "ReadOnlyObjects",
+            "Effect": "Allow",
+            "Action": [
+              "s3:GetObject",
+              "s3:GetObjectVersion"
+            ],
+            "Resource": [
+              "arn:aws:s3:::cdo-ai/*",
+              "arn:aws:s3:::cdo-v3-sources/sources{{ $envSuffix }}/*",
+              "arn:aws:s3:::cdo-v3-assets/assets{{ $envSuffix }}/*",
+              "arn:aws:s3:::cdo-v3-assets/starter_assets/*"
+            ]
+          },
+          {
+            "Sid": "ReadOnlyBuckets",
+            "Effect": "Allow",
+            "Action": "s3:ListBucket",
+            "Resource": [
+              "arn:aws:s3:::cdo-ai",
+              "arn:aws:s3:::cdo-v3-sources",
+              "arn:aws:s3:::cdo-v3-assets"
+            ]
+          },
+          {
+            "Sid": "GenAI",
+            "Effect": "Allow",
+            "Action": "sagemaker:InvokeEndpoint",
+            "Resource": "arn:aws:sagemaker:{{ $clusterRegion }}:{{ $accountID }}:endpoint/gen-ai-*"
+          },
+          {
+            "Sid": "Comprehend",
+            "Effect": "Allow",
+            "Action": [
+              "comprehend:DetectToxicContent",
+              "comprehend:DetectPiiEntities"
+            ],
+            "Resource": "*"
+          },
+          {
+            "Sid": "BedrockKnowledgeBases",
+            "Effect": "Allow",
+            "Action": "bedrock:RetrieveAndGenerate",
+            "Resource": "*"
+          },
+          {
+            "Sid": "BedrockRetrieve",
+            "Effect": "Allow",
+            "Action": "bedrock:Retrieve",
+            "Resource": [
+              "arn:aws:bedrock:{{ $clusterRegion }}:{{ $accountID }}:knowledge-base/1WHRENJ0OA",
+              "arn:aws:bedrock:{{ $clusterRegion }}:{{ $accountID }}:knowledge-base/ODWSNBOEZG"
+            ]
+          },
+          {
+            "Sid": "BedrockInferenceProfile",
+            "Effect": "Allow",
+            "Action": [
+              "bedrock:InvokeModel",
+              "bedrock:GetInferenceProfile"
+            ],
+            "Resource": "arn:aws:bedrock:{{ $clusterRegion }}:{{ $accountID }}:inference-profile/us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+          },
+          {
+            "Sid": "BedrockFoundationModel",
+            "Effect": "Allow",
+            "Action": "bedrock:InvokeModel",
+            "Resource": "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-5-20250929-v1:0",
+            "Condition": {
+              "StringLike": {
+                "bedrock:InferenceProfileArn": "arn:aws:bedrock:{{ $clusterRegion }}:{{ $accountID }}:inference-profile/us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+              }
+            }
+          }
+        ]
+      }
+{{- end }}
+{{- end }}

@@ -25,6 +25,7 @@ locals {
     parent_zone_arn      = "arn:${data.aws_partition.current.partition}:route53:::hostedzone/${data.aws_route53_zone.parent_domain.zone_id}"
     hosted_zone_arn_wildcard = "arn:${data.aws_partition.current.partition}:route53:::hostedzone/*"
     iam_role_names = [
+      "${var.cluster_name}-app-*",
       "${var.cluster_name}-external-dns",
       "${var.cluster_name}-eso-*",
       "${var.cluster_name}-monitoring-alloy",

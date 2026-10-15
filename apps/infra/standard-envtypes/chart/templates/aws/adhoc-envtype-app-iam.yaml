@@ -1,0 +1,183 @@
+{{- if eq .Values.provider "aws" }}
+{{- $clusterName := .Values.codeai_cluster_config.cluster_name -}}
+{{- $clusterRegion := .Values.codeai_cluster_config.cluster_region -}}
+{{- $oidcProviderArn := .Values.codeai_cluster_config.oidc_provider_arn -}}
+{{- $oidcHost := trimPrefix "https://" .Values.codeai_cluster_config.cluster_oidc_issuer_url -}}
+{{- $accountID := index (splitList ":" $oidcProviderArn) 4 -}}
+---
+# IRSA role for the code-dot-org app pods in every adhoc-* namespace. One role
+# serves all adhocs: the trust policy matches the namespace with StringLike,
+# so it needs no per-adhoc resource. The cdo chart (code-dot-org: k8s/helm)
+# creates the ServiceAccount; apps/codeai/envTypes/adhoc.values.yaml points it
+# at this role.
+apiVersion: iam.aws.m.upbound.io/v1beta1
+kind: Role
+metadata:
+  name: standard-envtypes-app-adhoc
+  namespace: crossplane-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "-100"
+    crossplane.io/external-name: {{ printf "%s-app-adhoc" $clusterName | quote }}
+spec:
+  providerConfigRef:
+    name: default
+    kind: ClusterProviderConfig
+  forProvider:
+    tags:
+      code.ai/cluster: {{ $clusterName | quote }}
+    assumeRolePolicy: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": "sts:AssumeRoleWithWebIdentity",
+            "Principal": {
+              "Federated": {{ $oidcProviderArn | quote }}
+            },
+            "Condition": {
+              "StringEquals": {
+                "{{ $oidcHost }}:aud": "sts.amazonaws.com"
+              },
+              "StringLike": {
+                "{{ $oidcHost }}:sub": "system:serviceaccount:adhoc-*:cdo-app"
+              }
+            }
+          }
+        ]
+      }
+---
+# The single-namespace app policy (single-namespace-envtypes-app-iam.yaml)
+# minus what an adhoc has no resource for: no DynamoDB (adhoc pods run as
+# RAILS_ENV=development, which keeps dynamic config in a local JSON file, and
+# no dcdo_adhoc or gatekeeper_adhoc table exists) and no user-content bucket
+# (code-dot-org: config.yml.erb maps no bucket for adhoc). The cdo-v3-* read
+# prefixes cover both the adhoc suffix (RACK_ENV=adhoc, as on EC2 adhocs) and
+# the development suffix that apps/codeai/envTypes/adhoc.values.yaml runs today.
+apiVersion: iam.aws.m.upbound.io/v1beta1
+kind: RolePolicy
+metadata:
+  name: standard-envtypes-app-adhoc
+  namespace: crossplane-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "-100"
+    crossplane.io/external-name: app-runtime
+spec:
+  providerConfigRef:
+    name: default
+    kind: ClusterProviderConfig
+  forProvider:
+    roleRef:
+      name: standard-envtypes-app-adhoc
+    policy: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Sid": "Metrics",
+            "Effect": "Allow",
+            "Action": "cloudwatch:PutMetricData",
+            "Resource": "*"
+          },
+          {
+            "Sid": "RuntimeSecrets",
+            "Effect": "Allow",
+            "Action": "secretsmanager:GetSecretValue",
+            "Resource": "arn:aws:secretsmanager:{{ $clusterRegion }}:{{ $accountID }}:secret:adhoc/cdo/*",
+            "Condition": {
+              "StringEquals": {
+                "secretsmanager:VersionStage": "AWSCURRENT"
+              }
+            }
+          },
+          {
+            "Sid": "Firehose",
+            "Effect": "Allow",
+            "Action": [
+              "firehose:PutRecord",
+              "firehose:PutRecordBatch"
+            ],
+            "Resource": [
+              "arn:aws:firehose:{{ $clusterRegion }}:{{ $accountID }}:deliverystream/analysis-events",
+              "arn:aws:firehose:{{ $clusterRegion }}:{{ $accountID }}:deliverystream/i18n-string-tracking-events"
+            ]
+          },
+          {
+            "Sid": "ReadOnlyObjects",
+            "Effect": "Allow",
+            "Action": [
+              "s3:GetObject",
+              "s3:GetObjectVersion"
+            ],
+            "Resource": [
+              "arn:aws:s3:::cdo-ai/*",
+              "arn:aws:s3:::cdo-v3-sources/sources_adhoc/*",
+              "arn:aws:s3:::cdo-v3-sources/sources_development/*",
+              "arn:aws:s3:::cdo-v3-assets/assets_adhoc/*",
+              "arn:aws:s3:::cdo-v3-assets/assets_development/*",
+              "arn:aws:s3:::cdo-v3-assets/starter_assets/*"
+            ]
+          },
+          {
+            "Sid": "ReadOnlyBuckets",
+            "Effect": "Allow",
+            "Action": "s3:ListBucket",
+            "Resource": [
+              "arn:aws:s3:::cdo-ai",
+              "arn:aws:s3:::cdo-v3-sources",
+              "arn:aws:s3:::cdo-v3-assets"
+            ]
+          },
+          {
+            "Sid": "GenAI",
+            "Effect": "Allow",
+            "Action": "sagemaker:InvokeEndpoint",
+            "Resource": "arn:aws:sagemaker:{{ $clusterRegion }}:{{ $accountID }}:endpoint/gen-ai-*"
+          },
+          {
+            "Sid": "Comprehend",
+            "Effect": "Allow",
+            "Action": [
+              "comprehend:DetectToxicContent",
+              "comprehend:DetectPiiEntities"
+            ],
+            "Resource": "*"
+          },
+          {
+            "Sid": "BedrockKnowledgeBases",
+            "Effect": "Allow",
+            "Action": "bedrock:RetrieveAndGenerate",
+            "Resource": "*"
+          },
+          {
+            "Sid": "BedrockRetrieve",
+            "Effect": "Allow",
+            "Action": "bedrock:Retrieve",
+            "Resource": [
+              "arn:aws:bedrock:{{ $clusterRegion }}:{{ $accountID }}:knowledge-base/1WHRENJ0OA",
+              "arn:aws:bedrock:{{ $clusterRegion }}:{{ $accountID }}:knowledge-base/ODWSNBOEZG"
+            ]
+          },
+          {
+            "Sid": "BedrockInferenceProfile",
+            "Effect": "Allow",
+            "Action": [
+              "bedrock:InvokeModel",
+              "bedrock:GetInferenceProfile"
+            ],
+            "Resource": "arn:aws:bedrock:{{ $clusterRegion }}:{{ $accountID }}:inference-profile/us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+          },
+          {
+            "Sid": "BedrockFoundationModel",
+            "Effect": "Allow",
+            "Action": "bedrock:InvokeModel",
+            "Resource": "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-5-20250929-v1:0",
+            "Condition": {
+              "StringLike": {
+                "bedrock:InferenceProfileArn": "arn:aws:bedrock:{{ $clusterRegion }}:{{ $accountID }}:inference-profile/us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+              }
+            }
+          }
+        ]
+      }
+{{- end }}

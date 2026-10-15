@@ -5,6 +5,13 @@ activeJobWorker:
   RAILS_ENV: levelbuilder
   priorityMode: low
 # dashboard_workers: 27
+
+# IRSA role for the app pods, created by the standard-envtypes chart
+# (apps/infra/standard-envtypes/chart/templates/aws/single-namespace-envtypes-app-iam.yaml).
+# Its trust policy names system:serviceaccount:levelbuilder:cdo-app.
+serviceAccount:
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::475661607190:role/codeai-k8s-app-levelbuilder
 healthChecks:
   enabled: true
 require_external_secrets: true
