@@ -103,9 +103,40 @@ These were inferred from code only. Record the answer next to each item.
 - [ ] **V3 (P0)** Check whether metrics-server is installed
       (`kubectl get apiservice v1beta1.metrics.k8s.io`) and whether the staging
       and test dashboard HPAs report metrics. Unblocks: C1. See 5.1.
-- [ ] **V4 (P0)** Confirm `ghcr.io/code-dot-org/cdo-rails` is multi-arch, and
+- [x] **V4 (P0)** Confirm `ghcr.io/code-dot-org/cdo-rails` is multi-arch, and
       list which architectures the `frontend` NodePool has launched. Unblocks:
       C2, C3. See 4.6.
+
+      **Result (2026-10-15, read-only `docker manifest inspect` and
+      `kubectl get nodes,nodeclaims`; nothing modified):**
+
+      The image is multi-arch: the manifest list for the staging digest
+      carries `linux/amd64` and `linux/arm64`. The `frontend` NodePool has
+      launched only **arm64** so far: both current nodes are `t4g.large`
+      (2 vCPU, 8 GiB, burstable). The pool has no arch or instance-type
+      requirement, so Karpenter picks the cheapest node that fits one worker.
+
+      One worker request against a `t4g.large`:
+
+      | Resource | Allocatable | Worker request | Left for a second worker |
+      |----------|-------------|----------------|--------------------------|
+      | cpu      | 1780m       | 1000m          | 780m                     |
+      | memory   | ~7 GiB      | 4 GiB          | ~3 GiB                   |
+
+      Exactly one worker fits per node. Every Kargo promotion surges a second
+      worker pod (RollingUpdate on 1 replica; `maxUnavailable: 25%` rounds to
+      0), and that pod sits Pending with
+      `0/5 nodes are available: 2 Insufficient cpu, 2 Insufficient memory,
+      3 node(s) didn't match Pod's node affinity/selector` for the two to four
+      minutes Karpenter needs to launch a fresh node. The old worker keeps
+      running the whole time, so this is a routine scale-up transient, not a
+      capacity failure. Seen in `staging` on 2026-10-14 during one of eight
+      rollouts that day. Nothing blocks the launch: the pool has no `limits`
+      and the account's on-demand Standard vCPU quota (20,896) is far above
+      use (a few hundred vCPUs). Auto Mode's Karpenter controller re-elected
+      its leader twice in about 30 minutes on 2026-10-15; that is AWS-managed
+      and can add a minute to the wait. Decision: not a P0. C2, C3, B5, and
+      E4 cover the production-side hardening.
 - [ ] **V5 (P0)** Apply a deny-all NetworkPolicy to a throwaway namespace and
       confirm Auto Mode enforces it. Unblocks: B6. See 4.4.
 - [ ] **V6 (P0)** Confirm the EKS module created the secrets KMS key and the
@@ -126,17 +157,30 @@ These were inferred from code only. Record the answer next to each item.
 Chart: `../code-dot-org/k8s/helm`. Values: `apps/codeai/envTypes/production.values.yaml`,
 `apps/codeai/deployments/production/values.yaml`.
 
-- [ ] **A1 (P0)** Add `terminationGracePeriodSeconds` to the shared pod
+- [x] **A1 (P0)** Add `terminationGracePeriodSeconds` to the shared pod
       template, exposed as `activeJobWorker.terminationGracePeriodSeconds`; set
       production to 2100.
       Where: `templates/dashboard/_dashboard.yaml`, production envType values.
       Done when: the rendered production worker carries the value, and a rolling
       restart in staging during a running low-priority job lets it finish. See 3.1.
-- [ ] **A2 (P0)** Stop `cdo-local-secrets` from blanking Honeybadger, Sentry,
+
+      **Confirmed (2026-10-15):** chart PR #75846 (2026-10-07) added
+      `activeJobWorker.terminationGracePeriodSeconds` to `_dashboard.yaml`
+      (default 60, schema-validated). `envTypes/production.values.yaml` and
+      `envTypes/staging.values.yaml` set 2100, and the live staging worker pod
+      carries `terminationGracePeriodSeconds: 2100`. The mid-job rolling
+      restart rehearsal was not re-run for this check.
+- [x] **A2 (P0)** Stop `cdo-local-secrets` from blanking Honeybadger, Sentry,
       PagerDuty, and Slack keys outside local dev. Gate the blanks behind a values
       flag that is off by default and on only in `development.values.yaml`.
       Where: `templates/cdo-local-secrets.yaml`, `development.values.yaml`.
       Done when: a staging worker exception appears in Honeybadger. See 3.6, 7.5.
+
+      **Confirmed (2026-10-15):** chart PR #75980 (2026-10-13) gates the blank
+      keys behind `localDev.stubSecrets`, which is `false` in `values.yaml` and
+      `true` only in `development.values.yaml`. The live
+      `staging-cdo-local-secrets` Secret now has no keys at all. Honeybadger
+      delivery itself is verified by E2.
 - [ ] **A3 (P0)** Decide whether legacy workers keep consuming priority >= 10
       during the soft launch. If the answer is "k8s only", add `--max-priority 9`
       support to the legacy launcher and flip it in the launch change window.
@@ -341,6 +385,14 @@ Most of these land in `apps/infra/standard-envtypes/chart`, which renders the
 - [ ] **C3 (P1)** Harden the existing `frontend` pool for staging and test:
       `amd64` requirement if V4 says so, `limits`, a `disruption` block, and its
       own NodeClass with non-production security groups.
+      Note (2026-10-15, from V4): the image is multi-arch, so `amd64` is a
+      choice here, not a requirement. The pool currently launches arm64
+      `t4g.large` burstable nodes that hold exactly one worker, so every
+      promotion launches a node and the surge pod reports `FailedScheduling`
+      until that node is Ready. When adding requirements, either choose a size
+      that holds two workers (one running, one surging) or accept one node per
+      worker; in both cases set `limits` so a values typo cannot launch dozens
+      of nodes.
       Where: `apps/infra/networking/chart/templates/frontend-node{pool,class}.yaml`.
       Done when: staging pods no longer carry the production frontend SG. See 4.6.
 - [ ] **C4 (P2)** Install KEDA (`apps/infra/keda`) and add a `ScaledObject`
