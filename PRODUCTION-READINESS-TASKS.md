@@ -16,7 +16,7 @@ section with the reasoning. Section numbers like `3.1` refer to that file.
 | 0. Live checks                     | 9   | 0   | 0   |
 | A. Worker workload                 | 4   | 6   | 1   |
 | B. Production namespace            | 2   | 5   | 0   |
-| C. Nodes and scaling               | 0   | 3   | 2   |
+| C. Nodes and scaling               | 0   | 4   | 2   |
 | D. Cluster security                | 1   | 5   | 7   |
 | E. Monitoring and alerting         | 2   | 10  | 1   |
 | F. Delivery (Argo CD, Kargo, repo) | 2   | 5   | 2   |
@@ -100,9 +100,41 @@ These were inferred from code only. Record the answer next to each item.
 - [ ] **V2 (P0)** In staging, check whether worker CloudWatch metric pushes and
       DCDO (DynamoDB) reads succeed with no pod credentials, and what else fails.
       Unblocks: B1. See 4.2.
-- [ ] **V3 (P0)** Check whether metrics-server is installed
+- [x] **V3 (P0)** Check whether metrics-server is installed
       (`kubectl get apiservice v1beta1.metrics.k8s.io`) and whether the staging
       and test dashboard HPAs report metrics. Unblocks: C1. See 5.1.
+
+      **Result (2026-10-15, read-only `kubectl get apiservice`, `kubectl top`,
+      `kubectl get hpa -A`, `kubectl get deploy`; nothing modified):**
+
+      No metrics-server. `v1beta1.metrics.k8s.io` is NotFound, `kubectl top
+      pods -n staging` returns `Metrics API not available`, and no
+      metrics-server pod runs in any namespace. The only metrics APIService on
+      the cluster is `v1.metrics.eks.amazonaws.com` (the EKS extension metrics
+      API), which is not the resource metrics API. Auto Mode confirmed not to
+      bundle it.
+
+      There are also **no HPA objects in any namespace**, so the HPAs are not
+      inert, they were never rendered. The chart gates
+      `templates/dashboard/autoscaler.yaml` on
+      `dashboard.enabled && autoscaling.enabled`, and `dashboard.enabled` keeps
+      the chart default `false` in every envType and deployment here. `staging`
+      and `test` each run exactly one Deployment, `<env>-cdo-active-job-worker`.
+      Nothing deployed today depends on metrics-server.
+
+      Side finding: `autoscaling.enabled`, `minReplicas`, and `maxReplicas` in
+      the `test` and `production` envTypes and in the `staging`, `test`, and
+      `production` deployment values are dead config. The worker's replica
+      count comes from `activeJobWorker.replicas` (chart default 1), falling
+      back to `autoscaling.replicasWhenAutoscaleDisabled`.
+
+      Scope for C1: the HPA half is moot, the worker was never autoscaled.
+      Remove the dead `autoscaling` values and set `activeJobWorker.replicas`
+      explicitly per 5.2 Phase 1. metrics-server is only needed for
+      `kubectl top` and any future CPU or memory scaler (a KEDA queue-depth
+      trigger does not need it). Install it as an `apps/infra` app or as the
+      managed EKS add-on (`metrics-server` v0.9.0-eksbuild.11 is the 1.35
+      default) when wanted; it is not on the launch path.
 - [x] **V4 (P0)** Confirm `ghcr.io/code-dot-org/cdo-rails` is multi-arch, and
       list which architectures the `frontend` NodePool has launched. Unblocks:
       C2, C3. See 4.6.
@@ -137,18 +169,136 @@ These were inferred from code only. Record the answer next to each item.
       its leader twice in about 30 minutes on 2026-10-15; that is AWS-managed
       and can add a minute to the wait. Decision: not a P0. C2, C3, B5, and
       E4 cover the production-side hardening.
-- [ ] **V5 (P0)** Apply a deny-all NetworkPolicy to a throwaway namespace and
+- [x] **V5 (P0)** Apply a deny-all NetworkPolicy to a throwaway namespace and
       confirm Auto Mode enforces it. Unblocks: B6. See 4.4.
-- [ ] **V6 (P0)** Confirm the EKS module created the secrets KMS key and the
+
+      **Result (2026-10-15, read-only `kubectl` and `aws eks describe-cluster`
+      plus the AWS Auto Mode docs; nothing modified, no throwaway namespace
+      created):**
+
+      NetworkPolicy is **not enforced** on this cluster today, and it cannot
+      be until the controller is turned on. On EKS Auto Mode the Network
+      Policy Controller is off by default and is enabled by a ConfigMap named
+      `amazon-vpc-cni` in `kube-system` with
+      `enable-network-policy-controller: "true"`. That ConfigMap does not
+      exist here; `kube-system` holds only the three stock ConfigMaps. The
+      policy CRDs (`policyendpoints`, `clusternetworkpolicies`,
+      `applicationnetworkpolicies.networking.k8s.aws`) are installed and
+      there are zero PolicyEndpoint and zero NetworkPolicy objects, so a
+      policy applied now is accepted by the API and silently ignored.
+
+      Once the ConfigMap exists, enforcement is done by the node agent that
+      is already on every Auto Mode node (both the built-in `default` and our
+      `frontend` NodeClass), for ingress and egress, by eBPF on the pod veth.
+      Two inputs for B6 came out of this:
+
+      - DNS is node-local. There is no `kube-dns` Service and no CoreDNS pod;
+        pods resolve against `172.20.0.10`, the `.10` of the service CIDR
+        `172.20.0.0/16`, which AWS documents as CoreDNS running on each
+        instance. The DNS allow rule must be an `ipBlock` for
+        `172.20.0.10/32` on TCP/UDP 53, not a namespace or pod selector.
+      - Both NodeClasses sit at `networkPolicy: DefaultAllow` (standard
+        mode): a new pod is allow-all until its PolicyEndpoint reaches the
+        node. Set `DefaultDeny` on the production NodeClass (C2) once its
+        namespace has policies.
+
+      Decision: the synthetic two-pod probe was skipped. The question it
+      would answer is settled by the missing ConfigMap, and the meaningful
+      test is B6's own policy rolled to `staging` first, which exercises the
+      real allow rules against the worker and is covered by B6's done-when
+      check. B6 now owns enabling the controller.
+- [x] **V6 (P0)** Confirm the EKS module created the secrets KMS key and the
       cluster has `encryption_config` set. See 4.3.
+
+      **Result (2026-10-15, read-only `aws eks describe-cluster`, `aws kms
+      describe-key`, `get-key-rotation-status`, `get-key-policy`; nothing
+      modified):**
+
+      Confirmed. `encryptionConfig` on `codeai-k8s` is set with
+      `resources: ["secrets"]` and a customer-managed KMS key,
+      `alias/eks/codeai-k8s` (`818d51d1-b43d-460d-8beb-502fb8884606`). The key
+      is Enabled, symmetric, not scheduled for deletion, created 2026-04-14
+      with the cluster, and automatic rotation is on at 365 days (next
+      2027-04-14). The key policy grants `Encrypt`, `Decrypt`,
+      `GenerateDataKey*`, `ReEncrypt*`, and `DescribeKey` to the cluster role
+      (`codeai-k8s-cluster-...`, the same role `describe-cluster` reports as
+      `roleArn`), and key administration to the two roles in
+      `cluster_admin_role_arns`.
+
+      `eks-cluster.tf` sets only `kms_key_administrators`; the rest is
+      terraform-aws-eks v21 defaults (`create_kms_key`,
+      `attach_encryption_policy`, `enable_kms_key_rotation`,
+      `kms_key_enable_default_policy`, and `encryption_config` scoped to
+      `secrets`). Re-check after any major module bump. No follow-up ticket
+      needed. Side note: `cdo-external-secrets` in `staging` holds 167 keys,
+      not 50.
 - [ ] **V7 (P0)** Confirm the `monitoring` Application is Healthy and AMP has
       recent `up{cluster="codeai-k8s"}` samples. Unblocks: E1, E12. See 7.1.
 - [ ] **V8 (P0)** Confirm production config sets `memcached_endpoint` and
       `redis_url`, and that both are reachable from the private subnets with the
       pod security groups. Unblocks: G4. See 9.
-- [ ] **V9 (P0)** Determine what `locals.yml.override_dashboard` and
+- [x] **V9 (P0)** Determine what `locals.yml.override_dashboard` and
       `stack_name` do for a worker (URL generation, StackSecret resolution).
       Unblocks: A10. See 3.6, 3.7.
+
+      **Result (2026-10-15, code reading in code-dot-org plus read-only
+      `kubectl get deploy,configmap -n staging` and `dig`; nothing modified):**
+
+      Both keys reach the worker as `CDO_*` env vars from the locals
+      ConfigMap, and env is the highest-precedence config source
+      (`lib/cdo.rb` loads ENV first and `Cdo::Config#merge` keeps the first
+      value), so the gitops values win over `config/<env>.yml.erb`.
+
+      `override_dashboard` has one consumer, `canonical_hostname` in
+      `lib/cdo.rb`, which returns it for `studio.code.org`. That feeds
+      `dashboard_hostname`, `dashboard_site_host`, `CDO.studio_url`, Rails
+      `routes.default_url_options[:host]`, and
+      `action_mailer.default_url_options[:host]`, so it rewrites every
+      absolute studio URL a job builds. Logs are unaffected. In the
+      production env with no override, `canonical_hostname` returns
+      `studio.code.org` outright, and legacy `autoscale-prod` sets no
+      override (the chef bootstrap sets one only for adhoc stacks). The
+      current value `studio.production.k8s.code.org` has no DNS record and no
+      Ingress (`dashboard.enabled` is false), so any link a k8s job emitted
+      would be dead. Exposure today is latent: the worker runs
+      `--min-priority 10`, only the `low_priority` queue maps to 10
+      (`active_job_queue_priorities`), and its two jobs
+      (`AiLessonSummariesJob`, `AnonymousGeoBackfillingJob`) build no URLs,
+      while `mailers`, `mailjet`, and `default` are priority 0 and never run
+      on k8s. It becomes live the moment A3 widens the priority range.
+      Decision: production workers should not carry it. Remove
+      `locals.yml.override_dashboard` from the production values rather than
+      set it to `studio.code.org`; the env already yields that. The same
+      applies to staging, test, and levelbuilder (`studio.staging.k8s.code.org`
+      does not resolve; `staging-studio.code.org` does). In the chart the key
+      doubles as the Ingress host, so it belongs with `dashboard.enabled`.
+
+      `stack_name` does not touch StackSecret resolution.
+      `StackSecret.current_stack_name` reads only EC2 metadata
+      (`AWS::EC2.instance_id`, then `ec2:DescribeTags`), never
+      `CDO.stack_name`; with `AWS_EC2_METADATA_DISABLED=true` (confirmed on
+      the live staging worker) it returns nil and no `CfnStack/` path is
+      tried. More to the point, `!StackSecret` appears only in
+      `config/adhoc.yml.erb`, so a production, staging, test, or levelbuilder
+      worker never evaluates one. Stack-specific DB secrets on k8s are
+      resolved outside Ruby by the standard-envtypes ExternalSecret
+      (`cfn_stack_name_overrides`, production `autoscale-prod`), which is
+      B2's mechanism; `locals.yml.stack_name` plays no part in B2. Runtime
+      readers of `CDO.stack_name` in a worker are only `codeprojects_hostname`
+      and `codeaiprojects_hostname`, and only outside production (production
+      returns the fixed apex domains). The gitops values (`staging`, `test`,
+      `levelbuilder`, `autoscale-prod`) equal the code defaults
+      (`config.yml.erb` `stack_name: <%=env%>`, `production.yml.erb`
+      `autoscale-prod`) in every environment, so the key is redundant.
+      Decision: harmless; drop it or comment it as a no-op in A10.
+
+      Side finding, code reading only: when no stack is found, the
+      StackSecret "fall back to `<env>/cdo/<key>`" comment in
+      `secrets_config.rb` does not hold. `super` calls `Secret#lookup`, whose
+      `key` dispatches back to `StackSecret#key` and returns nil, so the
+      fallback appears to call `get!(nil)` and re-raise. Unreachable for
+      non-adhoc workers and for adhoc keys the ConfigMap or ESO overrides, so
+      not a launch item.
 
 ---
 
@@ -266,6 +416,13 @@ Chart: `../code-dot-org/k8s/helm`. Values: `apps/codeai/envTypes/production.valu
       Where: `apps/codeai/envTypes/production.values.yaml`,
       `apps/codeai/deployments/production/`.
       Done when: a reader of the values file knows what applies to the worker. See 3.7.
+
+      V9 (2026-10-15): remove `locals.yml.override_dashboard` from the
+      production values (and from staging, test, levelbuilder); the env
+      resolves `studio.code.org` on its own, and the k8s hostname would put
+      dead links in any mail a job sends. `locals.yml.stack_name` is a no-op
+      that mirrors the code default; drop it or comment it. Neither key
+      affects StackSecret or B2.
 - [ ] **A11 (P2)** Chart hygiene: add `appVersion`, bump `version` with
       functional changes, drop `tty: true` on the worker, and move local-dev
       MySQL, Redis, and MinIO behind a clearly dev-only values file or subchart.
@@ -354,6 +511,17 @@ Most of these land in `apps/infra/standard-envtypes/chart`, which renders the
       nothing to other cluster namespaces or internal VPC ranges beyond those.
       Roll the same pattern to staging and test, and ingress policies to the
       platform namespaces.
+      Note (2026-10-15, from V5): enforcement is off until a ConfigMap
+      `amazon-vpc-cni` in `kube-system` sets
+      `enable-network-policy-controller: "true"`. Ship that ConfigMap from
+      `apps/infra/networking/chart` (bump the chart version) as the first
+      commit of this work; it is inert while no policies exist. Allow DNS
+      with `ipBlock: 172.20.0.10/32` on TCP/UDP 53, since there is no
+      `kube-dns` Service to select. Roll the policy to `staging` first and
+      treat that as the enforcement test V5 skipped: the worker must still
+      reach the DB, Redis, memcached, DNS, and 443, and must lose the
+      `argocd` namespace. Then set `networkPolicy: DefaultDeny` on the
+      production NodeClass.
       Where: `apps/infra/standard-envtypes/chart/templates/` (per envType), new
       policies in platform charts.
       Depends on: V5. Done when: a production pod cannot reach the `argocd`
@@ -371,6 +539,15 @@ Most of these land in `apps/infra/standard-envtypes/chart`, which renders the
       (tofu) or an `apps/infra` app, or remove the dashboard HPAs that depend on it.
       Where: `bootstrap/codeai-k8s/cluster/eks-cluster.tf` or `apps/infra/`.
       Done when: `kubectl top pods` works and HPAs show current utilization. See 5.1.
+
+      V3 (2026-10-15): no metrics-server and no HPA objects exist. The chart
+      never renders the HPA because `dashboard.enabled` is false in every
+      deployment here, and the worker is a fixed-replica Deployment.
+      Recommended re-scope: drop the dead `autoscaling` values from the
+      envType and deployment values, set `activeJobWorker.replicas` explicitly
+      (5.2 Phase 1), and treat a metrics-server install
+      (`apps/infra/metrics-server` or the managed add-on) as a P2 nicety for
+      `kubectl top` rather than a launch dependency.
 - [ ] **C2 (P1)** Add a dedicated `production` NodePool and NodeClass: taint
       `code.org/environment-type=production:NoSchedule`, only the security groups
       production needs, `kubernetes.io/arch In [amd64]`, current-generation
@@ -395,6 +572,27 @@ Most of these land in `apps/infra/standard-envtypes/chart`, which renders the
       of nodes.
       Where: `apps/infra/networking/chart/templates/frontend-node{pool,class}.yaml`.
       Done when: staging pods no longer carry the production frontend SG. See 4.6.
+- [ ] **C6 (P1)** Stop every worker promotion from waiting on a node launch.
+      The `frontend` pool launches `t4g.large` nodes that hold exactly one
+      worker (allocatable 1780m CPU and ~7 GiB against a 1000m, 4 GiB
+      request), so the RollingUpdate surge pod on every Kargo promotion sits
+      in `FailedScheduling` for the two to four minutes Karpenter needs to
+      launch a node (seen in `staging` 2026-10-14; see V4). The old worker
+      keeps running, so nothing is lost, but every rollout costs a node launch
+      and the production pool from C2 inherits this unless sized on purpose.
+      Pick one: a NodePool requirement so a node holds two workers (one
+      running, one surging), for example `karpenter.k8s.aws/instance-memory`
+      of at least 16384; a warm node via an Auto Mode static-capacity pool or
+      a low-priority placeholder pod; or accept the wait and write it into the
+      promotion checklist (F1). Do not switch the Deployment to `Recreate`:
+      with the A1 grace period it leaves production without a worker for up
+      to 35 minutes per promotion. In every case set `limits` on the pool.
+      Where: `apps/infra/networking/chart/templates/frontend-nodepool.yaml`
+      now (bump the chart version); the production NodePool when C2 adds it.
+      Depends on: V4 (done). Pair with: C2, C3.
+      Done when: a staging promotion schedules the surge pod without a
+      `FailedScheduling` event, or the wait is documented in F1; and the pool
+      has `limits`. See 4.6, 5.3.
 - [ ] **C4 (P2)** Install KEDA (`apps/infra/keda`) and add a `ScaledObject`
       for the production worker on a MySQL trigger counting unlocked
       priority >= 10 jobs (or the `aws-cloudwatch` scaler on

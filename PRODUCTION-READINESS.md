@@ -230,8 +230,10 @@ production`). Keep a CI assertion that renders production and greps the
   `ec2:DescribeTags`, then reads `CfnStack/<stack>/<key>`, falling back to
   `<env>/cdo/<key>`. Pods set `AWS_EC2_METADATA_DISABLED=true`, so every
   StackSecret takes the fallback. See 4.3 for what that means for production
-  DB endpoints. **Verify** how `locals.yml.stack_name: autoscale-prod`
-  interacts with this path.
+  DB endpoints. `locals.yml.stack_name` plays no part: `current_stack_name`
+  reads only EC2 metadata, never `CDO.stack_name`, and `!StackSecret` appears
+  only in `config/adhoc.yml.erb`, so a production worker never evaluates one
+  (V9, 2026-10-15).
 - Chart hygiene: `Chart.yaml` has no `appVersion` and `version: 0.2.0` has not
   moved with functional changes; `tty: true` on a worker; local-dev MySQL,
   Redis, and MinIO live in the same chart behind flags. Not blockers, but the
@@ -246,7 +248,7 @@ production`). Keep a CI assertion that renders production and greps the
 | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `autoscaling.enabled/min/max`                              | No-op. The chart HPA targets `cdo-dashboard` and renders only when `dashboard.enabled`.                                                                                                                                      |
 | `healthChecks.enabled: true`                               | No-op for the worker (forced off).                                                                                                                                                                                           |
-| `dnsName`, `locals.yml.override_dashboard`                 | No Ingress renders. `override_dashboard` still lands in the ConfigMap and may affect URL generation in mail or logs; **verify** whether the worker should carry the legacy `studio.code.org` value instead.                  |
+| `dnsName`, `locals.yml.override_dashboard`                 | No Ingress renders. `override_dashboard` still lands in the ConfigMap and may affect URL generation in mail or logs; Remove it (V9, 2026-10-15): with no override, production resolves `studio.code.org` on its own; the k8s hostname has no DNS record and would put dead links in any mail a job sends. Only latent today, since no priority >= 10 job builds URLs.                  |
 | `image: ghcr.io/code-dot-org/code-dot-org:git-f666540d...` | Stale: old repository and tag scheme. The first Kargo promotion rewrites it to a `cdo-rails@sha256:` digest. Do not enable production before that promotion has run, or pin it by hand to the same digest `test` is running. |
 | `resources.requests.ephemeralStorage: 30Gi`                | Applies chart-wide; see 3.4.                                                                                                                                                                                                 |
 | `deploy/` kustomize overlay                                | Parity path only (`kustomize build` mirror, per commit 62f01a92). It references the `code-dot-org` base at `?ref=staging` for production. Keep it in sync or mark it clearly as non-authoritative.                           |
@@ -373,7 +375,9 @@ Recommendation:
   `get secrets` in `production` reads all of them. Namespace RBAC in 6.2
   matters for this reason.
 - Kubernetes Secrets are envelope-encrypted with the EKS module's KMS key by
-  default in v21 (**verify** the key exists and `encryption_config` is set).
+  default in v21. Confirmed: `encryptionConfig` is set for `secrets` with the
+  customer-managed key `alias/eks/codeai-k8s`, rotation is on at 365 days, and
+  the cluster role is the only usage principal (V6, 2026-10-15).
 
 ### 4.4 Namespace guardrails (P1)
 
@@ -392,14 +396,21 @@ Add to the Namespace rendered in `_envtype.tpl` (or a sibling template):
   lower class for staging/test/adhoc. Today they share the same `frontend`
   pool; under pressure the scheduler should evict non-production first.
 - **NetworkPolicy** (default-deny ingress and egress, then explicit allows).
-  The worker needs no ingress at all. Egress: DNS to `kube-dns`, MySQL 3306 to
-  the DB/proxy CIDR, Redis 6379 and memcached 11211 to ElastiCache CIDRs, and
-  443 to the internet for OpenAI, aiproxy, Honeybadger, Sentry, MailJet,
-  Mapbox, and AWS APIs. Deny everything toward other cluster namespaces and
-  the VPC's internal ranges except the DB and cache subnets. EKS Auto Mode
-  enforces NetworkPolicy through the built-in VPC CNI agent; **verify** with a
-  test policy in staging first, and consider `spec.networkPolicy: DefaultDeny`
-  on the NodeClass once every namespace has policies.
+  The worker needs no ingress at all. Egress: DNS to `172.20.0.10/32` on
+  TCP/UDP 53 (CoreDNS runs on each Auto Mode node; there is no `kube-dns`
+  Service or pod to select), MySQL 3306 to the DB/proxy CIDR, Redis 6379 and
+  memcached 11211 to ElastiCache CIDRs, and 443 to the internet for OpenAI,
+  aiproxy, Honeybadger, Sentry, MailJet, Mapbox, and AWS APIs. Deny everything
+  toward other cluster namespaces and the VPC's internal ranges except the DB
+  and cache subnets. EKS Auto Mode does **not** enforce NetworkPolicy until
+  the Network Policy Controller is enabled by a ConfigMap `amazon-vpc-cni` in
+  `kube-system` with `enable-network-policy-controller: "true"`, which this
+  cluster does not have (V5, 2026-10-15); until then a policy is accepted and
+  ignored. Ship that ConfigMap from the networking chart first, roll the
+  policy to staging as the enforcement test, and set
+  `spec.networkPolicy: DefaultDeny` on the production NodeClass once its
+  namespace has policies (the default `DefaultAllow` leaves a new pod
+  allow-all until its PolicyEndpoint lands on the node).
 - Label the namespace `code.org/environment-type: production` for
   consistency with the adhoc selector (`ClusterExternalSecret` matches on
   that label).
@@ -452,10 +463,16 @@ subnets when they exist.
 
 - Chart HPA: CPU and memory utilization at 50 percent, targeting
   `cdo-dashboard` only, no `behavior` block
-  (`templates/dashboard/autoscaler.yaml`). Nothing scales the worker.
+  (`templates/dashboard/autoscaler.yaml`). Nothing scales the worker. The
+  template is gated on `dashboard.enabled`, which is false in every deployment
+  here, so no HPA object exists on the cluster (V3, 2026-10-15). The
+  `autoscaling.*` values in the test and production envTypes are dead config;
+  the worker's replica count is `activeJobWorker.replicas`.
 - HPA on CPU/memory needs metrics-server. It is not in the EKS addons in tofu
   (Auto Mode does not bundle it) and there is no `apps/*` app for it.
-  **Verify** whether the staging and test HPAs actually get metrics.
+  Confirmed absent: `v1beta1.metrics.k8s.io` is NotFound and `kubectl top`
+  fails (V3, 2026-10-15). Nothing deployed depends on it; it is only needed
+  for `kubectl top` and any future CPU or memory scaler.
 - Node scaling is EKS Auto Mode (Karpenter) through the built-in
   `system` and `general-purpose` pools plus the custom `frontend` pool.
 

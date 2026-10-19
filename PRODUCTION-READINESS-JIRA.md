@@ -1,6 +1,7 @@
 # Production readiness: P0 tasks as Jira tickets
 
 Every P0 item from [PRODUCTION-READINESS-TASKS.md](PRODUCTION-READINESS-TASKS.md),
+plus follow-up tickets filed from live-check findings (marked P1 in the index),
 written so each one can be pasted into Jira as is. The heading of each item is
 the ticket summary; everything under it up to the next heading is the ticket
 description. Descriptions are self-contained: the reasoning from
@@ -29,6 +30,7 @@ repo), `code-dot-org` (the application), or `infrastructure` (observability).
 | A4 | Guard against the production worker running as root                            |                        | F2             |
 | B1 | Give the worker its own ServiceAccount and IAM role                             | V2                     | E1, F2         |
 | B2 | Wire production database secrets through the autoscale-prod stack name          | V1                     | F2             |
+| C6 | Stop every worker promotion from waiting on a node launch (P1)                  | V4                     | C2, C3 (P1)    |
 | D1 | Turn on EKS control-plane audit logging with CloudWatch retention               |                        | F2, D10 (P2)   |
 | E1 | Add a canary job and alert that proves production is draining low-priority work | B1, V7                 | F2             |
 | E2 | Confirm a worker exception reaches Honeybadger                                  | A2                     | F2             |
@@ -112,15 +114,40 @@ metrics-server. It is not in the EKS add-ons in tofu (Auto Mode does not bundle
 it) and there is no `apps/*` app that installs it. The staging and test HPAs may
 be inert.
 
-What to do:
+**Resolution (2026-10-15, read-only checks, nothing modified)**
 
-- Run `kubectl get apiservice v1beta1.metrics.k8s.io` and `kubectl top pods -n staging`.
-- Run `kubectl describe hpa -n staging` and `-n test` and check whether current
-  utilization is reported or shows `<unknown>`.
-- Record the findings in the task list next to V3.
+**metrics-server:** absent. `kubectl get apiservice v1beta1.metrics.k8s.io` is
+NotFound, `kubectl top pods -n staging` returns `Metrics API not available`,
+and no metrics-server pod runs in any namespace. The only metrics APIService
+on the cluster is `v1.metrics.eks.amazonaws.com` (the EKS extension metrics
+API), which is not the resource metrics API. Auto Mode confirmed not to bundle
+it.
+
+**HPAs:** none. `kubectl get hpa -A` returns no resources, so there was nothing
+to `describe`. The chart gates `templates/dashboard/autoscaler.yaml` on
+`dashboard.enabled && autoscaling.enabled`, and `dashboard.enabled` keeps the
+chart default `false` in every envType and deployment in this repo. `staging`
+and `test` each run exactly one Deployment, `<env>-cdo-active-job-worker`.
+The HPAs are not inert; they were never rendered.
+
+**Conclusion:** nothing deployed today depends on metrics-server. The
+`autoscaling.enabled`, `minReplicas`, and `maxReplicas` values in the `test`
+and `production` envTypes and in the `staging`, `test`, and `production`
+deployment values are dead config. The worker's replica count comes from
+`activeJobWorker.replicas` (chart default 1), falling back to
+`autoscaling.replicasWhenAutoscaleDisabled`.
+
+**Scope handed to C1:** the HPA half is moot, the worker was never autoscaled.
+Remove the dead `autoscaling` values and set `activeJobWorker.replicas`
+explicitly per PRODUCTION-READINESS.md 5.2 Phase 1. metrics-server itself is
+only needed for `kubectl top` and any future CPU or memory scaler (a KEDA
+queue-depth trigger does not need it). Install it as an `apps/infra` app or as
+the managed EKS add-on (`metrics-server` v0.9.0-eksbuild.11 is the default for
+this 1.35 cluster) when wanted; it is not on the launch path.
 
 Done when: it is known whether metrics-server exists, so C1 (P1) can be scoped
-as either an install or removal of the HPAs.
+as either an install or removal of the HPAs. (Done: recorded next to V3 in
+PRODUCTION-READINESS-TASKS.md on 2026-10-15.)
 
 Unblocks: C1 (P1).
 
@@ -130,20 +157,37 @@ Source: PRODUCTION-READINESS-TASKS.md V3; PRODUCTION-READINESS.md 5.1.
 
 The `frontend` NodePool has no `kubernetes.io/arch` requirement, so EKS Auto
 Mode may choose Graviton (arm64) capacity. If `ghcr.io/code-dot-org/cdo-rails`
-is amd64 only, this becomes a CrashLoopBackOff with an exec format error the
-first time a worker lands on an arm64 node.
+were amd64 only, this would become a CrashLoopBackOff with an exec format error
+the first time a worker landed on an arm64 node.
 
-What to do:
+**Resolution (2026-10-15, read-only checks, nothing modified)**
 
-- Inspect the manifest list for `ghcr.io/code-dot-org/cdo-rails` (for example
-  `docker manifest inspect` or `crane manifest`) and list the platforms it
-  provides.
-- List the nodes the `frontend` NodePool has launched and their
-  `kubernetes.io/arch` label.
-- Record the findings in the task list next to V4.
+**Image:** `ghcr.io/code-dot-org/cdo-rails` is multi-arch. The digest pinned by
+the staging worker Deployment has a manifest list with `linux/amd64` and
+`linux/arm64` (`docker manifest inspect`).
+
+**Nodes:** the `frontend` NodePool has launched only arm64 so far: both current
+nodes are `t4g.large`. The `general-purpose` pool is all amd64. The pool has no
+arch or instance-type requirement, so Karpenter picks the cheapest node that
+fits one worker (`kubectl get nodes,nodeclaims` with the arch and instance-type
+labels).
+
+**Conclusion:** no exec-format risk. An `amd64` requirement in C2/C3 is a cost
+and performance choice, not a correctness need.
+
+**Side finding:** a `t4g.large` holds exactly one worker (allocatable ~1.8 vCPU
+and ~7 GiB against a 1 vCPU, 4 GiB request). Every Kargo promotion surges a
+second pod, which sits Pending for the two to four minutes Karpenter needs to
+launch a node. The old worker keeps running, so this is a routine scale-up
+transient, not a capacity failure. Not a launch blocker.
+
+**Folded into C2/C3:** pick a node size that holds two workers or accept one
+node per worker, and set `limits` on the pool so a values typo cannot launch
+dozens of nodes.
 
 Done when: both answers are written down so C2 and C3 (P1) know whether an
-`amd64` requirement is needed.
+`amd64` requirement is needed. (Done: recorded next to V4 in
+PRODUCTION-READINESS-TASKS.md on 2026-10-15.)
 
 Unblocks: C2, C3 (P1).
 
@@ -153,19 +197,33 @@ Source: PRODUCTION-READINESS-TASKS.md V4; PRODUCTION-READINESS.md 4.6.
 
 There is no NetworkPolicy anywhere in the cluster today, and the plan for the
 production namespace (B6, P1) is default-deny ingress and egress with explicit
-allows. EKS Auto Mode enforces NetworkPolicy through the built-in VPC CNI
-agent, but that has not been verified on this cluster.
+allows. The readiness plan assumed EKS Auto Mode enforces NetworkPolicy through
+the built-in VPC CNI agent; that had not been verified on this cluster.
 
-What to do:
+What was found (2026-10-15, read-only checks against `codeai-k8s` plus the AWS
+Auto Mode documentation):
 
-- Create a throwaway namespace with two pods. Confirm they can reach each other
-  and resolve DNS.
-- Apply a deny-all ingress and egress NetworkPolicy. Confirm pod-to-pod traffic
-  and DNS are blocked. Note whether egress is enforced, not only ingress.
-- Remove the policy, confirm traffic flows again, delete the namespace.
-- Record the findings in the task list next to V5.
+- NetworkPolicy is not enforced today. On Auto Mode the Network Policy
+  Controller is off until a ConfigMap `amazon-vpc-cni` in `kube-system` sets
+  `enable-network-policy-controller: "true"`. That ConfigMap does not exist on
+  this cluster. The policy CRDs are installed and there are zero PolicyEndpoint
+  objects, so a policy applied now is accepted and ignored.
+- Once enabled, enforcement runs on the node agent already present on every
+  Auto Mode node, including the custom `frontend` NodeClass, for both ingress
+  and egress.
+- DNS is node-local: pods resolve against `172.20.0.10` (the `.10` of the
+  service CIDR) and there is no `kube-dns` Service. B6's DNS allow must be an
+  `ipBlock` for `172.20.0.10/32`, not a selector.
+- Both NodeClasses use `networkPolicy: DefaultAllow`, so a new pod is allow-all
+  until its policy reaches the node. B6 should set `DefaultDeny` on the
+  production NodeClass.
 
-Done when: it is known whether (and how completely) NetworkPolicy is enforced.
+(Decided 2026-10-15: the throwaway-namespace probe was skipped. The question it
+would answer is settled by the missing ConfigMap, and the meaningful test is
+B6's real policy rolled to `staging` first. B6 now owns enabling the
+controller.)
+
+Done when: the findings above are recorded next to V5 and folded into B6.
 
 Unblocks: B6 (P1).
 
@@ -178,17 +236,39 @@ terraform-aws-eks module v21 envelope-encrypts Secrets with a KMS key by
 default, but nobody has confirmed the key exists and `encryption_config` is set
 on this cluster.
 
-What to do:
+**Resolution (2026-10-15, read-only checks, nothing modified)**
 
-- Run `aws eks describe-cluster --name codeai-k8s` and check `encryptionConfig`
-  for a KMS key ARN with the `secrets` resource.
-- Confirm the KMS key exists and its key policy allows the cluster role.
-- Check `k8s-gitops: bootstrap/codeai-k8s/cluster/eks-cluster.tf` for the module
-  setting that controls it.
-- Record the findings in the task list next to V6.
+**Cluster:** `aws eks describe-cluster --name codeai-k8s` reports
+`encryptionConfig` with `resources: ["secrets"]` and a customer-managed KMS
+key, `alias/eks/codeai-k8s`
+(`arn:aws:kms:us-east-1:475661607190:key/818d51d1-b43d-460d-8beb-502fb8884606`).
+
+**Key:** Enabled, `SYMMETRIC_DEFAULT`, `KeyManager: CUSTOMER`, no deletion
+scheduled, created 2026-04-14 alongside the cluster. Automatic rotation is on
+with a 365 day period; next rotation 2027-04-14.
+
+**Key policy:** three statements. The account root has `kms:*`. The two roles
+in `cluster_admin_role_arns` (`GoogleSignInAdmin`, `Engineering_FullAccess`)
+have key administration. The cluster role
+`codeai-k8s-cluster-20260415034802182900000002`, which is the `roleArn` that
+`describe-cluster` reports, has `Encrypt`, `Decrypt`, `GenerateDataKey*`,
+`ReEncrypt*`, and `DescribeKey`. Nothing else can use the key.
+
+**Tofu:** `bootstrap/codeai-k8s/cluster/eks-cluster.tf` sets only
+`kms_key_administrators = var.cluster_admin_role_arns`. The key, the
+`encryption_config` scoped to `secrets`, the encryption policy attachment,
+rotation, and the default key policy all come from terraform-aws-eks v21
+defaults (`create_kms_key`, `attach_encryption_policy`,
+`enable_kms_key_rotation`, `kms_key_enable_default_policy`). Nothing is
+pinned explicitly, so re-check after any major module bump.
+
+**Conclusion:** Secrets are envelope-encrypted at rest with a customer-managed,
+rotating KMS key that only the cluster role can use. No follow-up ticket.
+Side note: `cdo-external-secrets` in `staging` holds 167 keys, not 50.
 
 Done when: encryption at rest for Secrets is confirmed, or a follow-up ticket
-is opened to enable it.
+is opened to enable it. (Done: confirmed and recorded next to V6 in
+PRODUCTION-READINESS-TASKS.md on 2026-10-15.)
 
 Source: PRODUCTION-READINESS-TASKS.md V6; PRODUCTION-READINESS.md 4.3.
 
@@ -249,19 +329,77 @@ resolution in `code-dot-org: lib/cdo/secrets_config.rb`, which normally finds
 the stack through EC2 instance metadata (disabled in pods) and falls back to
 `<env>/cdo/<key>`.
 
-What to do:
+**Resolution (2026-10-15, code reading plus read-only cluster checks, nothing modified)**
 
-- Read `code-dot-org: lib/cdo/secrets_config.rb` and the URL helpers that
-  consume `override_dashboard` and determine how each behaves in a worker
-  process with IMDS disabled.
-- Decide whether production workers should carry `studio.code.org` as
-  `override_dashboard`.
-- Determine whether `stack_name` changes StackSecret lookups when IMDS is
-  disabled, and whether that matters for B2.
-- Record the findings in the task list next to V9.
+**How the keys reach the worker:** the locals ConfigMap is injected with the
+`CDO_` prefix, and `lib/cdo.rb` loads ENV before `locals.yml`,
+`config/<env>.yml.erb`, and `config.yml.erb` with a reverse-merge that keeps
+the first value. The gitops values therefore win over every config file.
+Confirmed on the live staging worker: `CDO_stack_name=staging`,
+`CDO_override_dashboard=studio.staging.k8s.code.org`,
+`AWS_EC2_METADATA_DISABLED=true`.
+
+**override_dashboard:** one consumer, `Cdo::Impl#canonical_hostname`
+(`lib/cdo.rb:88`), which returns it whenever the domain is `studio.code.org`.
+That feeds `dashboard_hostname`, `dashboard_site_host`, `CDO.studio_url`, Rails
+`routes.default_url_options[:host]`, and
+`action_mailer.default_url_options[:host]` (`dashboard/config/application.rb`),
+so it rewrites every absolute studio URL a job or mailer builds. It does not
+touch logs. In the production env with no override, `canonical_hostname`
+returns `studio.code.org` outright, and the legacy `autoscale-prod` stack sets
+no override: the chef bootstrap sets one only for adhoc stacks. The current
+value `studio.production.k8s.code.org` has no DNS record and no Ingress
+(`dashboard.enabled` is false), so any link a k8s job emitted would be dead.
+
+Exposure today is latent. The worker runs `--min-priority 10`; only the
+`low_priority` queue maps to priority 10 (`active_job_queue_priorities` in
+`config.yml.erb`), and its two jobs, `AiLessonSummariesJob` and
+`AnonymousGeoBackfillingJob`, build no URLs. `mailers`, `mailjet`, and
+`default` are priority 0 and never run on k8s. It becomes live the moment A3
+widens the priority range or a low-priority job grows a link.
+
+**Decision:** production workers should not carry
+`studio.production.k8s.code.org`. Remove `locals.yml.override_dashboard` from
+the production values rather than set it to `studio.code.org`; the env already
+yields that. The same reasoning applies to staging, test, and levelbuilder
+(`studio.staging.k8s.code.org` does not resolve; the legacy
+`staging-studio.code.org` does). In the chart the key doubles as the Ingress
+host (`templates/dashboard/ingress.yaml`), so it should come back only
+together with `dashboard.enabled: true`.
+
+**stack_name and StackSecret:** no interaction.
+`StackSecret.current_stack_name` reads only EC2 metadata
+(`AWS::EC2.instance_id`, then `ec2:DescribeTags` for
+`aws:cloudformation:stack-name`) and never `CDO.stack_name`. With IMDS
+disabled it returns nil, so no `CfnStack/<stack>/` path is attempted. More to
+the point, `!StackSecret` appears only in `config/adhoc.yml.erb`; a
+production, staging, test, or levelbuilder worker never evaluates one.
+Stack-specific DB secrets on k8s are resolved outside Ruby by the
+standard-envtypes ExternalSecret, whose `cfn_stack_name_overrides` maps
+production to `autoscale-prod`. That is B2's mechanism, and
+`locals.yml.stack_name` plays no part in it.
+
+**stack_name elsewhere:** the only runtime readers in a worker are
+`codeprojects_hostname` and `codeaiprojects_hostname`, and only outside
+production (production returns the fixed apex domains). Everything else is
+deploy tooling (`rake stack`, `rake adhoc`, CloudFormation, EC2 autoscaling)
+or the web-only `browser_events_controller`. The gitops values (`staging`,
+`test`, `levelbuilder`, `autoscale-prod`) equal the code defaults
+(`config.yml.erb` `stack_name: <%=env%>`, `config/production.yml.erb`
+`stack_name: autoscale-prod`) in every environment, so the key is redundant.
+Harmless; drop it or comment it as a no-op in A10.
+
+**Side finding (code reading only, not executed):** the "fall back to
+`<env>/cdo/<key>`" comment in `secrets_config.rb` does not hold when no stack
+is found. `StackSecret#lookup` calls `super`, and `Secret#lookup` calls `key`,
+which dispatches back to `StackSecret#key` and returns nil, so the fallback
+appears to call `get!(nil)` and re-raise. Unreachable for non-adhoc workers,
+and for adhoc the ConfigMap or ESO env overrides the affected keys before the
+Secret object exists. Not a launch item.
 
 Done when: the behaviour of both keys for a worker is written down and A10 (P1)
-can act on it.
+can act on it. (Done: recorded next to V9 and A10 in
+PRODUCTION-READINESS-TASKS.md on 2026-10-15.)
 
 Unblocks: A10 (P1).
 
@@ -471,6 +609,49 @@ composed `db_writer` and `db_reader` values and the ESO sync status is Ready.
 Unblocks: F2.
 
 Source: PRODUCTION-READINESS-TASKS.md B2; PRODUCTION-READINESS.md 4.3.
+
+### C6: Stop every worker promotion from waiting on a node launch
+
+The `frontend` NodePool has no instance-size requirement, so Karpenter picks
+the cheapest node that fits one worker: today an arm64 `t4g.large` (2 vCPU,
+8 GiB). Allocatable is about 1780m CPU and 7 GiB; the worker requests 1000m and
+4 GiB, so exactly one worker fits per node. The worker Deployment runs one
+replica with RollingUpdate (`maxUnavailable: 25%` rounds to 0), so every Kargo
+promotion surges a second pod. That pod reports `FailedScheduling`
+(`Insufficient cpu`, `Insufficient memory`) for the two to four minutes
+Karpenter needs to launch and register a new node. The old worker keeps running
+the whole time, so no work is lost; the cost is a slower promotion and a node
+launch per rollout. Seen in `staging` on 2026-10-14 (V4). The production pool
+from C2 will inherit the same behaviour unless its sizing is chosen on purpose.
+
+What to do:
+
+- Choose one:
+  - Size nodes for two workers. Add a NodePool requirement such as
+    `karpenter.k8s.aws/instance-memory` of at least 16384, or an instance-size
+    list (`large` is too small, `xlarge` fits two), so the surge pod lands on
+    the node that is already running.
+  - Keep a warm node. Use an Auto Mode static-capacity pool, or a low-priority
+    placeholder pod that the surge pod preempts.
+  - Accept the wait. Document it in the promotion checklist (F1) so nobody
+    reads a `FailedScheduling` event as a failed promotion.
+- Do not switch the Deployment to `Recreate`. With the A1 grace period (2100
+  seconds) that leaves production without a worker for up to 35 minutes per
+  promotion.
+- In every case set `limits.cpu` and `limits.memory` on the pool so a values
+  typo cannot launch dozens of nodes.
+- Apply the choice to
+  `k8s-gitops: apps/infra/networking/chart/templates/frontend-nodepool.yaml`
+  now (bump the chart version), and to the production NodePool when C2 creates
+  it.
+
+Done when: a staging promotion schedules the surge pod without a
+`FailedScheduling` event, or the wait is written into F1; and the pool has
+`limits`.
+
+Depends on: V4 (done). Pair with: C2, C3.
+
+Source: PRODUCTION-READINESS-TASKS.md C6; PRODUCTION-READINESS.md 4.6, 5.3.
 
 ### D1: Turn on EKS control-plane audit logging with CloudWatch retention
 
