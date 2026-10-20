@@ -5,6 +5,11 @@
 # This creates one shared IAM role for the Crossplane AWS provider runtimes we
 # expect to install first. Keep the trust strict by naming exact service
 # accounts. Keep the policy bounded to the AWS services Crossplane should own.
+#
+# Each provider runs under its own ServiceAccount, crossplane-aws-<provider>,
+# rendered by apps/infra/crossplane/chart. They must not share one SA: every
+# ProviderRevision re-applies its SA with itself as controller owner, and five
+# revisions sharing `crossplane-aws` fought over it at ~500 API requests/s.
 
 # This policy now derives many names and fences from var.cluster_name. Refuse
 # empty input here so the policy never degenerates into wildcard-shaped names.
@@ -17,12 +22,33 @@ check "cluster_name_not_empty" {
 
 locals {
   crossplane_aws = {
-    namespace            = "crossplane-system"
-    service_account_name = "crossplane-aws"
-    role_name            = "${var.cluster_name}-crossplane-aws"
-    oidc_host            = replace(var.oidc_provider_arn, "/^(.*provider/)/", "")
-    cluster_subdomain    = var.cluster_subdomain
-    parent_zone_arn      = "arn:${data.aws_partition.current.partition}:route53:::hostedzone/${data.aws_route53_zone.parent_domain.zone_id}"
+    namespace = "crossplane-system"
+    role_name = "${var.cluster_name}-crossplane-aws"
+
+    # One SA per provider templated in apps/infra/crossplane/chart, named
+    # crossplane-aws-<key> after the `provider.aws.<key>` values key. Disabled
+    # providers are listed too so enabling one later needs no tofu change.
+    service_account_names = concat(
+      [
+        for p in [
+          "acm",
+          "cloudfront",
+          "elasticache",
+          "family",
+          "iam",
+          "rds",
+          "route53",
+          "s3",
+          "secretsmanager",
+        ] : "crossplane-aws-${p}"
+      ],
+      # Legacy shared SA. Remove once every provider is healthy on its own SA
+      # (D14 step 6).
+      ["crossplane-aws"],
+    )
+    oidc_host                = replace(var.oidc_provider_arn, "/^(.*provider/)/", "")
+    cluster_subdomain        = var.cluster_subdomain
+    parent_zone_arn          = "arn:${data.aws_partition.current.partition}:route53:::hostedzone/${data.aws_route53_zone.parent_domain.zone_id}"
     hosted_zone_arn_wildcard = "arn:${data.aws_partition.current.partition}:route53:::hostedzone/*"
     iam_role_names = [
       "${var.cluster_name}-app-*",
@@ -57,7 +83,10 @@ data "aws_iam_policy_document" "crossplane_aws_trust" {
     condition {
       test     = "StringEquals"
       variable = "${local.crossplane_aws.oidc_host}:sub"
-      values = ["system:serviceaccount:${local.crossplane_aws.namespace}:${local.crossplane_aws.service_account_name}"]
+      values = [
+        for sa in local.crossplane_aws.service_account_names :
+        "system:serviceaccount:${local.crossplane_aws.namespace}:${sa}"
+      ]
     }
 
     condition {

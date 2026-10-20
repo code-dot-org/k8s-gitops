@@ -24,23 +24,38 @@ module "eks" {
   node_iam_role_use_name_prefix = false
   node_security_group_use_name_prefix = false
 
+  #============================================================
+  # Control-plane logs -> CloudWatch /aws/eks/codeai-k8s/cluster
+  #============================================================
+  #
+  # All five log types are on. `audit` is the only record of who did what
+  # through the API server.
+  #
+  # History: audit was switched off on 2026-04-15 because the log group was
+  # ingesting 80-120 GB/day (about $40-60/day). That was not cluster
+  # setup/teardown churn. It began on 2026-04-06, the day Crossplane was
+  # installed, and comes from the five AWS providers fighting over the shared
+  # `crossplane-aws` ServiceAccount at roughly 500 API requests/s.
+  # With that loop fixed the whole log group should run at single-digit GB/day.
+  # Check daily ingestion with:
+  #
+  #   aws cloudwatch get-metric-statistics --region us-east-1 \
+  #     --namespace AWS/Logs --metric-name IncomingBytes \
+  #     --dimensions Name=LogGroupName,Value=/aws/eks/codeai-k8s/cluster \
+  #     --start-time "$(date -u -v-7d +%Y-%m-%dT00:00:00Z)" \
+  #     --end-time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  #     --period 86400 --statistics Sum --output json
   enabled_log_types = [
     "api",
+    "audit",
     "authenticator",
-    # TODO: disabled k8s audit for cost reasons while Seth tears down and sets up
-    # clusters all day. This was costing about $40/day in CloudWatch usage. I think
-    # a setup/teardown cycle of the cluster costs about $5 in cloudwatch logs. Eep.
-    #
-    # Re-evaluate re-enabling once the cluster is in a stable state; if it is still
-    # flooding the logs with spam, keep this off until the churn is fixed.
-    #
-    # Can check daily usage with:
-    # aws cloudwatch get-metric-statistics --region us-east-1 --namespace AWS/Logs --metric-name IncomingBytes --dimensions Name=LogGroupName,Value=/aws/eks/codeai-k8s/cluster --start-time 2026-04-01T00:00:00Z --end-time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --period 86400 --statistics Sum --output json
-    #
-    # Should try to turn this on anytime after May 15, 2026 to get k8s audit logs back:
-    #
-    # "audit",
+    "controllerManager",
+    "scheduler",
   ]
+
+  # The module owns the log group. Pin retention here so it does not drift
+  # with the module default (also 90 today; the live group is already 90).
+  cloudwatch_log_group_retention_in_days = 90
 
   #=============================================================
   # Map AWS IAM roles to cluster permissions (affects kubectl)

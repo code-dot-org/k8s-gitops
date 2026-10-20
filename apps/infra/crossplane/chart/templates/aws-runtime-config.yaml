@@ -3,10 +3,34 @@
 {{- $config := required "codeai_cluster_config is required" (index .Values "codeai_cluster_config") -}}
 {{- $iamRoleArn := .Values.crossplane.providers.aws.iamRoleArn | default (printf "%s:role/%s-crossplane-aws" (required "codeai_cluster_config.iam_arn_prefix is required" (index $config "iam_arn_prefix")) (required "codeai_cluster_config.cluster_name is required" (index $config "cluster_name"))) -}}
 
+{{- /*
+One DeploymentRuntimeConfig per provider, each with its own ServiceAccount.
+
+Providers must not share a ServiceAccount. Every ProviderRevision re-applies
+its runtime SA with itself as the controller owner on each reconcile, so
+revisions sharing one SA overwrite each other's owner reference, each change
+wakes the others, and the loop never settles. With five providers on one SA
+that was ~500 API requests/s and 80-120 GB/day of audit logs
+(PRODUCTION-READINESS-JIRA.md D14).
+
+The SA name crossplane-aws-<key> must be in local.crossplane_aws.service_account_names
+in bootstrap/codeai-k8s/cluster-infra/infra/crossplane/crossplane-aws.tf, or the
+provider cannot assume the IAM role. Apply that tofu before this chart.
+*/ -}}
+
+{{- range $key, $provider := .Values.provider.aws }}
+{{- $enabled := false }}
+{{- if eq $key "family" }}
+{{- $enabled = eq (include "crossplane.isAnyAWSProviderEnabled" $) "true" }}
+{{- else if kindIs "map" $provider }}
+{{- $enabled = $provider.enabled | default false }}
+{{- end }}
+{{- if $enabled }}
+---
 apiVersion: pkg.crossplane.io/v1beta1
 kind: DeploymentRuntimeConfig
 metadata:
-  name: crossplane-aws-runtime-config
+  name: crossplane-aws-{{ $key }}-runtime-config
   annotations:
     argocd.argoproj.io/sync-wave: "10"
 spec:
@@ -26,8 +50,9 @@ spec:
                   memory: 1Gi
   serviceAccountTemplate:
     metadata:
-      # this service account name must match the one in crossplane-aws.tf
-      name: crossplane-aws
+      name: crossplane-aws-{{ $key }}
       annotations:
         eks.amazonaws.com/role-arn: {{ $iamRoleArn | quote }}
+{{- end }}
+{{- end }}
 {{- end }}
