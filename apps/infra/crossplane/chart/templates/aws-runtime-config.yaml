@@ -9,13 +9,11 @@ One DeploymentRuntimeConfig per provider, each with its own ServiceAccount.
 Providers must not share a ServiceAccount. Every ProviderRevision re-applies
 its runtime SA with itself as the controller owner on each reconcile, so
 revisions sharing one SA overwrite each other's owner reference, each change
-wakes the others, and the loop never settles. With five providers on one SA
-that was ~500 API requests/s and 80-120 GB/day of audit logs
-(PRODUCTION-READINESS-JIRA.md D14).
+wakes the others, and the loop never settles.
 
 The SA name crossplane-aws-<key> must be in local.crossplane_aws.service_account_names
 in bootstrap/codeai-k8s/cluster-infra/infra/crossplane/crossplane-aws.tf, or the
-provider cannot assume the IAM role. Apply that tofu before this chart.
+provider cannot assume the IAM role.
 */ -}}
 
 {{- range $key, $provider := .Values.provider.aws }}
