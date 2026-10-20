@@ -31,7 +31,8 @@ repo), `code-dot-org` (the application), or `infrastructure` (observability).
 | B1 | Give the worker its own ServiceAccount and IAM role                             | V2                     | E1, F2         |
 | B2 | Wire production database secrets through the autoscale-prod stack name          | V1                     | F2             |
 | C6 | Stop every worker promotion from waiting on a node launch (P1)                  | V4                     | C2, C3 (P1)    |
-| D1 | Turn on EKS control-plane audit logging with CloudWatch retention               |                        | F2, D10 (P2)   |
+| D1 | Turn on EKS control-plane audit logging with CloudWatch retention               | D14                    | F2, D10 (P2)   |
+| D14 | Stop Crossplane providers fighting over the shared crossplane-aws SA (P1)      |                        | D1, D10 (P2)   |
 | E1 | Add a canary job and alert that proves production is draining low-priority work | B1, V7                 | F2             |
 | E2 | Confirm a worker exception reaches Honeybadger                                  | A2                     | F2             |
 | F1 | Write the production promotion checklist                                        |                        | F2             |
@@ -669,11 +670,98 @@ What to do:
   group (90 days as a baseline).
 - Note the expected monthly cost in the PR so the acceptance is recorded.
 
+**Status (2026-10-19, read-only `aws` and `kubectl get --raw /metrics`; one
+tofu edit made, not yet applied)**
+
+Edit made: `k8s-gitops: bootstrap/codeai-k8s/cluster/eks-cluster.tf` now
+enables `api`, `audit`, `authenticator`, `controllerManager`, and `scheduler`,
+and sets `cloudwatch_log_group_retention_in_days = 90` explicitly. The live log
+group `/aws/eks/codeai-k8s/cluster` is already at 90 days (the module default,
+STANDARD class, 1.2 GB stored), so the plan should change only the cluster's
+logging configuration. The cluster itself shows `deletionProtection: false`
+(that is D-series P1 work, noted here only because it was in the same output).
+
+Cost check before applying: the April bill that got audit turned off was not
+setup/teardown churn. Ingestion was 2-3 GB/day until 2026-04-06, jumped to
+80-120 GB/day the day Crossplane was installed, and stayed there until audit
+was disabled on 2026-04-15, after which the group has run at 33-35 MB/day. The
+cause is still running: the five AWS provider revisions share one
+ServiceAccount (`crossplane-aws`) through a single DeploymentRuntimeConfig, and
+each reconcile sets itself as the SA's controller owner, which wakes the other
+four. Measured on 2026-10-19: about 570 audit events/s across both API servers
+(49 M/day), 94% of them from that loop (74% Metadata level, 26%
+RequestResponse). Enabling audit today is estimated at $45-130/day, or
+$1.6k-4.6k/month with 90-day storage; the April observation sits at the low end
+of that range. With the loop fixed (D14) the estimate is 4-12 GB/day, about
+$80-200/month including storage.
+
+Order of operations: land D14 first, then apply this edit. If audit must go on
+before D14, set a CloudWatch billing alarm first and expect the April rate.
+
+Note for D10: GuardDuty EKS Audit Log Monitoring reads the audit stream from
+the EKS control plane directly and does not require CloudWatch delivery, so D10
+depends on D14 (noise) more than on this ticket.
+
 Done when: audit events appear in the cluster's CloudWatch log group.
+
+Depends on: D14 (cost).
 
 Unblocks: F2, D10 (P2).
 
 Source: PRODUCTION-READINESS-TASKS.md D1; PRODUCTION-READINESS.md 6.1.
+
+### D14: Stop the Crossplane AWS providers fighting over the shared crossplane-aws ServiceAccount (P1)
+
+Every Crossplane AWS provider in
+`k8s-gitops: apps/infra/crossplane/chart/templates/` references one
+`DeploymentRuntimeConfig`, `crossplane-aws-runtime-config`
+(`aws-runtime-config.yaml`), whose `serviceAccountTemplate.metadata.name` is
+`crossplane-aws`. Crossplane re-applies the runtime ServiceAccount on every
+ProviderRevision reconcile with that revision as the controller owner. Five
+revisions share the object, so each apply replaces the previous owner, the
+change wakes the other four revisions, and the cycle never settles. Nothing
+reports unhealthy and Crossplane logs nothing, but the API servers see roughly
+550 requests/s. Per reconcile: 5 secret GETs, 2 secret PATCHes, one PATCH each
+of the ServiceAccount, Service, and Deployment, and a ProviderRevision status
+PUT, all no-ops except the owner flip. Measured 2026-10-19 by sampling
+`kubectl get --raw /metrics`: `apiserver_request_total` on one of the two API
+servers was 94% this pattern (77 M of 82 M requests in 147 h), and the SA's
+controller owner was a different revision on each of eight consecutive reads.
+
+Consequences: this is the 80-120 GB/day of audit logs that got audit logging
+turned off in April (D1), it is a steady load on the control plane, and it
+keeps all five provider deployments reconciling continuously.
+
+What to do:
+
+- Give each provider its own ServiceAccount. Render one
+  `DeploymentRuntimeConfig` per provider in the chart (for example
+  `crossplane-aws-acm` with SA `crossplane-aws-acm`, and likewise for `iam`,
+  `route53`, `s3`, and the provider family), keep the IRSA annotation on each,
+  and point each `Provider.spec.runtimeConfigRef` at its own config. Bump the
+  chart `version` in `Chart.yaml`.
+- Before that, widen the IRSA trust in
+  `k8s-gitops: bootstrap/codeai-k8s/cluster-infra/infra/crossplane/crossplane-aws.tf`.
+  The `sub` condition is `StringEquals` on exactly
+  `system:serviceaccount:crossplane-system:crossplane-aws`. Add the new SA
+  names to that list (or switch to `StringLike` on `crossplane-aws-*`). Apply
+  the tofu change before the chart change, or every provider loses AWS access
+  when its pod restarts with the new SA. Remove the old `crossplane-aws` entry
+  once the providers are healthy on the new SAs.
+- Expect every provider Deployment to roll once. The old `crossplane-aws` SA is
+  left behind with a stale owner reference; delete it by hand afterwards.
+- Do not take the shortcut of dropping the SA name from the template:
+  Crossplane then names the SA after the revision hash, and the trust policy
+  would need a wildcard on `provider-aws-*` that changes on every upgrade.
+
+Done when: the resourceVersion of each new provider SA is unchanged a minute
+apart, all providers report `HEALTHY=True`, and a fresh
+`apiserver_request_total` sample no longer has secrets and providerrevisions
+at the top.
+
+Unblocks: D1 (cost), D10 (P2).
+
+Source: live finding while working D1 on 2026-10-19; PRODUCTION-READINESS.md 6.1.
 
 ### E1: Add a canary job and alert that proves production is draining low-priority work
 

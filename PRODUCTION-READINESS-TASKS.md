@@ -614,6 +614,15 @@ Most of these land in `apps/infra/standard-envtypes/chart`, which renders the
       control-plane logs and set CloudWatch retention (90 days baseline).
       Where: `bootstrap/codeai-k8s/cluster/eks-cluster.tf`.
       Done when: audit events appear in the log group. See 6.1.
+
+      **Status (2026-10-19; tofu edited, not applied):** `eks-cluster.tf` now
+      enables all five log types and pins
+      `cloudwatch_log_group_retention_in_days = 90` (the live group is already
+      90 days). Apply after D14: the April 80-120 GB/day that got audit
+      switched off was the Crossplane shared-ServiceAccount reconcile loop,
+      which is still running at about 570 audit events/s, not cluster churn.
+      Audit as-is is roughly $45-130/day; after D14 roughly $80-200/month.
+      Details and the measurement in PRODUCTION-READINESS-JIRA.md D1 and D14.
 - [ ] **D2 (P1)** Restrict the public API endpoint with
       `endpoint_public_access_cidrs` (office and VPN), or disable public access
       and use SSM or a bastion.
@@ -674,6 +683,14 @@ Most of these land in `apps/infra/standard-envtypes/chart`, which renders the
       Where: `bootstrap/codeai-k8s/cluster/eks-cluster-networking.tf`,
       `apps/infra/networking`.
       Done when: production nodes land only in those subnets. See 6.3.
+- [ ] **D14 (P1)** Stop the Crossplane AWS providers fighting over the shared
+      `crossplane-aws` ServiceAccount: one DeploymentRuntimeConfig and SA per
+      provider, with the IRSA trust widened first.
+      Where: `apps/infra/crossplane/chart/templates/aws-runtime-config.yaml`,
+      `bootstrap/codeai-k8s/cluster-infra/infra/crossplane/crossplane-aws.tf`.
+      Unblocks: D1. Done when: each provider SA's resourceVersion is stable and
+      API request rate drops by about 90%. See 6.1 and
+      PRODUCTION-READINESS-JIRA.md D14.
 
 ---
 

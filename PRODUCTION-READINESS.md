@@ -542,6 +542,10 @@ requests from its p95. Revisit the 30Gi ephemeral request (3.4).
   preferably `controllerManager` and `scheduler`, and set an explicit
   CloudWatch log-group retention (90 days is a common baseline). GuardDuty EKS
   Protection also needs the audit stream.
+  Update 2026-10-19: the April volume (80-120 GB/day) that got audit turned
+  off was the Crossplane providers' shared-ServiceAccount reconcile loop
+  (D14), not cluster churn, and it is still running. Fix D14 before enabling
+  audit, or expect that rate again.
 - **Public API endpoint with no CIDR allowlist (P1).**
   `endpoint_public_access = true` and no `endpoint_public_access_cidrs`
   (`eks-cluster.tf:23`). Argo, Kargo, Crossplane, and ESO all run in-cluster
