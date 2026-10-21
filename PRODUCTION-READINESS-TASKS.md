@@ -234,9 +234,90 @@ These were inferred from code only. Record the answer next to each item.
       not 50.
 - [ ] **V7 (P0)** Confirm the `monitoring` Application is Healthy and AMP has
       recent `up{cluster="codeai-k8s"}` samples. Unblocks: E1, E12. See 7.1.
-- [ ] **V8 (P0)** Confirm production config sets `memcached_endpoint` and
+- [x] **V8 (P0)** Confirm production config sets `memcached_endpoint` and
       `redis_url`, and that both are reachable from the private subnets with the
       pod security groups. Unblocks: G4. See 9.
+
+      **Result (2026-10-21, read-only `aws elasticache`, `ec2`,
+      `cloudformation`, and `secretsmanager` describe/list calls as `cdo`,
+      `kubectl get`, and a bare TCP connect via `kubectl exec` from the
+      staging and test workers; no cache commands issued, nothing
+      modified):**
+
+      Reachability passes; configuration is missing. G4 is scoped below.
+
+      **Configuration: not set.** Nothing on the k8s side gives a production
+      worker either key:
+
+      - `production/cdo/` in Secrets Manager holds 196 secrets and none named
+        `memcached_endpoint` or `redis_url`. The only cache-related names are
+        `geocoder_redis_url` (2020) and `level_sources_redis_url` (2019);
+        a `grep` of `lib/` and `dashboard/` finds no Ruby reader for either.
+        The live `cdo-external-secrets` Secret in `production` agrees: 207
+        keys (196 plus the 11 `CfnStack/autoscale-prod/` keys from B2), and
+        the same two names are the only cache-related ones.
+      - `apps/codeai/deployments/production/values.yaml` sets only
+        `stack_name` and `override_dashboard` under `locals.yml`, and the
+        chart's `services.redis.enabled` defaults to false.
+      - So a production worker would boot with the `config.yml.erb` defaults:
+        `memcached_endpoint` empty (the shared cache falls back to the per-pod
+        FileStore) and `redis_url: redis://localhost:6379/0` (nothing listens
+        there in the pod).
+
+      Staging is in exactly that state today: the staging worker has no
+      `CDO_redis_url` or `CDO_memcached_endpoint` env var, 127.0.0.1:6379 is
+      closed inside the pod, and the FileStore directory
+      `dashboard/tmp/cache/shared` exists with entries. Legacy EC2 does not
+      use Secrets Manager for these either: `bootstrap_chef_stack.sh.erb`
+      writes `redis_url: rediss://<RedisGroup primary>:6379` and
+      `memcached_endpoint: <Memcached config endpoint>:11211` from the
+      CloudFormation outputs into the chef node attributes at boot. They are
+      plain hostnames, not secrets.
+
+      **Reachability: pass.** The production caches belong to the
+      `autoscale-prod` CloudFormation stack and sit in `vpc-6e98810a`, the
+      cluster's VPC:
+
+      | Resource | Endpoint | Security group |
+      |----------|----------|----------------|
+      | Memcached cluster `autoscale-prod` (3 x cache.r5.large, engine 1.4.34) | `autoscale-prod.xdvqbe.cfg.use1.cache.amazonaws.com:11211`, nodes `.0001`-`.0003` | the stack's memcached group |
+      | Redis replication group `aurpinpqs9ag1ua` (in-transit TLS on, no auth token) | `master.aurpinpqs9ag1ua.xdvqbe.use1.cache.amazonaws.com:6379` | the stack's Redis group |
+
+      Both cache security groups admit ingress only from the legacy frontend
+      security group (`frontend_security_group_id` in
+      `apps/infra/codeai-cluster-config.values.yaml`), on 11211 and 6379
+      respectively. The `frontend` NodeClass lists that group under
+      `podSecurityGroupSelectorTerms`, and `describe-network-interfaces` on
+      both frontend nodes confirms it lands on the pods: each node has a
+      second ENI (device 1) carrying the cluster primary group and the
+      frontend group with a prefix-delegated /28 that contains the worker pod
+      IP, while the node's own ENI (device 0) carries only the node shared
+      group (`node_security_group_id`). Pods on the frontend pool therefore
+      egress with the frontend group, and no security-group change is needed.
+
+      Bare TCP connect (`bash` `/dev/tcp`, closed immediately) from the
+      staging worker (`i-04ca800550377ba0e`, us-east-1a) and the test worker
+      (`i-0b31e127f8a3025bd`, us-east-1b): OPEN to the memcached config
+      endpoint and all three node endpoints on 11211, and to the Redis
+      primary on 6379, from both pods. A control probe to 127.0.0.1:6379 was
+      CLOSED in both.
+
+      Two notes for G4:
+
+      - The cursor fallback is not literally zero.
+        `AnonymousGeoBackfillingJob.storage_id_cursor` reads the shared-cache
+        key and falls back to `ProjectStorage::Geo.maximum(:storage_id)`.
+        Without memcached the cursor still dies with the pod and the next pod
+        resumes from whatever the DB max is, which can skip or re-scan work.
+        Once `memcached_endpoint` is set the key lives in the same cluster
+        the legacy production frontends use, so k8s and EC2 workers share one
+        cursor.
+      - Missing Redis is not fatal for the worker. `lib/cdo/geocoder.rb`
+        wraps lookups in a `RedisCacheStore` whose default error handler
+        (activesupport 7.0.10) logs and returns nil on connection errors, so
+        every geocode goes uncached to Mapbox or freegeoip instead. The
+        staging worker logged no `AnonymousGeoBackfillingJob` lines in the
+        last 24h, so there is no log evidence either way yet.
 - [x] **V9 (P0)** Determine what `locals.yml.override_dashboard` and
       `stack_name` do for a worker (URL generation, StackSecret resolution).
       Unblocks: A10. See 3.6, 3.7.
@@ -855,11 +936,57 @@ true`, `PrunePropagationPolicy=foreground`, and a `retry` block for the
       restart workarounds).
       Where: `docs/runbooks/`.
       Done when: someone other than the author can follow it. See 9.
-- [ ] **G4 (P1)** If V8 fails, configure `memcached_endpoint` and `redis_url`
-      for production and open the security-group paths; otherwise record that the
-      geo backfill cursor is durable.
-      Where: `production/cdo/*` secrets, NodeClass security groups.
-      Done when: the backfill cursor survives a pod replacement. See 9.
+- [ ] **G4 (P1)** Publish `memcached_endpoint` and `redis_url` from the
+      CloudFormation stack and sync them with the env-type ExternalSecret.
+      V8 (2026-10-21) found the network path already open (both ElastiCache
+      security groups admit the frontend group that the frontend pod ENIs
+      carry; TCP connects from frontend pods succeed) but nothing sets either
+      key: no `production/cdo/memcached_endpoint` or `redis_url` secret and
+      no `locals.yml` entry, so the worker would run on the per-pod FileStore
+      and `redis://localhost:6379/0`. Do not hardcode the hostnames in
+      gitops. Use the channel B2 already uses for the DB endpoints: the stack
+      publishes `CfnStack/<stack>/<key>` secrets from `!GetAtt`, and the
+      ExternalSecret's CfnStack find syncs them into `cdo-external-secrets`.
+      In code-dot-org, add two `AWS::SecretsManager::Secret` resources in the
+      shape of `DBWriterEndpointConfig` in
+      `aws/cloudformation/components/database.yml.erb`:
+      `CfnStack/${AWS::StackName}/memcached_endpoint` with
+      `!Sub "${Memcached.ConfigurationEndpoint.Address}:${Memcached.ConfigurationEndpoint.Port}"`
+      in `components/memcached.yml.erb`, and
+      `CfnStack/${AWS::StackName}/redis_url` with
+      `!Sub "rediss://${RedisGroup.PrimaryEndPoint.Address}:${RedisGroup.PrimaryEndPoint.Port}"`
+      in `components/redis.yml.erb`. Those are the expressions
+      `bootstrap_chef_stack.sh.erb` already writes into chef for legacy
+      frontends, so EC2 and k8s derive from one source and a cache rebuild
+      updates the secret. Only `autoscale-prod` renders the cache components:
+      it is the one app stack with `Op:Frontends=true`; `staging`, `test`,
+      and `levelbuilder` carry `Op:Frontends=false` and own no ElastiCache
+      resources (checked 2026-10-21), so they stay on the FileStore fallback
+      and the widened find matches nothing there. Here, widen the CfnStack
+      find regex in
+      `apps/infra/standard-envtypes/chart/templates/_envtype.tpl` from
+      `db_(cluster_id|endpoint_.*|credential_(writer|reader))` to also match
+      `memcached_endpoint|redis_url`, and bump the chart version. The IAM
+      role already allows `CfnStack/<stack>/*`, `cfn_stack_name_overrides`
+      already maps production to `autoscale-prod`, and a find that matches
+      nothing is harmless, so the regex can land before the stacks publish.
+      ESO re-syncs within 5 minutes; running pods pick the keys up on the
+      next rollout. The `production` namespace ExternalSecret already syncs
+      `CfnStack/autoscale-prod/` (B2 is live), so the two keys can be
+      verified in `cdo-external-secrets` there before any production worker
+      exists. No security-group, NodeClass, or NetworkPolicy change is
+      needed. The `autoscale-prod` stack update is additive but is still a
+      production CloudFormation change: run `rake stack:validate` first and
+      expect `No changes` on the current template and exactly two `Add`
+      entries with the edit; `rake stack:start` prints the change set and
+      prompts before executing.
+      Where: `code-dot-org: aws/cloudformation/components/memcached.yml.erb`,
+      `components/redis.yml.erb`;
+      `k8s-gitops: apps/infra/standard-envtypes/chart/templates/_envtype.tpl`.
+      Done when: `cdo-external-secrets` in `production` carries
+      `memcached_endpoint` and `redis_url`, `CDO.shared_cache` is a
+      `MemCacheStore` in the production worker, and the backfill cursor
+      survives a pod replacement. See 9, V8.
 - [ ] **G5 (P2)** Plan k8s `CronJob` equivalents and a non-host dedup
       strategy for `perform_job` enqueue crons, `report_activejob_metrics`, and
       `archive_failed_jobs`, for the day the EC2 daemon is retired.

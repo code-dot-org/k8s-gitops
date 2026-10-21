@@ -437,7 +437,7 @@ Add to the Namespace rendered in `_envtype.tpl` (or a sibling template):
 
 - Staging, test, and production all schedule onto the shared `frontend`
   NodePool. Its NodeClass attaches the cluster primary SG **and** the legacy
-  `frontend` SG `sg-663a031e` to every pod on those nodes
+  `frontend` SG to every pod on those nodes
   (`frontend-nodeclass.yaml`). That is how pods reach the database, and it
   also means a staging pod is one leaked credential away from production data.
 - The NodePool has no `kubernetes.io/arch` requirement. Auto Mode may choose
