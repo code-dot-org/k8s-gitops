@@ -126,7 +126,7 @@ spec:
             source: {{ printf "^%s/cdo/(.*)$" .environment_type | quote }}
             target: "$1"
     #==========================================================================
-    # CloudFormation-provisioned DB endpoints and credentials.
+    # CloudFormation-provisioned DB and cache endpoints, and DB credentials.
     #
     # dashboard declares these as !StackSecret (code-dot-org config.yml.erb),
     # which resolves by reading the EC2 instance's aws:cloudformation:stack-name
@@ -143,9 +143,13 @@ spec:
     # values.yaml says otherwise (production's stack is autoscale-prod).
     #
     # Matched on an explicit key list rather than the whole db_ prefix. The
-    # keys dashboard needs from here are db_cluster_id, db_endpoint_* and the
-    # writer/reader db_credential_* pair. CfnStack/<stack>/ also holds keys
-    # that shouldn't land in the namespace.
+    # keys dashboard needs from here are db_cluster_id, db_endpoint_*, the
+    # writer/reader db_credential_* pair, and the ElastiCache endpoints
+    # memcached_endpoint and redis_url that the stack's memcached and redis
+    # components publish (only stacks with frontends; today that is
+    # autoscale-prod, so the cache keys match nothing for the other env
+    # types). CfnStack/<stack>/ also holds keys that shouldn't land in the
+    # namespace.
     #
     # NOTE: dataFrom entries merge in order, so a key present under both paths
     # takes its value from this second entry. The db_credential_* keys ARE
@@ -158,7 +162,7 @@ spec:
         decodingStrategy: None
         path: {{ printf "CfnStack/%s/" .cfn_stack_name | quote }}
         name:
-          regexp: {{ printf "^CfnStack/%s/db_(cluster_id|endpoint_.*|credential_(writer|reader))$" .cfn_stack_name | quote }}
+          regexp: {{ printf "^CfnStack/%s/(db_(cluster_id|endpoint_.*|credential_(writer|reader))|memcached_endpoint|redis_url)$" .cfn_stack_name | quote }}
       rewrite:
         - regexp:
             source: {{ printf "^CfnStack/%s/(.*)$" .cfn_stack_name | quote }}
