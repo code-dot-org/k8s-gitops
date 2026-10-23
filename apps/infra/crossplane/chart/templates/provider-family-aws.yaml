@@ -10,5 +10,5 @@ spec:
   runtimeConfigRef:
     apiVersion: pkg.crossplane.io/v1beta1
     kind: DeploymentRuntimeConfig
-    name: crossplane-aws-runtime-config
+    name: crossplane-aws-family-runtime-config
 {{- end }}
