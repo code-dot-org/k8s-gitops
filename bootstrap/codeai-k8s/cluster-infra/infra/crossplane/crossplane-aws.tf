@@ -42,8 +42,7 @@ locals {
           "secretsmanager",
         ] : "crossplane-aws-${p}"
       ],
-      # Legacy shared SA. Remove once every provider is healthy on its own SA
-      # (D14 step 6).
+      # TODO: Legacy shared SA. Remove once every provider is healthy on its own SA
       ["crossplane-aws"],
     )
     oidc_host                = replace(var.oidc_provider_arn, "/^(.*provider/)/", "")
