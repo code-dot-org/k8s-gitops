@@ -143,7 +143,7 @@ spec:
     # values.yaml says otherwise (production's stack is autoscale-prod).
     #
     # Matched on an explicit key list rather than the whole db_ prefix. The
-    # keys dashboard needs from here are db_cluster_id, db_endpoint_*, the
+    # keys dashboard needs from here are db_cluster_id, db_proxy, db_endpoint_*, the
     # writer/reader db_credential_* pair, and the ElastiCache endpoints
     # memcached_endpoint and redis_url that the stack's memcached and redis
     # components publish (only stacks with frontends; today that is
@@ -162,7 +162,7 @@ spec:
         decodingStrategy: None
         path: {{ printf "CfnStack/%s/" .cfn_stack_name | quote }}
         name:
-          regexp: {{ printf "^CfnStack/%s/(db_(cluster_id|endpoint_.*|credential_(writer|reader))|memcached_endpoint|redis_url)$" .cfn_stack_name | quote }}
+          regexp: {{ printf "^CfnStack/%s/(db_(cluster_id|proxy|endpoint_.*|credential_(writer|reader))|memcached_endpoint|redis_url)$" .cfn_stack_name | quote }}
       rewrite:
         - regexp:
             source: {{ printf "^CfnStack/%s/(.*)$" .cfn_stack_name | quote }}
