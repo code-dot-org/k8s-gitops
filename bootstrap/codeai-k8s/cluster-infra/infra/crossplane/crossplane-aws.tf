@@ -8,8 +8,7 @@
 #
 # Each provider runs under its own ServiceAccount, crossplane-aws-<provider>,
 # rendered by apps/infra/crossplane/chart. They must not share one SA: every
-# ProviderRevision re-applies its SA with itself as controller owner, and five
-# revisions sharing `crossplane-aws` fought over it at ~500 API requests/s.
+# ProviderRevision re-applies its SA with itself as controller owner.
 
 # This policy now derives many names and fences from var.cluster_name. Refuse
 # empty input here so the policy never degenerates into wildcard-shaped names.
