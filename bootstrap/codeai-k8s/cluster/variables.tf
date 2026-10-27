@@ -35,7 +35,7 @@ variable "cluster_subdomain" {
 variable "kubernetes_version" {
   description = "Kubernetes version for the EKS cluster."
   type        = string
-  default     = "1.35"
+  default     = "1.36"
 }
 
 variable "cluster_admin_role_arns" {
