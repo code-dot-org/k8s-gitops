@@ -27,23 +27,19 @@ locals {
     # One SA per provider templated in apps/infra/crossplane/chart, named
     # crossplane-aws-<key> after the `provider.aws.<key>` values key. Disabled
     # providers are listed too so enabling one later needs no tofu change.
-    service_account_names = concat(
-      [
-        for p in [
-          "acm",
-          "cloudfront",
-          "elasticache",
-          "family",
-          "iam",
-          "rds",
-          "route53",
-          "s3",
-          "secretsmanager",
-        ] : "crossplane-aws-${p}"
-      ],
-      # TODO: Legacy shared SA. Remove once every provider is healthy on its own SA
-      ["crossplane-aws"],
-    )
+    service_account_names = [
+      for p in [
+        "acm",
+        "cloudfront",
+        "elasticache",
+        "family",
+        "iam",
+        "rds",
+        "route53",
+        "s3",
+        "secretsmanager",
+      ] : "crossplane-aws-${p}"
+    ]
     oidc_host                = replace(var.oidc_provider_arn, "/^(.*provider/)/", "")
     cluster_subdomain        = var.cluster_subdomain
     parent_zone_arn          = "arn:${data.aws_partition.current.partition}:route53:::hostedzone/${data.aws_route53_zone.parent_domain.zone_id}"
