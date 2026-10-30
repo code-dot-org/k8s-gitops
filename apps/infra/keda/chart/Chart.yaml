@@ -1,0 +1,10 @@
+apiVersion: v2
+name: codeai-keda
+description: Local chart for KEDA on codeai-k8s
+type: application
+version: 0.1.0
+
+dependencies:
+  - name: keda
+    repository: https://kedacore.github.io/charts
+    version: 2.21.0
