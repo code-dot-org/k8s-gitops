@@ -1,0 +1,10 @@
+keda:
+  # Argo owns CRDs alongside the operator; large CRDs use server-side apply.
+  crds:
+    install: true
+
+  # One shared installation serves codeai deployments across namespaces.
+  watchNamespace: ""
+
+  webhooks:
+    enabled: true
