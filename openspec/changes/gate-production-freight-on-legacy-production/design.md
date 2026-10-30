@@ -1,0 +1,123 @@
+## Context
+
+The `codeai` Kargo project has four Stages fed by one Warehouse that follows `ghcr.io/code-dot-org/cdo-rails:latest` by digest. `production` requests Freight from `test` and has `autoPromotionEnabled: false`. The production Argo Application exists but its workload is disabled; enabling it is a separate change. The disabled deployment file currently sets `branch: staging` behind a FIXME comment; this design assumes the enabling change sets `branch: production`, so the chart deployed to production comes from the same commit lineage as the promoted image. Legacy production is an EC2 fleet deployed by DTP: `bin/dotd` merges a candidate into the `production` branch, each production daemon polls that branch every minute, `db:migrate` runs within one to two minutes of the merge, the CloudFormation rolling AMI replacement takes about 45 minutes, and `publish_github_release` tags a release at the end (never for hotfixes, which are direct non-merge pushes).
+
+The image side: CI builds `cdo-rails` only on pushes to `staging`, tags `git-<sha>` and `latest`, and merges the two per-arch images into a Docker manifest list with `docker buildx imagetools create`. That list carries no annotations, so Kargo Freight knows a digest and nothing else. The same workflow also runs after each weekly `cdo-deps` publish and on manual dispatch, both on the default branch, and republishes `git-<sha>` and `latest` with new bytes, so `git-<sha>` is not immutable despite the README's promise; only a digest is. The image contains `dashboard/db/schema.rb` (max version only) and `schema_cache.yml`, but not `dashboard/db/migrate`. Rails itself only warns at boot when the DB schema version differs. The chart (`k8s/helm` in code-dot-org, version 0.4.0) renders a dashboard Deployment, an active-job-worker Deployment and an optional one-shot Job from one shared pod template with no initContainers, hooks or update strategy. Pods reach the database with `CDO_db_*` env from the `cdo-external-secrets` Secret, egress through NAT, and there are no NetworkPolicies yet.
+
+The k8s `staging` and `test` namespaces share databases with legacy staging and test: the ExternalSecret composes `db_writer` from `CfnStack/<env>/db_endpoint_writer`, the legacy stack's endpoint. Both run images built from `staging` pushes. The image builds in 4 to 5 minutes, Kargo auto-promotes each new Freight to `staging` and then `test` within minutes, and the test deployment deliberately tracks the `staging` branch. The legacy `ci_build` daemon runs one build at a time and batches pushes that land mid-build, with `db:migrate` early in each build, so a staging migration can reach k8s staging before the staging database has it. The test database migrates only when a robo-DTT build runs on the `test` branch (about six a day, each including UI tests), so k8s test runs ahead of its database for hours after any migration lands on staging. The hazard this change addresses for production therefore already exists in staging and test.
+
+The options analysis that led here (nine candidate gates, their coverage and cost) lives in `PRODUCTION-PROMOTION-GATES.md` at the repo root; the user chose gates 7 (pod self-gate) and 3 (Kargo http guard) on 2026-10-28, with the `production` branch HEAD as the legacy marker and a precise migration-set comparison.
+
+## Goals / Non-Goals
+
+**Goals:**
+
+- Make it impossible, through Kargo, to promote Freight to `production` whose commit is not contained in the legacy `production` branch.
+- Make it impossible, however a digest reaches the production values file, for a production pod to run application code that expects a migration the production database does not have.
+- Keep both gates fail-closed: no commit annotation, no version list, unreachable GitHub or database all block.
+- Never let a blocked rollout reduce the capacity that is already running.
+- Stop k8s staging and test pods from running ahead of the databases they share with legacy staging and test, with the same guard.
+- Give the human at the Kargo gate a short runbook with the checks the machinery does not do.
+- Land everything before the production deployment is enabled, so the first production promotion is gated.
+
+**Non-Goals:**
+
+- Automating the promotion decision itself (release-driven retagging, a `production` Warehouse, Kargo auto-promotion). Possible later on top of these gates.
+- Narrowing who may promote (Kargo RBAC). Separate decision.
+- Applying the Kargo commit gate to `staging` or `test`. For staging it is trivially true; for test it would fail every auto-promotion until the next DTT. Making k8s test track the legacy `test` branch by selecting Freight on each DTT is a possible follow-up, not part of this change.
+- Admission-time enforcement or image signing.
+- Shipping migrations in the image or letting the image run `db:migrate`.
+- Guarding one-shot Jobs rendered by the chart (`setup-db-minimal` populates an empty database on purpose).
+
+## Decisions
+
+### 1. Two independent gates, each sufficient on its own
+
+The commit gate (Kargo) catches the mistake at the moment a human presses the button, before any write to k8s-gitops, with the failing step naming the rule that broke. The schema gate (initContainer) catches everything the Kargo path cannot see: a hand-edited `values.yaml`, a rollback to a Freight that was fine then but whose schema was since changed, a node replacement after a legacy rollback, and the one-to-two-minute window between a DTP merge and `db:migrate` finishing. Either gate alone leaves a hole; together the only way to run ahead of the schema is to disable the guard in values, which is a reviewed commit.
+
+Alternatives considered: a PreSync hook Job in the chart (gate 6) also runs the same check but only on Argo syncs and on every sync, including ones that change nothing about the image; an admission policy with cosign attestations (gate 8) is the strongest but needs a policy engine and a signing pipeline in CI; a Kargo `verification` on `test` (gate 5) runs at the wrong moment, since the commit is not yet in production when it reaches `test`; building the image from the `production` branch (gate 9) matches legacy exactly but the promoted bytes would never have run in `test`.
+
+### 2. Legacy marker: the `production` branch HEAD, read through the GitHub compare API
+
+`GET /repos/code-dot-org/code-dot-org/compare/production...<sha>` answers the ancestry question directly: `ahead_by == 0` (status `behind` or `identical`) means every change in the image is already in the branch; `ahead` or `diverged` means it is not; an unknown or empty sha returns 404. The branch moves on hotfixes too, which the release tag does not, and the branch moves one to two minutes before `db:migrate` finishes, which the schema gate covers. The call is unauthenticated for now (60 requests per hour per source IP, far above promotion rates); if rate limiting ever appears, Kargo's `secret()` expression function can supply a token header from a generic credential Secret.
+
+Kargo 1.9.5's `http` step has `successExpression` and `failureExpression` but no way to set the failure message: a met failure criterion reports only `HTTP (<status>) response met failure criteria`, and outputs are produced on success alone. The gate is therefore two steps calling the same URL. `freight-has-revision` succeeds on 200 and fails terminally on 404 or 422 (no annotation, or a sha GitHub does not know). `revision-in-legacy-production` succeeds on 200 with `ahead_by == 0` and fails terminally on 200 with `ahead_by > 0`. The failing step's name tells the operator which rule broke, and the runbook maps step and status to cause. A response that matches neither expression (5xx, timeout) is retried until the step's five-minute timeout. Two calls per promotion stay far inside the unauthenticated limit.
+
+Alternatives: the GitHub release tag (strict "fleet finished" marker, but hotfixes never get one, and the fleet state matters less than the schema state); the `cdo-build-logs` S3 metadata or EC2 `git-commit` tags (both need AWS credentials in the Kargo controller and a non-`http` step, which Kargo 1.9.5 does not have); a Slack topic (not machine-readable with any guarantee).
+
+### 3. The commit travels as an OCI index annotation built with regctl
+
+Kargo 1.9.5 populates `imageFrom(...).Annotations` from the index annotations (then manifest and descriptor annotations), never from image config labels, so the commit must be on the index. `docker buildx imagetools create --annotation` silently drops annotations when the result is a Docker manifest list, which it is whenever every child is Docker-typed, as ours are. `regctl index create <ref> --ref <child>... --annotation k=v` always emits `application/vnd.oci.image.index.v1+json` and leaves the per-arch images (the bytes that ran in CI's smoke test) untouched. The merge job installs regctl from a SHA-pinned `regclient/actions/regctl-installer`, builds the index once under the immutable `git-<sha>` tag, inspects it, and fails the job unless the media type is OCI, the annotation equals `github.sha`, and both platform descriptors are present. Only then does it copy that validated index to `latest` and any other tag in `$TAGS` with `regctl image copy`, so the tag Kargo follows never points at an index that has not passed the check. If regctl does not derive the platform from a single-arch child, the two-step form (`index create ... --desc-platform linux/amd64`, then `index add ... --desc-platform linux/arm64`) is the fallback; `skopeo copy --format oci` per leg plus buildx is the fallback to that.
+
+Alternatives: pushing the per-arch images as OCI manifests so buildx emits an OCI index (changes the tested bytes' media types and the Dockerfile build flags); a Kargo git subscription to `staging` alongside the image (Freight would carry a commit, but nothing ties it to the image digest in the same Freight).
+
+### 4. Precise migration-set comparison, from a version manifest baked into the image
+
+`schema.rb` carries only the maximum version. A migration with an older timestamp merged after a newer one (common with long-lived PRs) would pass a max-version compare and still be missing from the database. Rails' own `check_pending!` compares sets, so the guard does too: `dashboard/db/migrate_versions.txt` is generated at build time by `docker/rails/write-migrate-versions.sh` (the leading 14 digits of every file in `dashboard/db/migrate`, sorted, unique), run by CI right after `ensure-locales.sh` in every job that builds, and by the skaffold `build.hooks.before` for local images. It is gitignored so it can never go stale in the repo. `db/migrate` itself stays excluded by `Dockerfile.dockerignore` so the image still cannot migrate.
+
+### 5. The check is a small Ruby script using `mysql2` directly
+
+`dashboard/bin/check-schema-migrations` requires `deployment.rb` (already proven to load database-free inside the image by the smoke test), resolves the same URI Rails uses (`CDO.dashboard_db_reader || CDO.dashboard_db_writer`, so `RAILS_ENV` selects `dashboard_<env>`), opens a `Mysql2::Client` with short connect and read timeouts and `default_group: 'cdo'`, runs `SELECT version FROM schema_migrations`, and computes `missing = expected - applied` as strings. Exit codes: 0 ok (or `warn`/`off`), 1 ahead in `enforce`, 2 cannot decide (no version list, connection or query failure). It prints both counts, both maxima and every missing version so the pod log names the migration being waited for.
+
+Alternatives rejected: `Cdo::Sequel.database_connection_pool` (pulls DCDO and Gatekeeper, which read DynamoDB in production); `rails runner` (eager-loads the app, about 3 GiB, for a one-row query). Configuration is plain `SCHEMA_GUARD_MODE` and `SCHEMA_GUARD_EXTRA_VERSIONS` env, not `CDO_*` names, because `CDO_*` env is parsed into config and would need defaults in `config.yml.erb`.
+
+### 6. Guard as an initContainer rendered from shared named templates, Deployments only, default off
+
+The initContainer runs the same image and digest as the main container (so it checks exactly the code that is about to run), with the same `env`/`envFrom`, `securityContext`, `resources` and `volumeMounts`. Those blocks are factored into named templates (`dashboard.containerEnv`, `dashboard.containerSecurityContext`, `dashboard.containerResources`, `dashboard.volumeMounts`) and included by both containers so they cannot drift. Sharing `resources` keeps the pod's QoS class unchanged at no scheduling cost, since init and app containers do not run concurrently. The block is gated by `and $isDeployment .Values.schemaGuard.enabled`; `values.yaml` defaults to `enabled: false, mode: enforce, extraVersions: ""`, `values.schema.json` constrains `mode` to `enforce|warn|off`, and `Chart.yaml` goes to 0.5.0. A `verify-schema-guard` script under `k8s/bin` renders the chart on and off and asserts the contract in `k8s-validate.yml`.
+
+Alternative: a boot-time check inside the Rails process. That would also cover Jobs, but a failed init container leaves a clearer state (`Init:Error`, a dedicated log stream, the old ReplicaSet untouched) than a crash-looping app container, and keeps the guard out of the application's boot path.
+
+### 7. RollingUpdate with `maxUnavailable: 0`, `maxSurge: 1`
+
+The chart sets no strategy today. Kubernetes' defaults (25%/25%) round `maxUnavailable` down and `maxSurge` up, so a single-replica worker already gets 0 and 1, but the dashboard Deployment runs several replicas under its autoscaler and the default would let one of them be taken down before the new pod proves it can start. Setting both values explicitly makes the property hold at every replica count. With `maxUnavailable: 0` the old pod keeps running while the new pod sits in `Init:Error`; kubelet retries the init container with backoff (capped at five minutes), so once the legacy deploy applies the migration the rollout completes by itself. The Deployment reports `Progressing` and then, after `progressDeadlineSeconds`, `Degraded`, which Argo surfaces and alerting picks up.
+
+### 8. Fail closed everywhere, with a sanctioned `warn` mode
+
+Freight without an annotation produces a URL ending in `...`, GitHub returns 404, and `freight-has-revision` fails. A missing version list, an unreachable database or a failed query exit 2, not 0, in every mode. `warn` mode logs the comparison and starts the pod. It exists for staging's first guarded rollout, to read the comparison against a real legacy database before it can block anything, and as the emergency lever; the runbook treats leaving it on as a defect. Production never starts in `warn`: a connection failure exits 2 regardless of mode, so `warn` would prove nothing about credentials, and at first enablement there is no k8s capacity to protect while legacy serves every job, so a false block is free and a false start is the hazard itself. `off` skips the database entirely for local use.
+
+### 9. Manual promotion stays, nothing about "who" changes
+
+`autoPromotionEnabled: false` for `production` and `levelbuilder` is untouched. The gates make the manual decision safe; they do not replace it. Kargo RBAC narrowing remains available as a separate change.
+
+### 10. Rehearsal without touching production
+
+The Kargo steps are rehearsed, before the production deployment is enabled, on the `levelbuilder` Stage by adding them there temporarily and promoting three Freight: one unannotated (expect `freight-has-revision` to fail with HTTP 404), the newest (expect `revision-in-legacy-production` to fail with HTTP 200), and the one whose annotation equals `git merge-base production staging` (expect both steps to pass; later steps may fail on the missing levelbuilder Application, which is fine). This rehearsal is mandatory, not optional: the expressions are the part of the gate most likely to be wrong, and a wrong expression could fail every promotion or pass every one. The schema guard is rehearsed locally with skaffold by deleting one non-max row from `schema_migrations`, on the cluster by staging in `enforce` mode during ordinary pushes (decision 11), and in production later with `extraVersions` set to a far-future version.
+
+### 11. The schema guard runs in every envType that shares a legacy database; the commit gate is production-only
+
+Staging and test have the same exposure as production today, so the guard is enabled there too, with the mode chosen per envType. Staging goes to `enforce` after one `warn` rollout: a block there lasts at most one legacy build cycle and heals itself when that build migrates. Test starts in `warn`: a block there would last until the next robo-DTT, and the right long-term fix for test may be selecting Freight from the legacy `test` branch rather than blocking, which the `warn` logs will inform. The commit gate stays production-only: for staging the image commit is always the branch head or an ancestor, and for test the newest Freight is always ahead of the `test` branch until the next DTT, so the gate would fail every auto-promotion.
+
+The guard composes with Kargo the way we want. The `argocd-update` step succeeds when the Argo sync operation completes; it maps the operation phase to the step status and never reads application health. Freight is marked verified in a Stage only while the Stage is Healthy, and with no verification process that happens as soon as it is. A pod blocked by the guard therefore leaves the Promotion successful, the old pod serving, the Stage not Healthy, and the Freight unverified in that Stage until the database catches up. Once test is in `enforce`, Freight that reaches production through test has provably run against a database that had its migrations; while test is in `warn`, test's Healthy state says nothing about schema and that assurance comes from staging alone. Staging in `enforce` also gives the guard's failure path a real rehearsal on the cluster before production is enabled, which the levelbuilder rehearsal could not.
+
+## Risks / Trade-offs
+
+- [A mixed-media index (OCI index wrapping Docker manifests) breaks some puller] → Verified by `docker pull` on both architectures and a staging pod pull after the first publish; fallback is `skopeo copy --format oci` per leg so every child is OCI.
+- [regctl does not derive platform descriptors from single-arch children] → The merge job inspects the pushed index and fails if a platform is missing; the two-step `--desc-platform` form is the documented fallback.
+- [GitHub rate limit or outage during a promotion] → 5xx and timeouts retry for up to five minutes then fail; the promotion can simply be retried; a token header via `secret()` is the next step if limits bite.
+- [Window between DTP merge and `db:migrate`] → The commit gate passes but the schema gate holds the new pod until the migration lands, then the rollout completes without intervention; documented in the runbook as expected behaviour.
+- [Legacy rollback moves `production` HEAD backwards] → Running pods keep running (the guard runs only at start). A re-promotion of an older Freight passes both gates. Migrations are rarely rolled back on the legacy side; if one is, the next pod start blocks, which is the correct outcome.
+- [An older Freight passes both gates but expects a table or column a later migration removed] → The gates certify only that no prerequisite migration is missing, not that older code fits a newer schema. The runbook requires, before every rollback including to the previous Freight, a review of the migrations added between the two commits for `drop_table`, `remove_column` and renames, the same review a legacy code rollback needs; one release can carry a destructive migration, so no distance is exempt.
+- [Hand-edited production `values.yaml` bypasses the Kargo gate] → The schema gate still enforces; the runbook says the Kargo gate is the only sanctioned path.
+- [A default-deny NetworkPolicy added later] → Must allow production pods to reach the database on 3306 (same pod, same policy as the app) and the Kargo controller namespace to reach api.github.com on 443; noted in the runbook.
+- [Local databases created by `db:schema:load` hold one `schema_migrations` row] → `setup-db-minimal` records every manifest version into `schema_migrations` right after its own `db:schema:load`, and on an existing database only when `schema_migrations` holds exactly one row, which identifies a database an earlier image loaded. A database with real migration history is left alone: the script's "current" check compares table names and the maximum version only, so it cannot tell a pending older-timestamp migration from an applied one, and recording it would hide a missing column from the guard and from `db:migrate`. Databases loaded before this change re-run the setup profile once.
+- [`warn` left enabled in staging after its first rollout, or set in production during an incident and forgotten] → Explicit runbook steps to flip to `enforce`; the Argo diff makes the value visible.
+- [Kargo `http` failures carry no custom message] → Two named steps make the failing step's name the diagnostic; the runbook maps step and HTTP status to the cause and gives the compare URL to run by hand.
+- [Argo `Degraded` noise while a staging or production rollout waits for a legacy build] → Expected and documented; the alert tells the operator to check the init container log for the missing version. Staging blocks are bounded by one legacy build cycle and the old pod serves meanwhile.
+- [Test in `enforce` would show routine Progressing and Degraded states and a stream of Freight never verified in test] → Start test in `warn`, review the logged gaps, then choose between `enforce` with alert tuning and a follow-up that selects Freight from the legacy `test` branch.
+- [Guard adds a DB round trip to every pod start] → One query with a five-second connect timeout; negligible against image pull and Rails boot.
+
+## Migration Plan
+
+1. code-dot-org PR to `staging`: provenance (version list, regctl index), guard script, `setup-db-minimal` parity, chart initContainer and strategy behind `schemaGuard.enabled: false`, verification script, docs. Merge; after the next `latest` publish confirm the index media type, annotation and platforms, and confirm the newest Freight shows the annotation.
+2. k8s-gitops on `nicklathe/prod-ready-checklist`: the two Kargo gate steps in `stages/production.yaml`, `schemaGuard: {enabled: true, mode: enforce}` in the production envType and `schemaGuard: {enabled: true, mode: warn}` in staging and test, `docs/production-promotion.md`, Kargo project README. Argo applies the Stage change and, since the chart comes from the `staging` branch, rolls staging and test with the guard in `warn` once the image they run carries the version list and check script; nothing deploys to production because that workload is still disabled.
+3. After one clean `warn` rollout in staging, set staging to `enforce` and watch the first blocked rollout during a legacy build. Rehearse the two Kargo steps on `levelbuilder` (decision 10). Leave test in `warn` and review its logs after a couple of weeks.
+4. The chart change reaches the `production` branch through a normal DTP. The production deployment is then enabled by its own change, which also sets `branch: production`. The first promotion follows the runbook with the guard already in `enforce`; the operator reads the init container log and, once the pod runs, performs the `extraVersions` drill. If the first pod blocks, the missing versions are read and acted on with evidence; `warn` is not the default way past it.
+
+Rollback: remove the two gate steps (Kargo path returns to today's behaviour); set `schemaGuard.mode: warn` or `enabled: false` in the affected envType (pods start without checking); revert the chart to 0.4.0 via the normal staging → production path. None of these touch the database or the legacy fleet. Rolling the promoted image back to an older Freight is a runbook procedure, subject to the destructive-migration review every time.
+
+## Open Questions
+
+- Whether to authenticate the GitHub compare call from day one, or wait for evidence of rate limiting.
+- Whether the change that enables the production deployment will set `branch: production`, as this design assumes; confirm before the first production promotion.
+- Whether test ends in `enforce` or in a follow-up that selects Freight from the legacy `test` branch. Decided after reviewing the `warn` logs.
+- Whether regctl derives platform descriptors from single-arch children; resolved by the merge job's own inspect check on the first run.
