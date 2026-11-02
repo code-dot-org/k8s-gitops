@@ -7,9 +7,11 @@ global:
   sharedResources:
     createNamespace: false
 
-webhooks:
-  # The Kargo chart otherwise expects cert-manager to mint webhook certs.
-  register: false
+# Kargo's Kubernetes admission webhooks run with the chart defaults. The chart
+# mints their certificate with a cert-manager Issuer and Certificate in this
+# namespace; cert-manager comes from apps/infra/cert-manager. Kargo 1.11+
+# builds every Promotion in the mutating webhook, so promotions fail without
+# them.
 
 api:
   host: kargo.k8s.code.org
@@ -52,9 +54,6 @@ externalWebhooksServer:
   tls:
     enabled: false
     terminatedUpstream: true
-
-webhooksServer:
-  enabled: false
 
 controller:
   annotations:

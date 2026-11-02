@@ -1,0 +1,20 @@
+cert-manager:
+  # Argo owns the CRDs alongside the operator; they are large, so the app
+  # applies server-side like the other infra charts. The chart's default keep
+  # annotation is honored by Argo as Delete=false, so a prune of this app
+  # leaves the CRDs, and with them every Certificate, in place.
+  crds:
+    enabled: true
+    keep: true
+
+  global:
+    leaderElection:
+      # Keep the leader lease and its RBAC in the release namespace rather
+      # than kube-system.
+      namespace: cert-manager
+
+  # The post-install API check is a Helm hook, which Argo would re-run as a
+  # PostSync Job on every sync. Readiness is already visible on the
+  # Deployments.
+  startupapicheck:
+    enabled: false
