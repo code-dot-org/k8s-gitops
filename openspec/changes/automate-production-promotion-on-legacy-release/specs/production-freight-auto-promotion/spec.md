@@ -39,12 +39,12 @@ Before the production Stage is switched to the production Warehouse, that Wareho
 
 ### Requirement: Manual rollback is possible, reviewed, and holds automation until a person resumes
 
-A person SHALL be able to promote an older Freight from the production Warehouse to `production`. Before doing so, for every rollback including to the previous release, they SHALL review the migrations added between the two commits for destructive changes, because the gates certify missing prerequisites only. Because that Freight is not the auto-promotion candidate, Kargo SHALL record an auto-promotion hold for the Stage once the Promotion completes, and SHALL NOT auto-promote any Freight from the production Warehouse, including Freight from later releases, while the hold stands. The hold SHALL end when a person promotes the current candidate by hand or uses the Stage's Resume action.
+A person SHALL be able to promote an older Freight from the production Warehouse to `production`. Before doing so, for every rollback including to the previous release, they SHALL review the migrations added between the two commits for destructive changes, because the gate certifies missing prerequisites only. Because that Freight is not the auto-promotion candidate, Kargo SHALL record an auto-promotion hold for the Stage once the Promotion completes, and SHALL NOT auto-promote any Freight from the production Warehouse, including Freight from later releases, while the hold stands. The hold SHALL end when a person promotes the current candidate by hand or uses the Stage's Resume action.
 
 #### Scenario: Rollback to the previous release
 
 - **WHEN** an operator reviews the migrations between the two releases, finds none destructive, and promotes the previous production Freight
-- **THEN** both gates pass, the rollout completes, the Stage shows an auto-promotion hold, and the newest Freight is not re-promoted
+- **THEN** the gate passes, the rollout completes, the Stage shows an auto-promotion hold, and the newest Freight is not re-promoted
 
 #### Scenario: A release arrives while a hold stands
 
