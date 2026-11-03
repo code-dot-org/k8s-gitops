@@ -20,30 +20,11 @@ The `cdo-rails` image index that CI publishes for each push to `staging` SHALL b
 - **WHEN** `latest` is pulled by Docker on an amd64 host, on an arm64 host, and by a pod on the cluster
 - **THEN** each pull resolves to the matching per-architecture image and succeeds
 
-### Requirement: Image carries the migration set it expects
-
-The image SHALL contain `dashboard/db/migrate_versions.txt` listing the 14-digit version of every file in `dashboard/db/migrate` at the build commit, one per line, sorted ascending, without duplicates. The file SHALL be generated at build time by `docker/rails/write-migrate-versions.sh` and SHALL NOT be committed to the repository. The image SHALL continue to exclude `dashboard/db/migrate`.
-
-#### Scenario: CI build
-
-- **WHEN** CI builds the image in any job that runs `docker build`
-- **THEN** the version list is written before the build and the built image contains it with one line per migration file
-
-#### Scenario: Local build
-
-- **WHEN** an engineer builds the image with skaffold
-- **THEN** the build hook writes the same file so the local image carries it
-
-#### Scenario: Smoke test guards the contract
-
-- **WHEN** `docker/rails/smoke-test.sh` runs against a built image
-- **THEN** it fails if `dashboard/db/migrate_versions.txt` is missing or empty, or if `dashboard/bin/check-schema-migrations` is missing or not executable, or if `dashboard/db/migrate` is present
-
 ### Requirement: Tag contract documents the provenance guarantee
 
-`docker/rails/README.md` SHALL list, alongside the existing tag guarantees, that the published index carries `org.opencontainers.image.revision` naming the staging commit it was built from, and that the image carries its migration version list. It SHALL also correct the existing `git-<sha>` guarantee: that tag is republished when the `cdo-deps` chain or a manual dispatch rebuilds the commit, so a digest is the only immutable handle.
+`docker/rails/README.md` SHALL list, alongside the existing tag guarantees, that the published index carries `org.opencontainers.image.revision` naming the staging commit it was built from. It SHALL also correct the existing `git-<sha>` guarantee: that tag is republished when the `cdo-deps` chain or a manual dispatch rebuilds the commit, so a digest is the only immutable handle.
 
 #### Scenario: Reading the tag contract
 
 - **WHEN** an engineer reads the tag contract section
-- **THEN** it states the revision annotation and the version list as guarantees of every published build, and states that `git-<sha>` can be repointed by a rebuild
+- **THEN** it states the revision annotation as a guarantee of every published build, and states that `git-<sha>` can be repointed by a rebuild

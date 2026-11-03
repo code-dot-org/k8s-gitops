@@ -2,22 +2,27 @@
 
 ### Requirement: A runbook defines the production promotion procedure
 
-k8s-gitops SHALL contain `docs/production-promotion.md` describing how Freight is promoted to `production`. It SHALL state the rule (the image's commit is contained in what legacy production runs, and every migration the image expects is applied in the production database) and the two gates that enforce it; the checks the operator performs before promoting (the Freight is verified in `test`; `schemaGuard.mode` is `enforce`); the checks after promoting (production pods `Running`, the `schema-guard` log, and whatever application-level health signal exists at the time, such as a Honeybadger test exception raised from a production worker or a canary job); rollout and rollback timing given the worker's 2100-second termination grace period; the rollback procedure (re-promote an earlier Freight, which passes both gates; before every rollback, including to the previous Freight, list the migrations added between the two commits and review them for `drop_table`, `remove_column` and renames, because the gates certify missing prerequisites only and not that older code fits a newer schema); the failure signatures in Kargo (Promotion failed at `legacy-ancestry` with either the no-revision message and HTTP 404 or 422, or the ahead-by message and HTTP 200, with the compare URL to run by hand for the full comparison), in the cluster (`Init:Error`, `kubectl logs -c schema-guard`) and in Argo (`Degraded` while a rollout waits for the legacy deploy); the hotfix caveat (a direct push to `production` moves the marker without a release, and both gates still work); the emergency use of `mode: warn` with the obligation to revert it; and that a Freight blocked by the guard in staging or test is not verified in that Stage, and so not promotable to production, until that database has caught up.
+k8s-gitops SHALL contain `docs/production-promotion.md` describing how Freight is promoted to `production`. It SHALL state the rule (the image's commit is contained in what legacy production runs) and the gate that enforces it; when to promote (only after the GitHub release for the DTP that carried the commit exists, because the `production` branch moves one to two minutes before that deploy's `db:migrate` finishes and the gate reads the branch); the checks the operator performs before promoting (the Freight is verified in `test`; the release exists); the checks after promoting (production pods `Running`, and whatever application-level health signal exists at the time, such as a Honeybadger test exception raised from a production worker or a canary job); rollout and rollback timing given the worker's 2100-second termination grace period; the rollback procedure (re-promote an earlier Freight, which passes the gate; before every rollback, including to the previous Freight, list the migrations added between the two commits and review them for `drop_table`, `remove_column` and renames, because the gate certifies missing prerequisites only and not that older code fits a newer schema); the failure signatures in Kargo (Promotion failed at `legacy-ancestry` with either the no-revision message and HTTP 404 or 422, or the ahead-by message and HTTP 200, with the compare URL to run by hand for the full comparison); the hotfix caveat (a direct push to `production` moves the marker without a release, and the gate still works); and the accepted gaps: a legacy migration rollback after a promotion, which nothing in k8s notices and which the operator answers by re-promoting the Freight whose commit matches the rolled-back branch, and hand edits to the production values file, which bypass the gate and are not a sanctioned path.
 
 #### Scenario: First production promotion
 
 - **WHEN** an operator performs the first promotion to `production`
 - **THEN** they can complete every step and check from the runbook alone
 
-#### Scenario: Promotion blocked by a gate
+#### Scenario: Promotion blocked by the gate
 
-- **WHEN** a promotion fails at the gate step or a pod sits in `Init:Error`
-- **THEN** the runbook explains the cause, the expected wait (legacy DTP merge or `db:migrate`), and the alternatives (wait, promote an older Freight)
+- **WHEN** a promotion fails at the gate step
+- **THEN** the runbook explains the cause, the expected wait (the next DTP and its release), and the alternatives (wait, promote an older Freight)
 
 #### Scenario: Rollback
 
 - **WHEN** a promoted Freight must be rolled back
 - **THEN** the runbook's procedure reviews the migrations added between the two commits, re-promotes the earlier Freight through Kargo, and states how long the worker pod may take to drain
+
+#### Scenario: Legacy rolled a migration back
+
+- **WHEN** legacy production is rolled back to a commit from before a migration
+- **THEN** the runbook has the operator re-promote the Freight whose commit is contained in the rolled-back branch, after the same destructive-migration review
 
 ### Requirement: The runbook is discoverable from the places an operator looks
 
