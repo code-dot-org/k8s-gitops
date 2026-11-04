@@ -6,11 +6,6 @@ metadata:
   finalizers:
     - resources-finalizer.argocd.argoproj.io
   annotations:
-    # The Kargo chart mints its admission webhook certificate with a
-    # cert-manager Issuer and Certificate, so the CRDs and the cainjector must
-    # exist before the kargo app syncs. Kargo sits outside the infra bootstrap
-    # group and so follows every infra wave; this wave only orders cert-manager
-    # among the infra apps, after networking and DNS.
     argocd.argoproj.io/sync-wave: "10"
 spec:
   project: default
