@@ -1,0 +1,10 @@
+apiVersion: v2
+name: codeai-cert-manager
+description: Local chart for cert-manager on codeai-k8s
+type: application
+version: 0.1.0
+
+dependencies:
+  - name: cert-manager
+    repository: https://charts.jetstack.io
+    version: v1.21.3
