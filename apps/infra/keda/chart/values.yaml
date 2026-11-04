@@ -1,3 +1,5 @@
+codeai_cluster_config: {}
+
 keda:
   # Argo owns CRDs alongside the operator; large CRDs use server-side apply.
   crds:
@@ -8,3 +10,8 @@ keda:
 
   webhooks:
     enabled: true
+
+  serviceAccount:
+    operator:
+      create: false
+      name: keda-operator-cloudwatch
