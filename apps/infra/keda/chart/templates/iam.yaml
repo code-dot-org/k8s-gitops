@@ -1,0 +1,58 @@
+{{- $config := .Values.codeai_cluster_config -}}
+{{- range $key := list "cluster_name" "cluster_oidc_issuer_url" "oidc_provider_arn" "iam_arn_prefix" -}}
+{{- $_ := required (printf "codeai_cluster_config.%s is required" $key) (index $config $key) -}}
+{{- end -}}
+{{- $issuer := trimPrefix "https://" .Values.codeai_cluster_config.cluster_oidc_issuer_url }}
+apiVersion: iam.aws.m.upbound.io/v1beta1
+kind: Role
+metadata:
+  name: keda-cloudwatch
+  namespace: crossplane-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "-100"
+    crossplane.io/external-name: {{ printf "%s-keda-cloudwatch" .Values.codeai_cluster_config.cluster_name | quote }}
+spec:
+  providerConfigRef:
+    name: default
+    kind: ClusterProviderConfig
+  forProvider:
+    tags:
+      code.ai/cluster: {{ .Values.codeai_cluster_config.cluster_name | quote }}
+    assumeRolePolicy: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [{
+          "Effect": "Allow",
+          "Action": "sts:AssumeRoleWithWebIdentity",
+          "Principal": {"Federated": {{ .Values.codeai_cluster_config.oidc_provider_arn | quote }}},
+          "Condition": {"StringEquals": {
+            "{{ $issuer }}:sub": "system:serviceaccount:{{ .Release.Namespace }}:{{ .Values.keda.serviceAccount.operator.name }}",
+            "{{ $issuer }}:aud": "sts.amazonaws.com"
+          }}
+        }]
+      }
+---
+apiVersion: iam.aws.m.upbound.io/v1beta1
+kind: RolePolicy
+metadata:
+  name: keda-cloudwatch
+  namespace: crossplane-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "-100"
+    crossplane.io/external-name: cloudwatch-read
+spec:
+  providerConfigRef:
+    name: default
+    kind: ClusterProviderConfig
+  forProvider:
+    roleRef:
+      name: keda-cloudwatch
+    policy: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [{
+          "Effect": "Allow",
+          "Action": "cloudwatch:GetMetricData",
+          "Resource": "*"
+        }]
+      }
