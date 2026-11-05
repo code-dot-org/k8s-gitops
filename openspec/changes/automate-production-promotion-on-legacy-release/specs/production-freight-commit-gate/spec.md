@@ -12,7 +12,8 @@ The ancestry step SHALL run for every Promotion targeting the `production` Stage
 #### Scenario: Automatic promotion on a legacy release
 
 - **WHEN** Kargo auto-promotes new Freight from the production Warehouse
-- **THEN** the ancestry step runs first and passes for a correctly resolved release, and fails the Promotion before any write, with the ahead-by message, if the resolved commit is not contained in `production`
+- **THEN** the ancestry step runs first and passes for a correctly resolved release
+- **AND** it fails the Promotion before any write, with the ahead-by message, if the resolved commit is not contained in `production`
 
 #### Scenario: Staging and test are unaffected
 

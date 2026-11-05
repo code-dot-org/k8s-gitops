@@ -7,7 +7,7 @@ The Kargo project `kargo-project-codeai` SHALL contain a Warehouse `kargo-projec
 #### Scenario: The production tag moves to a new digest
 
 - **WHEN** the release workflow moves `cdo-rails:production` to a digest the Warehouse has not seen
-- **THEN** within one Warehouse refresh exactly one new Freight exists from that Warehouse carrying that digest and its revision annotation
+- **THEN** within one Warehouse refresh exactly one new Freight exists from that Warehouse, carrying that digest and its revision annotation
 
 #### Scenario: The production tag is pointed at a known digest
 
@@ -30,7 +30,7 @@ The `production` Stage SHALL request Freight only from `kargo-project-codeai-pro
 
 ### Requirement: The cutover preserves a rollback target
 
-Before the production Stage is switched to the production Warehouse, that Warehouse SHALL hold Freight for both the previous and the current legacy release, created by seeding the `production` tag with the previous release and then the current one while the Stage still sources from the shared Warehouse, so that the current release is the newest Freight and the auto-promotion candidate.
+Before the production Stage is switched to the production Warehouse, that Warehouse SHALL hold Freight for both the previous and the current legacy release. They SHALL be created by seeding the `production` tag with the previous release and then the current one, while the Stage still sources from the shared Warehouse, so that the current release is the newest Freight and the auto-promotion candidate.
 
 #### Scenario: Switching the Stage
 
@@ -39,7 +39,12 @@ Before the production Stage is switched to the production Warehouse, that Wareho
 
 ### Requirement: Manual rollback is possible, reviewed, and holds automation until a person resumes
 
-A person SHALL be able to promote an older Freight from the production Warehouse to `production`. Before doing so, for every rollback including to the previous release, they SHALL review the migrations added between the two commits for destructive changes, because the gate certifies missing prerequisites only. Because that Freight is not the auto-promotion candidate, Kargo SHALL record an auto-promotion hold for the Stage once the Promotion completes, and SHALL NOT auto-promote any Freight from the production Warehouse, including Freight from later releases, while the hold stands. The hold SHALL end when a person promotes the current candidate by hand or uses the Stage's Resume action.
+A person SHALL be able to promote an older Freight from the production Warehouse to `production`.
+
+- Before doing so, for every rollback including to the previous release, they SHALL review the migrations added between the two commits for destructive changes, because the gate certifies missing prerequisites only.
+- Because that Freight is not the auto-promotion candidate, Kargo SHALL record an auto-promotion hold for the Stage once the Promotion completes.
+- While the hold stands, Kargo SHALL NOT auto-promote any Freight from the production Warehouse, including Freight from later releases.
+- The hold SHALL end when a person promotes the current candidate by hand or uses the Stage's Resume action.
 
 #### Scenario: Rollback to the previous release
 
@@ -58,7 +63,13 @@ A person SHALL be able to promote an older Freight from the production Warehouse
 
 ### Requirement: A failed automatic promotion is visible, not retried by Kargo, and recoverable by hand
 
-When the gate step fails an automatic Promotion, Kargo SHALL NOT create another Promotion for that Freight while its newest Promotion is not Succeeded, the Promotion SHALL show as Failed at `legacy-ancestry` with the HTTP status and the message naming the cause, and the production values file SHALL be unchanged. Recovery from a transient cause SHALL be a manual promotion of the same Freight. Recovery from a wrong digest SHALL be a corrected tag move that yields new Freight, or a manual promotion when the correct digest already has Freight.
+When the gate step fails an automatic Promotion, the following SHALL hold:
+
+- Kargo SHALL NOT create another Promotion for that Freight while its newest Promotion is not Succeeded.
+- The Promotion SHALL show as Failed at `legacy-ancestry` with the HTTP status and the message naming the cause.
+- The production values file SHALL be unchanged.
+- Recovery from a transient cause SHALL be a manual promotion of the same Freight.
+- Recovery from a wrong digest SHALL be a corrected tag move that yields new Freight, or a manual promotion when the correct digest already has Freight.
 
 #### Scenario: GitHub is unavailable during the automatic promotion
 
@@ -68,7 +79,8 @@ When the gate step fails an automatic Promotion, Kargo SHALL NOT create another 
 #### Scenario: The workflow resolved a commit that is not in production
 
 - **WHEN** the production Freight's revision is not contained in `production`
-- **THEN** the automatic Promotion fails at `legacy-ancestry` with the ahead-by message, nothing is written, and a corrected `workflow_dispatch` run that moves the tag to a new digest produces new Freight and a new automatic Promotion
+- **THEN** the automatic Promotion fails at `legacy-ancestry` with the ahead-by message and nothing is written
+- **AND** a corrected `workflow_dispatch` run that moves the tag to a new digest produces new Freight and a new automatic Promotion
 
 ### Requirement: Automation can be paused with one commit
 

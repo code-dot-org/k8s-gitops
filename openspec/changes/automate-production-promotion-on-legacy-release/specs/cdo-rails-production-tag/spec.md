@@ -2,7 +2,7 @@
 
 ### Requirement: Eligible legacy releases move the production tag
 
-A code-dot-org workflow SHALL run whenever a GitHub release of `code-dot-org/code-dot-org` is published and SHALL act only on eligible releases: not a draft or prerelease, a tag matching `^v\d{4}-\d{2}-\d{2}\.\d+$`, and a release commit that is a merge commit contained in the `production` branch. For an eligible release it SHALL resolve the image commit, validate the image, write the alias `ghcr.io/code-dot-org/cdo-rails:release-<release tag>`, and move the mutable tag `ghcr.io/code-dot-org/cdo-rails:production`, preserving the index digest and the `org.opencontainers.image.revision` annotation.
+A code-dot-org workflow SHALL run whenever a GitHub release of `code-dot-org/code-dot-org` is published. It SHALL act only on eligible releases: not a draft or prerelease, a tag matching `^v\d{4}-\d{2}-\d{2}\.\d+$`, and a release commit that is a merge commit contained in the `production` branch. For an eligible release it SHALL resolve the image commit, validate the image, write the alias `ghcr.io/code-dot-org/cdo-rails:release-<release tag>`, and move the mutable tag `ghcr.io/code-dot-org/cdo-rails:production`, preserving the index digest and the `org.opencontainers.image.revision` annotation.
 
 #### Scenario: A DTP finishes and a release is published
 
@@ -22,7 +22,7 @@ A code-dot-org workflow SHALL run whenever a GitHub release of `code-dot-org/cod
 
 ### Requirement: The release names the revision the legacy deploy actually ran
 
-`lib/rake/infra.rake` `publish_github_release` SHALL pass the revision `ci_build` recorded for the build to `bin/create-release`, and `bin/create-release` SHALL accept `--commit <sha>` and use it as the release's `target_commitish`. Interactive use without the option SHALL behave as today.
+`lib/rake/infra.rake` `publish_github_release` SHALL pass the revision `ci_build` recorded for the build to `bin/create-release`. `bin/create-release` SHALL accept `--commit <sha>` and use it as the release's `target_commitish`. Interactive use without the option SHALL behave as today.
 
 #### Scenario: Production advances during a deploy
 
@@ -32,7 +32,10 @@ A code-dot-org workflow SHALL run whenever a GitHub release of `code-dot-org/cod
 
 ### Requirement: The image commit is resolved exactly, without automatic fallback
 
-The workflow SHALL take `merge_base_commit.sha` from the GitHub compare API for `staging...<release sha>` as the image commit, SHALL require that `ghcr.io/code-dot-org/cdo-rails:git-<sha>` exists, and SHALL resolve that tag to a digest once, using the digest for every later read and write. If the manifest is absent, the workflow SHALL fail without writing, naming the release and the commit and listing up to thirty ancestors of that commit for which an image exists, for an operator to choose with the `image_commit` override after a compatibility review. A not-found response SHALL be distinguished from authentication errors, timeouts and server errors, which SHALL fail as "cannot determine" without suggestions.
+The workflow SHALL take `merge_base_commit.sha` from the GitHub compare API for `staging...<release sha>` as the image commit. It SHALL require that `ghcr.io/code-dot-org/cdo-rails:git-<sha>` exists, and SHALL resolve that tag to a digest once, using the digest for every later read and write.
+
+- If the manifest is absent, the workflow SHALL fail without writing. The failure SHALL name the release and the commit and list up to thirty ancestors of that commit for which an image exists, for an operator to choose with the `image_commit` override after a compatibility review.
+- A not-found response SHALL be distinguished from authentication errors, timeouts and server errors. Those SHALL fail as "cannot determine" without suggestions.
 
 #### Scenario: The merge base has an image
 
@@ -51,7 +54,13 @@ The workflow SHALL take `merge_base_commit.sha` from the GitHub compare API for 
 
 ### Requirement: Writes happen by digest, in a safe order, and are classified on failure
 
-Before any write the workflow SHALL validate the resolved index by digest: OCI index media type, revision annotation equal to the resolved commit, both platform descriptors present. It SHALL then copy the digest to `release-<tag>` and read it back, perform the freshness check, copy the digest to `production` and read it back. A failure before the live copy SHALL be reported as "nothing published". A failure at or after the live copy SHALL be reported as "outcome unknown, inspect registry and Kargo".
+Before any write the workflow SHALL validate the resolved index by digest: OCI index media type, revision annotation equal to the resolved commit, both platform descriptors present. It SHALL then, in order:
+
+1. copy the digest to `release-<tag>` and read it back;
+2. perform the freshness check;
+3. copy the digest to `production` and read it back.
+
+A failure before the live copy SHALL be reported as "nothing published". A failure at or after the live copy SHALL be reported as "outcome unknown, inspect registry and Kargo".
 
 #### Scenario: Validation fails
 
@@ -65,7 +74,7 @@ Before any write the workflow SHALL validate the resolved index by digest: OCI i
 
 ### Requirement: Runs are serialized and only the newest release moves the live tag
 
-The workflow SHALL declare a `concurrency` group without cancellation. Immediately before the live copy it SHALL confirm that the release it is processing is the one `GET /releases/latest` returns and that its commit is still contained in `production`; otherwise it SHALL write only the alias and stop, unless the `workflow_dispatch` input `move_live_tag` is true.
+The workflow SHALL declare a `concurrency` group without cancellation. Immediately before the live copy it SHALL confirm that the release it is processing is the one `GET /releases/latest` returns, and that its commit is still contained in `production`. Otherwise it SHALL write only the alias and stop, unless the `workflow_dispatch` input `move_live_tag` is true.
 
 #### Scenario: Two releases overlap
 
@@ -79,7 +88,7 @@ The workflow SHALL declare a `concurrency` group without cancellation. Immediate
 
 ### Requirement: Release aliases are stable and overrides are scoped to the release
 
-If `release-<tag>` already exists with the same digest, the write SHALL succeed unchanged; if it exists with a different digest, the workflow SHALL fail before any write unless the dispatch input `replace_alias` is true. The `workflow_dispatch` entry point SHALL take `release_tag` (required), `image_commit`, `replace_alias` and `move_live_tag`. With `image_commit`, the workflow SHALL skip resolution but SHALL call the compare API for `<release sha>...<override>` and fail unless `ahead_by` is 0.
+If `release-<tag>` already exists with the same digest, the write SHALL succeed unchanged. If it exists with a different digest, the workflow SHALL fail before any write unless the dispatch input `replace_alias` is true. The `workflow_dispatch` entry point SHALL take `release_tag` (required), `image_commit`, `replace_alias` and `move_live_tag`. With `image_commit`, the workflow SHALL skip resolution but SHALL call the compare API for `<release sha>...<override>` and fail unless `ahead_by` is 0.
 
 #### Scenario: Re-run for a release already processed
 
@@ -107,7 +116,11 @@ On any failure the workflow SHALL post the release, the stage reached and the ou
 
 ### Requirement: The tag contract documents the production tags
 
-`docker/rails/README.md` SHALL state that `cdo-rails:production` always points at the exact image of a staging commit contained in a legacy production release, moved only by the release workflow and never by hand; that `cdo-rails:release-<tag>` is an alias per release that is not repointed without an explicit correction; and that a digest is the only immutable handle, since `git-<sha>` is republished by rebuilds.
+`docker/rails/README.md` SHALL state:
+
+- that `cdo-rails:production` always points at the exact image of a staging commit contained in a legacy production release, moved only by the release workflow and never by hand;
+- that `cdo-rails:release-<tag>` is an alias per release that is not repointed without an explicit correction;
+- that a digest is the only immutable handle, since `git-<sha>` is republished by rebuilds.
 
 #### Scenario: Reading the tag contract
 

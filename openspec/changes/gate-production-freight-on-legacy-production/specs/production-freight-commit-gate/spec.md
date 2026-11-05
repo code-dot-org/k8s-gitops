@@ -2,7 +2,13 @@
 
 ### Requirement: Production promotion verifies legacy ancestry before any write
 
-The `production` Stage promotion template SHALL run, before `git-clone`, one HTTP step named `legacy-ancestry` against the GitHub compare endpoint for `production...<revision>`, where the revision is the Freight's `cdo-rails` image annotation `org.opencontainers.image.revision`. The step SHALL succeed on response status 200 with `ahead_by` 0. It SHALL fail terminally on status 404 or 422, and on status 200 with `ahead_by` greater than 0. Its error expression SHALL render a message naming the cause: that the Freight has no revision annotation or GitHub does not know the commit, with the HTTP status, or that the image commit is a stated number of commits ahead of legacy production, with GitHub's `status` word. Any other response SHALL leave the step running and re-polled until the step's five-minute timeout, then fail. When the step fails, the Promotion SHALL fail at it and no later step SHALL run.
+The `production` Stage promotion template SHALL run one HTTP step named `legacy-ancestry` before `git-clone`. The step SHALL call the GitHub compare endpoint for `production...<revision>`, where the revision is the Freight's `cdo-rails` image annotation `org.opencontainers.image.revision`.
+
+- The step SHALL succeed on response status 200 with `ahead_by` 0.
+- It SHALL fail terminally on status 404 or 422, and on status 200 with `ahead_by` greater than 0.
+- Its error expression SHALL render a message naming the cause: either that the Freight has no revision annotation or GitHub does not know the commit (with the HTTP status), or that the image commit is a stated number of commits ahead of legacy production (with GitHub's `status` word).
+- Any other response SHALL leave the step running and re-polled until the step's five-minute timeout, then fail.
+- When the step fails, the Promotion SHALL fail at it and no later step SHALL run.
 
 #### Scenario: Freight commit is already in legacy production
 
@@ -45,7 +51,7 @@ The ancestry step SHALL run for every Promotion targeting the `production` Stage
 
 ### Requirement: Gate failures lead the operator to the runbook
 
-The production Stage manifest SHALL carry a header comment that names the gate step and links to the promotion runbook, and the Kargo project directory SHALL carry a README that links to the runbook. The runbook SHALL map each failure message and HTTP status to its cause and give the compare URL to run by hand.
+The production Stage manifest SHALL carry a header comment that names the gate step and links to the promotion runbook. The Kargo project directory SHALL carry a README that links to the runbook. The runbook SHALL map each failure message and HTTP status to its cause and give the compare URL to run by hand.
 
 #### Scenario: A promotion fails at the gate
 
