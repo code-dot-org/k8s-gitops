@@ -2,7 +2,17 @@
 
 ### Requirement: A runbook defines the production promotion procedure
 
-k8s-gitops SHALL contain `docs/production-promotion.md` describing how Freight is promoted to `production`. It SHALL state the rule (the image's commit is contained in what legacy production runs) and the gate that enforces it; when to promote (only after the GitHub release for the DTP that carried the commit exists, because the `production` branch moves one to two minutes before that deploy's `db:migrate` finishes and the gate reads the branch); the checks the operator performs before promoting (the Freight is verified in `test`; the release exists); the checks after promoting (production pods `Running`, and whatever application-level health signal exists at the time, such as a Honeybadger test exception raised from a production worker or a canary job); rollout and rollback timing given the worker's 2100-second termination grace period; the rollback procedure (re-promote an earlier Freight, which passes the gate; before every rollback, including to the previous Freight, list the migrations added between the two commits and review them for `drop_table`, `remove_column` and renames, because the gate certifies missing prerequisites only and not that older code fits a newer schema); the failure signatures in Kargo (Promotion failed at `legacy-ancestry` with either the no-revision message and HTTP 404 or 422, or the ahead-by message and HTTP 200, with the compare URL to run by hand for the full comparison); the hotfix caveat (a direct push to `production` moves the marker without a release, and the gate still works); and the accepted gaps: a legacy migration rollback after a promotion, which nothing in k8s notices and which the operator answers by re-promoting the Freight whose commit matches the rolled-back branch, and hand edits to the production values file, which bypass the gate and are not a sanctioned path.
+k8s-gitops SHALL contain `docs/production-promotion.md` describing how Freight is promoted to `production`. It SHALL cover:
+
+- **The rule and the gate.** The image's commit is contained in what legacy production runs, and the `legacy-ancestry` step enforces it.
+- **When to promote.** Only after the GitHub release for the DTP that carried the commit exists. The `production` branch moves one to two minutes before that deploy's `db:migrate` finishes, and the gate reads the branch.
+- **Checks before promoting.** The Freight is verified in `test`; the release exists.
+- **Checks after promoting.** Production pods are `Running`, plus whatever application-level health signal exists at the time, such as a Honeybadger test exception raised from a production worker or a canary job.
+- **Rollout and rollback timing**, given the worker's 2100-second termination grace period.
+- **The rollback procedure.** Re-promote an earlier Freight, which passes the gate. Before every rollback, including to the previous Freight, list the migrations added between the two commits and review them for `drop_table`, `remove_column` and renames. The gate certifies missing prerequisites only, not that older code fits a newer schema.
+- **Failure signatures in Kargo.** A Promotion failed at `legacy-ancestry` with either the no-revision message and HTTP 404 or 422, or the ahead-by message and HTTP 200. The compare URL to run by hand for the full comparison.
+- **The hotfix caveat.** A direct push to `production` moves the marker without a release, and the gate still works.
+- **The accepted gaps.** A legacy migration rollback after a promotion, which nothing in k8s notices and which the operator answers by re-promoting the Freight whose commit matches the rolled-back branch. Hand edits to the production values file, which bypass the gate and are not a sanctioned path.
 
 #### Scenario: First production promotion
 
@@ -12,7 +22,7 @@ k8s-gitops SHALL contain `docs/production-promotion.md` describing how Freight i
 #### Scenario: Promotion blocked by the gate
 
 - **WHEN** a promotion fails at the gate step
-- **THEN** the runbook explains the cause, the expected wait (the next DTP and its release), and the alternatives (wait, promote an older Freight)
+- **THEN** the runbook explains the cause, the expected wait (the next DTP and its release), and the alternatives (wait, or promote an older Freight)
 
 #### Scenario: Rollback
 

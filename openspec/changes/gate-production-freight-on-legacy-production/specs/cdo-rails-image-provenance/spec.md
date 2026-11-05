@@ -2,12 +2,13 @@
 
 ### Requirement: Published image index names its source commit
 
-The `cdo-rails` image index that CI publishes for each push to `staging` SHALL be an OCI image index (`application/vnd.oci.image.index.v1+json`) whose index annotations include `org.opencontainers.image.revision` set to the full 40-character SHA of the commit the image was built from. The annotation SHALL be present on every tag CI publishes for that build (`git-<sha>` and `latest`). The per-architecture images SHALL be the same manifests that CI smoke-tested, and the index SHALL list both `linux/amd64` and `linux/arm64` with platform descriptors.
+The `cdo-rails` image index that CI publishes for each push to `staging` SHALL be an OCI image index (`application/vnd.oci.image.index.v1+json`). Its index annotations SHALL include `org.opencontainers.image.revision`, set to the full 40-character SHA of the commit the image was built from. The annotation SHALL be present on every tag CI publishes for that build (`git-<sha>` and `latest`). The per-architecture images SHALL be the same manifests that CI smoke-tested, and the index SHALL list both `linux/amd64` and `linux/arm64` with platform descriptors.
 
 #### Scenario: CI publishes a staging build
 
 - **WHEN** the image workflow's merge job runs for a push to `staging`
-- **THEN** it builds the index under `:git-<sha>` first, inspects it, and only after the OCI media type, the revision annotation equal to that push's SHA and two platform entries are confirmed copies it to `:latest`
+- **THEN** it builds the index under `:git-<sha>` first and inspects it
+- **AND** it copies the index to `:latest` only after confirming the OCI media type, the revision annotation equal to that push's SHA, and two platform entries
 - **AND** the job fails before `latest` moves if any of those three checks does not hold, so Kargo never observes an unvalidated index
 
 #### Scenario: Kargo discovers the build
