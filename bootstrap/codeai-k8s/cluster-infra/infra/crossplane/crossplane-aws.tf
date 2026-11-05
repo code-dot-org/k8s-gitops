@@ -53,6 +53,7 @@ locals {
       "${var.cluster_name}-external-dns",
       "${var.cluster_name}-eso-*",
       "${var.cluster_name}-monitoring-alloy",
+      "${var.cluster_name}-keda-cloudwatch",
     ]
     iam_policy_names = [
       "${var.cluster_name}-external-dns",
