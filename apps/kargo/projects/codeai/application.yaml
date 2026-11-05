@@ -7,6 +7,9 @@ metadata:
     - resources-finalizer.argocd.argoproj.io
   annotations:
     argocd.argoproj.io/sync-wave: "1"
+    # Diff via server-side dry run so defaults added by Kargo's mutating webhooks
+    # (e.g. inside Warehouse spec.subscriptions[]) don't show as permanent drift.
+    argocd.argoproj.io/compare-options: ServerSideDiff=true
 spec:
   project: default
   source:
