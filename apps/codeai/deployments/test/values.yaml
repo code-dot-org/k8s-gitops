@@ -1,4 +1,4 @@
-image: ghcr.io/code-dot-org/cdo-rails@sha256:f0b0a6b3326dc380977109ea51a2e36d5dc6c36c2e215800c27ac84a00db1d96
+image: ghcr.io/code-dot-org/cdo-rails@sha256:f67ff732d4cfcf1c534e77a7a7711366fbc07625e0a80c5ef7db399d869600a0
 dnsName: studio.test
 user:
   uid: 0
