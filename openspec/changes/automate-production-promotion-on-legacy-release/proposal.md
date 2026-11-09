@@ -19,14 +19,14 @@ Step two depends on step one being rolled out: production running behind the gat
 - **Production image tag (code-dot-org).** A new workflow runs when a GitHub release is published and acts only on eligible releases: not a draft or prerelease, a production-format tag, a merge commit contained in `production`. For an eligible release it:
   - asks the GitHub compare API for the merge base of `staging` and the release commit, which is the staging commit the release contains;
   - requires that CI published an image for exactly that commit, and resolves that image to a digest once;
-  - validates the index by digest, writes the `cdo-rails:release-<tag>` alias, confirms the release is still the newest, and only then moves the mutable `cdo-rails:production` tag. Every write is by digest with regctl, which preserves the digest and the revision annotation.
-  - Runs are serialized. A non-latest release can only write its alias. An existing alias is never repointed without an explicit input. Failures are classified as published or not, and every failure notifies a person.
+  - validates the index by digest, writes the `cdo-rails:release-<tag>` alias, confirms the image commit is not behind the one already live, and only then moves the mutable `cdo-rails:production` tag. Every write is by digest with regctl, which preserves the digest and the revision annotation.
+  - Runs are serialized and queued, and no queued run is dropped. A release older than what is live can only write its alias. An existing alias is never repointed without an explicit input. Failures are classified as published or not, and every failure notifies a person.
   - A missing exact image fails the run and lists candidate ancestors for an operator to choose from after a compatibility review. Nothing older is promoted automatically.
-  - A `workflow_dispatch` entry point re-runs it for a named release, with an optional commit override that must be contained in that release.
+  - A `workflow_dispatch` entry point re-runs it for a named release, with an optional commit override that must be contained in that release, and a dry-run mode.
 - **Production Warehouse and auto-promotion (k8s-gitops).** A second Warehouse follows `cdo-rails:production` by digest, exactly as the existing one follows `latest`. The `production` Stage requests Freight directly from that Warehouse instead of from `test`, and the project promotion policy turns `autoPromotionEnabled` on for `production`.
   - **BREAKING** for the manual flow: Freight from the shared Warehouse, including Freight verified in `test`, can no longer be promoted to production. Only Freight from the production Warehouse can.
   - Rollback becomes a manual promotion of an older production-Warehouse Freight. Kargo then records an auto-promotion hold on the Stage, so nothing promotes automatically, not even a later release, until a person resumes it. Every rollback, including to the previous release, follows the runbook's destructive-migration review, since the gate certifies missing prerequisites only.
-  - The Warehouse is seeded with the previous and current releases before the Stage switches to it, so a rollback target exists from the first automatic promotion.
+  - The Warehouse is added before the workflow can run and seeded with the previous release and then the current one, so that the current release is Kargo's candidate and a rollback target exists from the first automatic promotion. The switch waits for a check that the newest Freight is the latest release's.
 - **The gate stays, the runbook changes.** The gate step `legacy-ancestry` keeps running first on every promotion, now including the automatic ones, as defense in depth against a mis-resolved commit. The runbook describes what the automation does, how to confirm which release a digest came from and whether that digest ran in `test`, how to pause the automation with one commit, how rollback behaves and how to resume after it, and what to do when the workflow fails before or after publishing or the gate fails. Its requirement that promotion remains a manual decision is removed.
 - **Unchanged on purpose.** The `staging`, `test` and `levelbuilder` Stages; who may create a Promotion; no new cluster infrastructure. The alternative that keeps a single Warehouse, an in-cluster job that creates Promotions, is recorded in the design and not chosen.
 
@@ -34,8 +34,8 @@ Step two depends on step one being rolled out: production running behind the gat
 
 ### New Capabilities
 
-- `cdo-rails-production-tag`: the legacy release names the deployed revision. On every eligible release the `cdo-rails:production` tag is moved, by digest and live tag last, to the exact image of the staging commit the release contains. Each release gets an alias, runs are serialized, and every failure notifies a person.
-- `production-freight-auto-promotion`: a dedicated Warehouse, seeded with the previous and current releases before cutover, turns each move of that tag into Freight. The production Stage promotes it without a person. Manual rollback is reviewed and holds automation until a person resumes it. Failed promotions are recovered by hand, and the automation can be paused with one commit.
+- `cdo-rails-production-tag`: the legacy release names the deployed revision. On every eligible release the `cdo-rails:production` tag is moved, by digest and live tag last, to the exact image of the staging commit the release contains. Each release gets an alias, runs are serialized and queued, the live tag only moves forward, and every failure notifies a person.
+- `production-freight-auto-promotion`: a dedicated Warehouse, seeded in order with the previous and current releases before cutover, turns each move of that tag into Freight. The production Stage promotes it without a person. Manual rollback is reviewed and holds automation until a person resumes it. Failed promotions are recovered by hand, and the automation can be paused with one commit.
 
 ### Modified Capabilities
 
@@ -55,7 +55,13 @@ Both come from `gate-production-freight-on-legacy-production`, which must be arc
   - The exact image is missing: the run fails with candidates, and the operator decides.
   - A Promotion fails at the gate step: Kargo never retries that Freight. A transient cause is recovered by promoting the same Freight by hand; a wrong digest by a corrected tag move that yields new Freight.
   - A rollback leaves an auto-promotion hold on the Stage, visible in the Kargo UI, that stays until a person resumes.
-- **Sequencing**: step one rolled out first; the release identity change merged, carried to `production` by a DTP and observed on a release; the workflow merged and carried to `production`; a failure notification tested; the Warehouse added in its own k8s-gitops commit; the `production` tag seeded with the previous and then the current release so the Warehouse holds two Freight; then the Stage switch and auto-promotion in a second commit.
+- **Sequencing**:
+  1. step one rolled out; the release identity change merged, carried to `production` by a DTP and observed on a release;
+  2. the Warehouse added in its own k8s-gitops commit while no `production` tag exists;
+  3. the workflow merged to `staging` and, in the same sitting, exercised (notification tested) and the `production` tag seeded with the previous and then the current release, so the Warehouse holds two Freight in that order;
+  4. the next DTP carries the workflow to `production` and its release produces the first unattended run;
+  5. a check that the newest Freight is the latest release's;
+  6. the Stage switch and auto-promotion in a second commit.
 
 ## Terms
 

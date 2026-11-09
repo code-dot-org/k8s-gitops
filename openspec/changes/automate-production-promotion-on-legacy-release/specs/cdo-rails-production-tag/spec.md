@@ -57,7 +57,7 @@ The workflow SHALL take `merge_base_commit.sha` from the GitHub compare API for 
 Before any write the workflow SHALL validate the resolved index by digest: OCI index media type, revision annotation equal to the resolved commit, both platform descriptors present. It SHALL then, in order:
 
 1. copy the digest to `release-<tag>` and read it back;
-2. perform the freshness check;
+2. perform the forward-only check;
 3. copy the digest to `production` and read it back.
 
 A failure before the live copy SHALL be reported as "nothing published". A failure at or after the live copy SHALL be reported as "outcome unknown, inspect registry and Kargo".
@@ -72,23 +72,39 @@ A failure before the live copy SHALL be reported as "nothing published". A failu
 - **WHEN** the copy to `production` returns an error or the read-back digest differs
 - **THEN** the workflow fails as "outcome unknown" and the summary tells the operator to inspect the registry digest of `production`, the Warehouse and any Promotion before acting
 
-### Requirement: Runs are serialized and only the newest release moves the live tag
+### Requirement: Runs are serialized, no queued run is dropped, and the live tag only moves forward
 
-The workflow SHALL declare a `concurrency` group without cancellation. Immediately before the live copy it SHALL confirm that the release it is processing is the one `GET /releases/latest` returns, and that its commit is still contained in `production`. Otherwise it SHALL write only the alias and stop, unless the `workflow_dispatch` input `move_live_tag` is true.
+The workflow SHALL declare a `concurrency` group with `cancel-in-progress: false` and `queue: max`, so that runs execute one at a time and a run waiting in the queue is not cancelled when another is queued. Immediately before the live copy the run SHALL read the `org.opencontainers.image.revision` annotation of the index `cdo-rails:production` currently resolves to, and SHALL move the live tag only when the compare API for `<live revision>...<image commit>` reports `behind_by` 0 and the release commit is still contained in `production`.
 
-#### Scenario: Two releases overlap
+Otherwise it SHALL write only the alias and stop, with a summary saying so, unless the `workflow_dispatch` input `move_live_tag` is true.
 
-- **WHEN** a second release is published while the first run is still executing
-- **THEN** the second run waits, and whichever run reaches the live copy while not processing the newest release writes only its alias
+- If `cdo-rails:production` does not exist, the run SHALL proceed.
+- If the live index has no revision annotation, or GitHub does not know the live revision, the run SHALL fail before the live copy as "cannot determine".
+
+#### Scenario: Several releases queue
+
+- **WHEN** two more releases are published while a run is executing
+- **THEN** both later runs wait and neither is cancelled
+- **AND** after all three have run, `production` resolves to the newest release's digest and all three aliases exist, whatever order the runs executed in
 
 #### Scenario: An older release is re-run
 
-- **WHEN** an operator dispatches the workflow for a release that is no longer the latest, without `move_live_tag`
+- **WHEN** an operator dispatches the workflow for a release whose image commit is behind the live revision, without `move_live_tag`
 - **THEN** its alias is written or confirmed and `production` is unchanged
+
+#### Scenario: The newest release's run fails
+
+- **WHEN** the run for release N+1 fails to resolve its image and the run for release N executes after it
+- **THEN** release N's run moves `production` to N's digest, and the failure notification names N+1
+
+#### Scenario: The live tag does not exist yet
+
+- **WHEN** `cdo-rails:production` does not exist and the workflow runs for an eligible release, whether the first seed or the first release after the workflow is active
+- **THEN** the live tag is created at that release's digest without `move_live_tag`
 
 ### Requirement: Release aliases are stable and overrides are scoped to the release
 
-If `release-<tag>` already exists with the same digest, the write SHALL succeed unchanged. If it exists with a different digest, the workflow SHALL fail before any write unless the dispatch input `replace_alias` is true. The `workflow_dispatch` entry point SHALL take `release_tag` (required), `image_commit`, `replace_alias` and `move_live_tag`. With `image_commit`, the workflow SHALL skip resolution but SHALL call the compare API for `<release sha>...<override>` and fail unless `ahead_by` is 0.
+If `release-<tag>` already exists with the same digest, the write SHALL succeed unchanged. If it exists with a different digest, the workflow SHALL fail before any write unless the dispatch input `replace_alias` is true. The `workflow_dispatch` entry point SHALL take `release_tag` (required), `image_commit`, `replace_alias`, `move_live_tag` and `dry_run`. With `image_commit`, the workflow SHALL skip resolution but SHALL call the compare API for `<release sha>...<override>` and fail unless `ahead_by` is 0. With `dry_run`, it SHALL perform every read and validation and no write.
 
 #### Scenario: Re-run for a release already processed
 
@@ -104,6 +120,11 @@ If `release-<tag>` already exists with the same digest, the write SHALL succeed 
 
 - **WHEN** an operator dispatches the workflow with an `image_commit` that is not an ancestor of the release's commit
 - **THEN** the workflow fails before any write and names the compare status
+
+#### Scenario: Dry run
+
+- **WHEN** the workflow is dispatched with `dry_run`
+- **THEN** the summary reports the release, the commit, the digest and what would be written, and neither tag changes
 
 ### Requirement: Failures notify a person
 

@@ -30,12 +30,24 @@ The `production` Stage SHALL request Freight only from `kargo-project-codeai-pro
 
 ### Requirement: The cutover preserves a rollback target
 
-Before the production Stage is switched to the production Warehouse, that Warehouse SHALL hold Freight for both the previous and the current legacy release. They SHALL be created by seeding the `production` tag with the previous release and then the current one, while the Stage still sources from the shared Warehouse, so that the current release is the newest Freight and the auto-promotion candidate.
+Before the production Stage is switched to the production Warehouse, that Warehouse SHALL hold Freight for both the previous and the current legacy release, the previous one created first. They SHALL be created by seeding the `production` tag with the previous release and then the current one, before any release-triggered run has created the tag and while the Stage still sources from the shared Warehouse, so that the current release's Freight is the newer by creation time and the auto-promotion candidate.
+
+Before the switch, an operator SHALL confirm that the newest Freight from the Warehouse carries the digest `cdo-rails:production` resolves to and that this is the latest release's digest. If it does not, the Stage SHALL NOT be switched until a newer release has produced Freight that does.
 
 #### Scenario: Switching the Stage
 
 - **WHEN** the Stage's requested Freight is changed to the production Warehouse and auto-promotion is enabled
-- **THEN** the Warehouse already holds at least two Freight, Kargo promotes the newest, and the older one is available for rollback from the first automatic promotion onward
+- **THEN** the Warehouse already holds at least two Freight, the newest by creation time is the current release's, Kargo promotes it, and the older one is available for rollback from the first automatic promotion onward
+
+#### Scenario: Freight discovered in the wrong order
+
+- **WHEN** the Warehouse created the current release's Freight before the previous release's
+- **THEN** the Stage is not switched, no Freight is deleted or edited by hand, and the switch waits for the next release, whose Freight becomes the newest and the candidate
+
+#### Scenario: The tag exists before seeding
+
+- **WHEN** `cdo-rails:production` already exists when seeding starts
+- **THEN** the previous release is not seeded, the Warehouse holds the current release only, and the rollback target arrives with the next release
 
 ### Requirement: Manual rollback is possible, reviewed, and holds automation until a person resumes
 
@@ -69,7 +81,7 @@ When the gate step fails an automatic Promotion, the following SHALL hold:
 - The Promotion SHALL show as Failed at `legacy-ancestry` with the HTTP status and the message naming the cause.
 - The production values file SHALL be unchanged.
 - Recovery from a transient cause SHALL be a manual promotion of the same Freight.
-- Recovery from a wrong digest SHALL be a corrected tag move that yields new Freight, or a manual promotion when the correct digest already has Freight.
+- Recovery from a wrong digest SHALL be a corrected tag move that yields new Freight (with `move_live_tag` when the corrected commit is older than the live revision), or a manual promotion when the correct digest already has Freight.
 
 #### Scenario: GitHub is unavailable during the automatic promotion
 
@@ -80,7 +92,7 @@ When the gate step fails an automatic Promotion, the following SHALL hold:
 
 - **WHEN** the production Freight's revision is not contained in `production`
 - **THEN** the automatic Promotion fails at `legacy-ancestry` with the ahead-by message and nothing is written
-- **AND** a corrected `workflow_dispatch` run that moves the tag to a new digest produces new Freight and a new automatic Promotion
+- **AND** a corrected `workflow_dispatch` run, with `move_live_tag` if the corrected commit is older than the live revision, moves the tag to a new digest and produces new Freight and a new automatic Promotion
 
 ### Requirement: Automation can be paused with one commit
 
