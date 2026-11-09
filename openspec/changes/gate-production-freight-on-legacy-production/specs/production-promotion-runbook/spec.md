@@ -10,7 +10,8 @@ k8s-gitops SHALL contain `docs/production-promotion.md` describing how Freight i
 - **Checks after promoting.** Production pods are `Running`, plus whatever application-level health signal exists at the time, such as a Honeybadger test exception raised from a production worker or a canary job.
 - **Rollout and rollback timing**, given the worker's 2100-second termination grace period.
 - **The rollback procedure.** Re-promote an earlier Freight, which passes the gate. Before every rollback, including to the previous Freight, list the migrations added between the two commits and review them for `drop_table`, `remove_column` and renames. The gate certifies missing prerequisites only, not that older code fits a newer schema.
-- **Failure signatures in Kargo.** A Promotion failed at `legacy-ancestry` with either the no-revision message and HTTP 404 or 422, or the ahead-by message and HTTP 200. The compare URL to run by hand for the full comparison.
+- **Failure signatures in Kargo.** A Promotion failed at `legacy-ancestry` with either the no-revision message and HTTP 404 or 422, or the ahead-by message and HTTP 200. The compare URL to run by hand for the full comparison. A Promotion failed at `argocd-update` with "application not found", expected only while the production deployment is disabled, and how the rehearsal's passing case ends.
+- **The rehearsal record.** The three reference Promotion statuses from the rehearsal on the production Stage, so a live failure can be matched against a known one.
 - **The hotfix caveat.** A direct push to `production` moves the marker without a release, and the gate still works.
 - **The accepted gaps.** A legacy migration rollback after a promotion, which nothing in k8s notices and which the operator answers by re-promoting the Freight whose commit matches the rolled-back branch. Hand edits to the production values file, which bypass the gate and are not a sanctioned path.
 

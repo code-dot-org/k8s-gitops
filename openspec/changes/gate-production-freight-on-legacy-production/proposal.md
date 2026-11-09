@@ -54,7 +54,12 @@ None. `openspec/specs/` holds no existing capabilities.
 - **code-dot-org**, one PR to `staging`: `.github/workflows/cdo-rails-image.yml` (the merge job builds the index with regctl) and `docker/rails/README.md` (tag contract). No image content, chart or runtime change.
 - **k8s-gitops**, branch `INF-2281/promotion-gates`: `apps/kargo/projects/codeai/stages/production.yaml`, new `docs/production-promotion.md`, new `apps/kargo/projects/codeai/README.md`. No chart under `apps/` changes, so no `Chart.yaml` bump. No `apps/app-of-apps` structure change, so no mimic-tree edit.
 - **Runtime behaviour**: one GitHub API call per production promotion from the Kargo controller, unauthenticated, within a 60-per-hour limit. One new failure state for operators to recognise: a Promotion failed at `legacy-ancestry` with a message naming the cause.
-- **Sequencing**: the Kargo step can land any time after the first annotated image exists. The production deployment is enabled by a separate change, which this design assumes sets `branch: production`, so the chart deployed to production comes from the same commit lineage as the promoted image. The step's failure message uses the `http` step's `errorExpression`, available since Kargo 1.11; the cluster runs Kargo 1.12.5 with its admission webhooks enabled. Any NetworkPolicy added later must keep allowing the Kargo controller's GitHub egress.
+- **Sequencing**:
+  - The Kargo step can land any time after the first annotated image exists.
+  - Before the production deployment is enabled, the step is rehearsed on the production Stage itself, where a promotion can reach neither pods nor database until then.
+  - The production deployment is enabled by a separate change, which this design assumes sets `branch: production`, so the chart deployed to production comes from the same commit lineage as the promoted image.
+  - The step's failure message uses the `http` step's `errorExpression`, available since Kargo 1.11; the cluster runs Kargo 1.12.5 with its admission webhooks enabled.
+  - Any NetworkPolicy added later must keep allowing the Kargo controller's GitHub egress.
 
 ## Terms
 

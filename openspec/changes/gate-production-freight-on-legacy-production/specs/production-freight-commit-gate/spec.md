@@ -60,10 +60,15 @@ The production Stage manifest SHALL carry a header comment that names the gate s
 
 ### Requirement: The gate expressions are rehearsed before production is enabled
 
-Before the production deployment is enabled, the step SHALL be exercised on the `levelbuilder` Stage by adding it there temporarily and promoting three Freight: one without a revision annotation, the newest available, and the one whose revision equals the merge base of `production` and `staging`. The step SHALL be removed from `levelbuilder` afterwards.
+Before the production deployment is enabled, while the `production` namespace has no workload and no `codeai-production` Application exists, the step SHALL be exercised on the production Stage itself by promoting three Freight in one sitting: one without a revision annotation, the newest available, and the one whose revision equals the merge base of `production` and `staging`. The template SHALL NOT be altered for the rehearsal.
 
 #### Scenario: Rehearsal outcomes
 
-- **WHEN** the three Freight are promoted to `levelbuilder` with the step in place
-- **THEN** the first fails with HTTP 404 and the no-revision message, the second fails with HTTP 200 and the ahead-by message, and the third passes the step
+- **WHEN** the three Freight are promoted to `production` with the step in place and the deployment disabled
+- **THEN** the first fails with HTTP 404 and the no-revision message and writes nothing, the second fails with HTTP 200 and the ahead-by message and writes nothing, and the third passes the step, commits its digest into the production values file, and ends Failed at `argocd-update` because the Application does not exist
 - **AND** the three Promotion statuses are recorded in the runbook as reference signatures
+
+#### Scenario: Production is enabled after the rehearsal
+
+- **WHEN** the production deployment is enabled
+- **THEN** Argo creates `codeai-production` on the gate-approved digest the rehearsal left in the values file

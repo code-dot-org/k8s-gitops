@@ -8,7 +8,7 @@
 
 **What the image contains.** It ships `dashboard/db/schema.rb` and `schema_cache.yml` but not `dashboard/db/migrate`, so it cannot migrate. Rails itself only warns at boot when the database's schema version differs from the image's.
 
-**Network.** The Kargo controller reaches api.github.com through NAT. There are no NetworkPolicies yet.
+**Network.** The Kargo controller reaches api.github.com through NAT. There are no NetworkPolicies yet, so nothing stops the Kargo controller from calling GitHub as planned.
 
 **Staging and test.** The k8s `staging` and `test` namespaces share databases with legacy staging and test and run images built from `staging` pushes. They already run ahead of their databases for minutes (staging) or hours (test) after a migration lands. That is out of scope here and recorded as an accepted risk.
 
@@ -102,15 +102,19 @@ There is no bypass mode. The only way past the gate is a reviewed commit that re
 
 `autoPromotionEnabled: false` for `production` and `levelbuilder` is untouched. The gate makes the manual decision safe; it does not replace it. Kargo RBAC narrowing remains available as a separate change.
 
-### 6. Rehearsal without touching production
+### 6. Rehearsal on the production Stage, before its deployment exists
 
-Before the production deployment is enabled, the Kargo step is rehearsed on the `levelbuilder` Stage by adding it there temporarily and promoting three Freight:
+The k8s production deployment is disabled today: no workload in the `production` namespace, no `codeai-production` Application in Argo, and no Promotion in the Stage's history. Until it is enabled, a promotion to the production Stage can reach neither the pods nor the database. The step is therefore rehearsed where it lives, by promoting three Freight to `production` with the step in place:
 
-- One unannotated: expect `legacy-ancestry` to fail with HTTP 404 and the no-revision message.
-- The newest: expect it to fail with HTTP 200 and the ahead-by message, unless a DTP has just landed.
-- The one whose annotation equals `git merge-base production staging`: expect the step to pass. Later steps may fail on the missing levelbuilder Application, which is fine.
+- One unannotated: expect `legacy-ancestry` to fail with HTTP 404 and the no-revision message. Nothing is written, because the step runs before `git-clone`.
+- The newest: expect it to fail with HTTP 200 and the ahead-by message, unless a DTP has just landed. Nothing is written.
+- The one whose annotation equals `git merge-base production staging`: expect the step to pass. The later steps then commit that digest into the production values file on `main`, and the Promotion ends Failed at `argocd-update` because `codeai-production` does not exist yet. That is the expected end state. The commit is useful: when the deployment is enabled, Argo brings production up on a gate-approved image.
+
+The three promotions happen in one sitting, before the deployment is enabled, and the three Promotion statuses are recorded in the runbook as reference signatures. `argocd-update` stays in the template, so the rehearsed template is the one that guards production; the runbook lists its "application not found" failure as expected only while the deployment is disabled.
 
 This rehearsal is mandatory, not optional. The expressions are the part of the gate most likely to be wrong. A wrong expression could fail every promotion or pass every one, and no second check stands behind the gate.
+
+Alternatives: the `levelbuilder` Stage, which tests the wrong marker (legacy levelbuilder is deployed from `test` by DTL and its database is migrated on that cadence) and would need a temporary copy of the step; a throwaway Stage, which needs cleanup and still is not the template that ships.
 
 ### 7. The gate is production-only
 
@@ -127,14 +131,16 @@ For staging the image commit is always the branch head or an ancestor. For test 
 - **Hand-edited production `values.yaml` bypasses the gate.** Accepted. It is a reviewed commit, and the runbook says the Kargo gate is the only sanctioned path.
 - **A default-deny NetworkPolicy added later.** Must allow the Kargo controller namespace to reach api.github.com on 443. Noted in the runbook.
 - **The `http` step's failure text is limited to what `errorExpression` can compute from one response.** The message names the rule and the number of commits ahead. The runbook maps message and HTTP status to the cause and gives the compare URL to run by hand for anything more.
-- **The gate's expressions are wrong.** A wrong expression could fail every promotion or pass every one, and no second check stands behind it. The levelbuilder rehearsal (decision 6) is mandatory for that reason, and the runbook records the three reference outcomes.
+- **The gate's expressions are wrong.** A wrong expression could fail every promotion or pass every one, and no second check stands behind it. The rehearsal on the production Stage (decision 6) is mandatory for that reason, and the runbook records the three reference outcomes.
+- **The rehearsal leaves Failed Promotions in the production Stage's history.** Two fail at the gate by design, and the passing one fails at `argocd-update` because the Application does not exist yet. Cosmetic. Kargo never auto-promotes Freight whose newest Promotion failed, which does not matter while promotion is manual, and step two's production Freight come from another Warehouse.
+- **Someone enables the production deployment during the rehearsal.** The rehearsal would become a real promotion. The three promotions are done in one sitting, and the enablement change is sequenced after them (migration plan).
 
 ## Migration Plan
 
 1. code-dot-org PR to `staging`: the regctl-built OCI index and the README tag contract. Merge. After the next `latest` publish, confirm the index media type, annotation and platforms, and confirm the newest Freight shows the annotation.
 2. k8s-gitops on `INF-2281/promotion-gates`: the Kargo gate step in `stages/production.yaml`, `docs/production-promotion.md`, and the Kargo project README. Argo applies the Stage change. Nothing deploys to production, because that workload is still disabled.
-3. Rehearse the Kargo step on `levelbuilder` (decision 6) and record the three outcomes in the runbook.
-4. The production deployment is enabled by its own change, which also sets `branch: production`. The first promotion follows the runbook: wait for the release of the DTP that carried the Freight's commit, promote, and check the pods.
+3. Rehearse the Kargo step on the production Stage while its deployment is still disabled (decision 6): three promotions in one sitting, the three outcomes recorded in the runbook. The passing one leaves the gate-approved digest in the production values file.
+4. The production deployment is enabled by its own change, which also sets `branch: production`. Argo creates `codeai-production` on the digest the rehearsal left in the values file. The first promotion follows the runbook: wait for the release of the DTP that carried the Freight's commit, promote, and check the pods.
 
 Rollback: remove the gate step, and the Kargo path returns to today's behaviour. Nothing here touches the database, the chart or the legacy fleet. Rolling the promoted image back to an older Freight is a runbook procedure, subject to the destructive-migration review every time.
 

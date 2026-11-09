@@ -42,7 +42,7 @@ Tasks marked **(user)** need an action only the user takes: git commit and push,
   - post-promotion checks: pods `Running`, and whatever application-level health signal exists at the time
   - rollout and rollback timing with the 2100-second grace period
   - the rollback procedure: review the migrations added between the two commits for destructive changes, every time
-  - failure signatures in Kargo: the `legacy-ancestry` message and HTTP status, what each means, and the compare URL to run by hand
+  - failure signatures in Kargo: the `legacy-ancestry` message and HTTP status, what each means, and the compare URL to run by hand; a Promotion failed at `argocd-update` with application not found, expected only while the deployment is disabled; the three reference statuses from the rehearsal
   - the hotfix caveat
   - the accepted gaps: a legacy migration rollback (answered by re-promoting the Freight whose commit matches the rolled-back branch) and hand edits to the values file (which bypass the gate and are not a sanctioned path)
   - the NetworkPolicy allowance a future default-deny policy must keep for the Kargo controller
@@ -50,11 +50,10 @@ Tasks marked **(user)** need an action only the user takes: git commit and push,
 ## 5. Rollout
 
 - [ ] 5.1 **(user)** Commit and push the k8s-gitops changes. Refresh the `kargo-project-codeai` Argo Application, which owns the Stage, and sync if it has not moved. Confirm with read-only `kubectl get stage production -n kargo-project-codeai -o yaml` that the step and its three expressions are present
-- [ ] 5.2 **(user)** Rehearse the Kargo step on `levelbuilder` before production is enabled:
-  - temporarily add the step
-  - promote an unannotated Freight: expect failure with HTTP 404 and the no-revision message
-  - promote the newest Freight: expect failure with HTTP 200 and the ahead-by message
-  - promote the Freight whose annotation equals `git merge-base production staging`: expect the step to pass
-  - record the three Promotion statuses in the runbook as reference signatures, then remove the step
-- [ ] 5.3 **(user)** After the production deployment has been enabled with `branch: production`, perform the first production promotion following the runbook: wait for the release of the DTP that carried the Freight's commit, promote, and confirm the pods are `Running`
+- [ ] 5.2 **(user)** Rehearse the Kargo step on the production Stage, in one sitting, while the deployment is still disabled. First confirm read-only that the `production` namespace has no workload and that `codeai-production` is absent from Argo. Then:
+  - promote an unannotated Freight: expect failure with HTTP 404 and the no-revision message, and no commit on `main`
+  - promote the newest Freight: expect failure with HTTP 200 and the ahead-by message, and no commit on `main`
+  - promote the Freight whose annotation equals `git merge-base production staging`: expect the step to pass, a commit on `main` that sets the production values file to that digest, and the Promotion ending Failed at `argocd-update` with application not found
+  - record the three Promotion statuses in the runbook as reference signatures
+- [ ] 5.3 **(user)** After the production deployment has been enabled with `branch: production` and Argo has created `codeai-production` on the digest the rehearsal left in the values file, perform the first production promotion following the runbook: wait for the release of the DTP that carried the Freight's commit, promote, and confirm the pods are `Running`
 - [ ] 5.4 Record the first promotion's date and Freight in the runbook's history section
