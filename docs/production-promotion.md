@@ -118,16 +118,23 @@ passes for any older commit, because it certifies only that no prerequisite
 migration is missing. It does not certify that older code fits a newer schema.
 
 Before every rollback, including to the previous Freight, list the migrations
-added between the two commits and review them for `drop_table`,
+the database has that the older image does not. The upper bound is the revision
+legacy production has deployed, not the Freight being replaced: legacy may have
+migrated past the current k8s image since it was promoted. The legacy
+`production` branch is that bound. While a DTP is in progress the branch is
+ahead of the schema, so the range then includes migrations not yet applied,
+which errs on the safe side. Review the range for `drop_table`,
 `remove_column`, `rename_table` and `rename_column`:
 
 ```
-git log --oneline <old revision>..<new revision> -- dashboard/db/migrate
-git diff <old revision>..<new revision> -- dashboard/db/migrate | grep -E 'drop_table|remove_column|rename_(table|column)'
+git fetch origin production
+git log --oneline <old revision>..origin/production -- dashboard/db/migrate
+git diff <old revision>..origin/production -- dashboard/db/migrate | grep -E 'drop_table|remove_column|rename_(table|column)'
 ```
 
-One release can carry a destructive migration, so no distance is exempt. If a
-destructive migration is in the range, the older image may fail against the
+`<old revision>` is the revision annotation of the Freight you are rolling back
+to. One release can carry a destructive migration, so no distance is exempt. If
+a destructive migration is in the range, the older image may fail against the
 current schema, exactly as a legacy code rollback would. That is the same
 review a legacy rollback needs.
 
@@ -143,7 +150,7 @@ message carries the HTTP status and one of two texts.
 |---|---|---|
 | `legacy-ancestry` failed, HTTP 404 or 422, "no revision annotation, or GitHub does not know the commit" | The Freight has no `org.opencontainers.image.revision` (built before CI stamped it), or the annotation names a commit GitHub does not have. | Promote a Freight that carries a revision. Check with the `kubectl get freight` command above. |
 | `legacy-ancestry` failed, HTTP 200, "image commit is N commit(s) ahead of legacy production (ahead)" or "(diverged)" | The image is newer than what legacy production runs. | Wait for the DTP that carries that commit and its release, then promote. Or promote the merge-base Freight. |
-| `legacy-ancestry` still Running for minutes, then failed with a timeout | GitHub returned 5xx, rate-limited the call, or was unreachable. The step re-polls until its 5 minute timeout. | Retry the promotion. If it repeats, run the compare URL by hand (below) and check GitHub's status page. |
+| `legacy-ancestry` still Running for minutes, then failed with a timeout | GitHub returned 5xx, rate-limited the call, timed out or was unreachable. Kargo retries until the step's 5 minute timeout. The step's `errorThreshold` of 20 is what lets request errors retry at all; Kargo's default of 1 stops at the first one. | Retry the promotion. If it repeats, run the compare URL by hand (below) and check GitHub's status page. |
 | `argocd-update` failed, application `codeai-production` not found | The production deployment is still disabled, so the Argo Application does not exist. Expected only in that state, and how the gate rehearsal's passing case ends. The values file was already updated. | Nothing, while the deployment is disabled. After it is enabled this signature means the Application was deleted; investigate. |
 
 The full comparison, by hand:

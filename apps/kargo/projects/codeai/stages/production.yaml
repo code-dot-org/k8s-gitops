@@ -33,12 +33,17 @@ spec:
         # cloned or written, and fails closed:
         #   404 or 422             no revision annotation, or GitHub does not know the commit
         #   200 with ahead_by > 0  the image is ahead of legacy production
-        #   5xx or timeout         re-polled until the 5 minute retry timeout, then fails
+        #   5xx or rate limited    re-polled every 30s until the 5 minute timeout, then fails
+        #   timeout, no connection an error, retried with backoff until the 5 minute timeout
+        # Request errors count against retry.errorThreshold, not the timeout, and
+        # Kargo's default threshold of 1 stops at the first one. 20 is more attempts
+        # than fit in 5 minutes, so the timeout governs in every case.
         # Removing this step is an incident action; see docs/production-promotion.md.
         - uses: http
           as: legacy-ancestry
           retry:
             timeout: 5m
+            errorThreshold: 20
           config:
             method: GET
             url: https://api.github.com/repos/code-dot-org/code-dot-org/compare/production...${{ imageFrom("ghcr.io/code-dot-org/cdo-rails").Annotations["org.opencontainers.image.revision"] }}
