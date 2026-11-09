@@ -54,11 +54,15 @@ k8s-gitops/
           project.yaml            # kargo project for codeai
           project-config.yaml     # kargo projectconfig for codeai
           warehouse.yaml          # kargo warehouse for codeai
+          README.md               # what is here, how Freight flows, the production gate
           stages/
             levelbuilder.yaml     # kargo stage for codeai deployment levelbuilder
             ...
 
   bootstrap/                      # tofu modules to bootstrap a codeai-k8s eks cluster
+
+  docs/
+    production-promotion.md       # runbook: promoting cdo-rails Freight to production behind the legacy-ancestry gate
 ```
 
 ## Bootstrap Cluster
