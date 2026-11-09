@@ -9,7 +9,7 @@ k8s-gitops SHALL contain `docs/production-promotion.md` describing how Freight i
 - **Checks before promoting.** The Freight is verified in `test`; the release exists.
 - **Checks after promoting.** Production pods are `Running`, plus whatever application-level health signal exists at the time, such as a Honeybadger test exception raised from a production worker or a canary job.
 - **Rollout and rollback timing**, given the worker's 2100-second termination grace period.
-- **The rollback procedure.** Re-promote an earlier Freight, which passes the gate. Before every rollback, including to the previous Freight, list the migrations added between the two commits and review them for `drop_table`, `remove_column` and renames. The gate certifies missing prerequisites only, not that older code fits a newer schema.
+- **The rollback procedure.** Re-promote an earlier Freight, which passes the gate. Before every rollback, including to the previous Freight, list the migrations between the older Freight's commit and the revision legacy production has deployed, and review them for `drop_table`, `remove_column` and renames. The Freight being replaced is not the upper bound, since the shared database can be ahead of it. The gate certifies missing prerequisites only, not that older code fits a newer schema.
 - **Failure signatures in Kargo.** A Promotion failed at `legacy-ancestry` with either the no-revision message and HTTP 404 or 422, or the ahead-by message and HTTP 200. The compare URL to run by hand for the full comparison. A Promotion failed at `argocd-update` with "application not found", expected only while the production deployment is disabled, and how the rehearsal's passing case ends.
 - **The rehearsal record.** The three reference Promotion statuses from the rehearsal on the production Stage, so a live failure can be matched against a known one.
 - **The hotfix caveat.** A direct push to `production` moves the marker without a release, and the gate still works.
@@ -28,7 +28,7 @@ k8s-gitops SHALL contain `docs/production-promotion.md` describing how Freight i
 #### Scenario: Rollback
 
 - **WHEN** a promoted Freight must be rolled back
-- **THEN** the runbook's procedure reviews the migrations added between the two commits, re-promotes the earlier Freight through Kargo, and states how long the worker pod may take to drain
+- **THEN** the runbook's procedure reviews the migrations between the older Freight's commit and the legacy `production` branch, re-promotes the earlier Freight through Kargo, and states how long the worker pod may take to drain
 
 #### Scenario: Legacy rolled a migration back
 

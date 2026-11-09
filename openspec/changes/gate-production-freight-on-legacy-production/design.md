@@ -65,7 +65,8 @@ The gate is therefore one step, `legacy-ancestry`:
 - It succeeds on 200 with `ahead_by == 0`.
 - It fails terminally on 404 or 422 (no annotation, or a sha GitHub does not know), with the message `no revision annotation, or GitHub does not know the commit (HTTP <status>)`.
 - It fails terminally on 200 with `ahead_by > 0`, with the message `image commit is <n> commit(s) ahead of legacy production (<status>)`.
-- A response matching neither expression (5xx, timeout) leaves the step running. Kargo re-polls at the step's `pollInterval` (default 30 seconds) until the step's five-minute retry timeout, then fails.
+- A response matching neither expression (5xx, rate limit) leaves the step running. Kargo re-polls at the step's `pollInterval` (default 30 seconds) until the step's five-minute timeout, then fails.
+- A request timeout or connection failure is an error, not a response, and Kargo counts it against `retry.errorThreshold`, whose default of 1 ends the step at the first one. The step sets the threshold to 20, more attempts than fit in five minutes under Kargo's exponential backoff, so the timeout governs this path too.
 
 So the Promotion itself tells the operator which rule broke and by how much. One call per promotion stays far inside the unauthenticated limit.
 
@@ -84,7 +85,7 @@ Kargo populates `imageFrom(...).Annotations` from the index annotations (then ma
 The merge job therefore:
 
 1. Installs regctl from a SHA-pinned `regclient/actions/regctl-installer`.
-2. Builds the index once under the immutable `git-<sha>` tag.
+2. Builds the index once under the commit-keyed `git-<sha>` tag. A run that fails the next step leaves that tag pointing at the unvalidated index until a re-run repoints it; only `latest` is held back.
 3. Inspects it and fails the job unless the media type is OCI, the annotation equals `github.sha`, and both platform descriptors are present.
 4. Only then copies the validated index to `latest` and any other tag in `$TAGS` with `regctl image copy`. The tag Kargo follows never points at an index that has not passed the check.
 
@@ -94,7 +95,7 @@ Alternatives: pushing the per-arch images as OCI manifests so buildx emits an OC
 
 ### 4. Fail closed, with no bypass mode
 
-Freight without an annotation produces a URL ending in `...`. GitHub returns 404 and `legacy-ancestry` fails with the no-revision message. A commit GitHub does not know returns 422 and fails the same way. A GitHub outage or rate limit leaves the step running until its five-minute timeout, then fails; the promotion can simply be retried.
+Freight without an annotation produces a URL ending in `...`. GitHub returns 404 and `legacy-ancestry` fails with the no-revision message. A commit GitHub does not know returns 422 and fails the same way. A GitHub outage, rate limit or unreachable API keeps the step retrying until its five-minute timeout, then fails; the promotion can simply be retried.
 
 There is no bypass mode. The only way past the gate is a reviewed commit that removes the step, which the runbook treats as an incident action to be reverted.
 
@@ -124,10 +125,11 @@ For staging the image commit is always the branch head or an ancestor. For test 
 
 - **A mixed-media index (OCI index wrapping Docker manifests) breaks some puller.** Verified by `docker pull` on both architectures and a staging pod pull after the first publish. Fallback is `skopeo copy --format oci` per leg so every child is OCI.
 - **regctl does not derive platform descriptors from single-arch children.** The merge job inspects the pushed index and fails if a platform is missing. The two-step `--desc-platform` form is the documented fallback.
-- **GitHub rate limit or outage during a promotion.** 5xx and timeouts retry for up to five minutes, then fail. The promotion can simply be retried. A token header via `secret()` is the next step if limits bite.
+- **GitHub rate limit or outage during a promotion.** 5xx responses, request timeouts and connection failures retry for up to five minutes, then fail. The promotion can simply be retried. A token header via `secret()` is the next step if limits bite.
 - **A promotion inside the window between a DTP merge and `db:migrate`.** Accepted. The runbook's rule is to promote only after the release for that DTP exists, and step two removes the person from this path. If the rule proves unreliable, the marker can become the latest release (decision 2) or the runtime guard can return.
 - **Legacy rollback moves `production` HEAD backwards.** Running pods keep running. A re-promotion of an older Freight passes the gate. If a migration is rolled back legacy-side, nothing in k8s notices; the runbook has the operator re-promote the Freight whose commit matches the rolled-back branch. Accepted; rare.
-- **An older Freight passes the gate but expects a table or column a later migration removed.** The gate certifies only that no prerequisite migration is missing, not that older code fits a newer schema. The runbook requires, before every rollback including to the previous Freight, a review of the migrations added between the two commits for `drop_table`, `remove_column` and renames. That is the same review a legacy code rollback needs. One release can carry a destructive migration, so no distance is exempt.
+- **An older Freight passes the gate but expects a table or column a later migration removed.** The gate certifies only that no prerequisite migration is missing, not that older code fits a newer schema. The runbook requires, before every rollback including to the previous Freight, a review of the migrations between the older Freight's commit and the legacy `production` branch for `drop_table`, `remove_column` and renames.
+  The Freight being replaced is not the upper bound, because the shared database can be ahead of it: legacy may have migrated since that Freight was promoted. That is the same review a legacy code rollback needs. One release can carry a destructive migration, so no distance is exempt.
 - **Hand-edited production `values.yaml` bypasses the gate.** Accepted. It is a reviewed commit, and the runbook says the Kargo gate is the only sanctioned path.
 - **A default-deny NetworkPolicy added later.** Must allow the Kargo controller namespace to reach api.github.com on 443. Noted in the runbook.
 - **The `http` step's failure text is limited to what `errorExpression` can compute from one response.** The message names the rule and the number of commits ahead. The runbook maps message and HTTP status to the cause and gives the compare URL to run by hand for anything more.

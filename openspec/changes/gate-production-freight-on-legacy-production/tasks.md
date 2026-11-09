@@ -26,7 +26,7 @@ Tasks marked **(user)** need an action only the user takes: git commit and push,
 
 - [x] 3.1 Insert one `http` step, `legacy-ancestry`, as the first step of the promotion template in `apps/kargo/projects/codeai/stages/production.yaml`:
   - URL: GitHub compare `production...${{ imageFrom("ghcr.io/code-dot-org/cdo-rails").Annotations["org.opencontainers.image.revision"] }}`
-  - 30-second request timeout, 5-minute retry timeout
+  - 30-second request timeout, 5-minute retry timeout, `retry.errorThreshold` 20 so request errors retry until the timeout instead of ending the step at the first one
   - success: `response.status == 200 && response.body.ahead_by == 0`
   - failure: `response.status == 404 || response.status == 422 || (response.status == 200 && response.body.ahead_by > 0)`
   - `errorExpression` rendering `no revision annotation, or GitHub does not know the commit (HTTP <status>)` for 404 and 422, and `image commit is <ahead_by> commit(s) ahead of legacy production (<status>)` for 200
@@ -41,7 +41,7 @@ Tasks marked **(user)** need an action only the user takes: git commit and push,
   - pre-promotion checks
   - post-promotion checks: pods `Running`, and whatever application-level health signal exists at the time
   - rollout and rollback timing with the 2100-second grace period
-  - the rollback procedure: review the migrations added between the two commits for destructive changes, every time
+  - the rollback procedure: review the migrations between the older Freight's commit and the legacy `production` branch for destructive changes, every time
   - failure signatures in Kargo: the `legacy-ancestry` message and HTTP status, what each means, and the compare URL to run by hand; a Promotion failed at `argocd-update` with application not found, expected only while the deployment is disabled; the three reference statuses from the rehearsal
   - the hotfix caveat
   - the accepted gaps: a legacy migration rollback (answered by re-promoting the Freight whose commit matches the rolled-back branch) and hand edits to the values file (which bypass the gate and are not a sanctioned path)

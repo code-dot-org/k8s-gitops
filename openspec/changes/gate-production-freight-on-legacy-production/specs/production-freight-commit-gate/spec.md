@@ -8,6 +8,7 @@ The `production` Stage promotion template SHALL run one HTTP step named `legacy-
 - It SHALL fail terminally on status 404 or 422, and on status 200 with `ahead_by` greater than 0.
 - Its error expression SHALL render a message naming the cause: either that the Freight has no revision annotation or GitHub does not know the commit (with the HTTP status), or that the image commit is a stated number of commits ahead of legacy production (with GitHub's `status` word).
 - Any other response SHALL leave the step running and re-polled until the step's five-minute timeout, then fail.
+- A request timeout or connection failure SHALL be retried until the same five-minute timeout, then fail. The step's `retry.errorThreshold` SHALL be high enough that the timeout, not the threshold, ends the retries.
 - When the step fails, the Promotion SHALL fail at it and no later step SHALL run.
 
 #### Scenario: Freight commit is already in legacy production
@@ -31,8 +32,8 @@ The `production` Stage promotion template SHALL run one HTTP step named `legacy-
 
 #### Scenario: GitHub is unavailable
 
-- **WHEN** the compare call returns a 5xx status or times out
-- **THEN** the step stays running, is re-polled, and fails after five minutes
+- **WHEN** the compare call returns a 5xx status, times out, or cannot connect
+- **THEN** the step stays running, is retried, and fails after five minutes
 - **AND** the step never succeeds without a 200 response
 
 ### Requirement: Gate applies to every promotion into production

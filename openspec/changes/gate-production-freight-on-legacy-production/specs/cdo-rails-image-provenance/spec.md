@@ -23,9 +23,10 @@ The `cdo-rails` image index that CI publishes for each push to `staging` SHALL b
 
 ### Requirement: Tag contract documents the provenance guarantee
 
-`docker/rails/README.md` SHALL list, alongside the existing tag guarantees, that the published index carries `org.opencontainers.image.revision` naming the staging commit it was built from. It SHALL also correct the existing `git-<sha>` guarantee: that tag is republished when the `cdo-deps` chain or a manual dispatch rebuilds the commit, so a digest is the only immutable handle.
+`docker/rails/README.md` SHALL list, alongside the existing tag guarantees, that the published index carries `org.opencontainers.image.revision` naming the staging commit it was built from. It SHALL also correct the existing `git-<sha>` guarantee: that tag is republished when the `cdo-deps` chain or a manual dispatch rebuilds the commit, so a digest is the only immutable handle. It SHALL scope the validation guarantee to `latest`, and state that a run failing validation leaves the commit tag pointing at an unvalidated index until a re-run repoints it.
 
 #### Scenario: Reading the tag contract
 
 - **WHEN** an engineer reads the tag contract section
 - **THEN** it states the revision annotation as a guarantee of every published build, and states that `git-<sha>` can be repointed by a rebuild
+- **AND** it states that only `latest` is withheld on a failed validation, and what the commit tag holds in that case
