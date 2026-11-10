@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# Prints what docs/production-promotion.md needs for a promotion: the latest
+# legacy release and whether it covers legacy production HEAD, the staging
+# commit legacy production runs, and the Freight that carries it.
+# Read-only: gh api and kubectl get.
+#
+# Usage: bin/production-freight
+# Exit: 0 a Freight is ready to promote, or is already in production
+#       1 nothing to promote yet, or wait
+#       2 a required tool is missing
+#
+# Verdicts, on the last line: PROMOTE, WAIT, NONE, DONE. A CHECK line above
+# them means a hotfix moved production after the latest release; confirm in
+# #infra-production that its deploy finished before acting on PROMOTE.
+set -euo pipefail
+
+repo=code-dot-org/code-dot-org
+project=kargo-project-codeai
+
+for tool in gh kubectl jq; do
+  command -v "$tool" >/dev/null 2>&1 || { echo "$tool is required" >&2; exit 2; }
+done
+
+release=$(gh api "repos/$repo/releases/latest" --jq '"\(.tag_name) published \(.published_at)"')
+release_at=${release##* }
+read -r head_sha head_parents head_at < <(gh api "repos/$repo/commits/production" \
+  --jq '"\(.sha) \(.parents | length) \(.commit.committer.date)"')
+base=$(gh api "repos/$repo/compare/production...staging" --jq '.merge_base_commit.sha')
+
+echo "Latest legacy release:   $release"
+echo "Legacy production HEAD:  $head_sha committed $head_at"
+echo "Staging commit it runs:  $base"
+echo
+
+wait=0
+hotfix=0
+if [ "$head_at" \> "$release_at" ] && [ "$head_parents" -ge 2 ]; then
+  wait=1
+  echo "WAIT     a DTP merged after the latest release and its release is not out: db:migrate may still be running."
+  echo "         Promote after that release exists."
+elif [ "$head_at" \> "$release_at" ]; then
+  hotfix=1
+  echo "CHECK    a hotfix moved production after the latest release, and hotfixes get no release."
+  echo "         Confirm in #infra-production that its deploy finished before acting on a PROMOTE below."
+else
+  echo "OK       the latest release covers production HEAD, so the legacy deploy is done."
+fi
+echo
+
+freight=$(kubectl get freight -n "$project" -o json)
+total=$(jq '.items | length' <<<"$freight")
+rows=$(jq -r '
+  def rev: .images[0].annotations["org.opencontainers.image.revision"] // "";
+  [.items[] | select(rev != "")] | sort_by(.metadata.creationTimestamp) | .[]
+  | [ .alias, .metadata.creationTimestamp, rev,
+      (if .status.verifiedIn.test then "yes" else "no" end),
+      ((.status.currentlyIn // {}) | keys | join(",") | if . == "" then "-" else . end) ]
+  | @tsv' <<<"$freight")
+
+echo "Freight with a revision annotation, newest last ($total Freight in $project):"
+if [ -z "$rows" ]; then
+  echo "  none: no Freight carries org.opencontainers.image.revision yet"
+else
+  { printf 'ALIAS\tCREATED\tREVISION\tVERIFIED-IN-TEST\tCURRENTLY-IN\n'; echo "$rows"; } \
+    | column -t -s "$(printf '\t')" | sed 's/^/  /'
+fi
+echo
+
+match=$(jq -r --arg rev "$base" '
+  def rev: .images[0].annotations["org.opencontainers.image.revision"] // "";
+  [.items[] | select(rev == $rev)] | sort_by(.metadata.creationTimestamp) | last // empty
+  | "\(.alias)\t\(.metadata.name)\t\(if .status.verifiedIn.test then "yes" else "no" end)\t\(if .status.currentlyIn.production then "yes" else "no" end)"' <<<"$freight")
+
+if [ -z "$match" ]; then
+  echo "NONE     no Freight carries $base."
+  echo "         CI did not publish an image for that commit, or the Warehouse missed it."
+  echo "         Wait for the next DTP. Promote an older Freight only after bin/rollback-review."
+  exit 1
+fi
+IFS="$(printf '\t')" read -r alias name verified current <<<"$match"
+if [ "$current" = yes ]; then
+  echo "DONE     Freight $alias ($name) carries $base and is already in production."
+  exit 0
+fi
+if [ "$verified" != yes ]; then
+  echo "WAIT     Freight $alias ($name) carries $base but is not yet verified in test."
+  exit 1
+fi
+if [ "$wait" = 1 ]; then
+  echo "WAIT     Freight $alias ($name) carries $base, but the legacy deploy is not done (above)."
+  exit 1
+fi
+echo "PROMOTE  Freight $alias ($name) carries $base and is verified in test."
+if [ "$hotfix" = 1 ]; then
+  echo "         Once the hotfix deploy is confirmed finished (CHECK above):"
+fi
+echo "         Kargo UI: project $project, Stage production, Promote, pick alias $alias."

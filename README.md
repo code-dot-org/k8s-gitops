@@ -59,6 +59,10 @@ k8s-gitops/
             levelbuilder.yaml     # kargo stage for codeai deployment levelbuilder
             ...
 
+  bin/
+    production-freight            # read-only: latest legacy release, merge base, and the Freight to promote
+    rollback-review               # read-only: migrations between a revision and legacy production, destructive ops flagged
+
   bootstrap/                      # tofu modules to bootstrap a codeai-k8s eks cluster
 
   docs/
