@@ -1,7 +1,7 @@
 # Promoting cdo-rails to production
 
 This doc covers how to promote `cdo-rails` Freight to the k8s `production` namespace
-with Kargo, what to do when it fails, and how to handle rollbacks, and more.
+with Kargo, what to do when it fails, how to handle rollbacks, and more.
 Kargo is at https://kargo.k8s.code.org, project `kargo-project-codeai`, Stage
 `production`. Argo is at https://argocd.k8s.code.org, Application
 `codeai-production`.
@@ -29,8 +29,9 @@ in. The first also needs `kubectl` with read access to the cluster, and `jq`.
    It prints the latest legacy release, the current legacy `production` HEAD,
    the staging commit legacy production runs (the merge base of `production`
    and `staging`), every Freight that carries a revision annotation, and a
-   verdict on the last line. This example was taken while a DTP was in
-   progress, before CI stamped any image:
+   verdict on the last line.
+
+   This example was taken while a DTP was in progress, before CI stamped any image:
 
    ```
    Latest legacy release:   v2026-11-09.1 published 2026-11-10T02:00:28Z
@@ -48,6 +49,23 @@ in. The first also needs `kubectl` with read access to the cluster, and `jq`.
             Wait for the next DTP. Promote an older Freight only after bin/rollback-review.
    ```
 
+   This example was taken while a DTP was not in progress, before CI stamped any image:
+
+   ```
+   Latest legacy release:   v2026-11-12.0 published 2026-11-12T18:42:20Z
+   Legacy production HEAD:  eca2c4e1af7510b9cf300c7249090c29e3b25718 committed 2026-11-12T17:40:18Z
+   Staging commit it runs:  8a701b7aad71e0b33ed2ee85226adda1a93cd70c
+
+   OK       the latest release covers production HEAD, so the legacy deploy is done.
+
+   Freight with a revision annotation, newest last (249 Freight in kargo-project-codeai):
+     none: no Freight carries org.opencontainers.image.revision yet
+
+   NONE     no Freight carries 8a701b7aad71e0b33ed2ee85226adda1a93cd70c.
+           CI did not publish an image for that commit, or the Warehouse missed it.
+           Wait for the next DTP. Promote an older Freight only after bin/rollback-review.
+   ```
+
 2. **Act on the verdict.**
 
    | verdict                                       | meaning                                                                                                                                                                                                                                                                                | do                                                                                                  |
@@ -63,7 +81,8 @@ in. The first also needs `kubectl` with read access to the cluster, and `jq`.
    `production`, Promote, pick the alias the finder named. The Promotion's step
    list shows `legacy-ancestry` first; its output `status` is GitHub's word for
    the comparison, `behind` or `identical` on success. If a step fails, see
-   [When it fails](#when-it-fails).
+   [When it fails](#when-it-fails). TODO: Update this step with a screenshot of
+   the Kargo Freight picker UI.
 
 4. **Verify.**
    - The Promotion is Succeeded, and
@@ -76,8 +95,6 @@ in. The first also needs `kubectl` with read access to the cluster, and `jq`.
    An old worker pod stays until its current job finishes or its 35-minute
    grace period ends, so the rollout can take that long per worker pod. See
    [Rollout and rollback timing](#rollout-and-rollback-timing).
-
-5. **Record it** in [History](#history).
 
 ## Roll back
 
