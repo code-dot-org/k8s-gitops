@@ -21,22 +21,14 @@ directory except `application.yaml`.
 - `staging` and `test` auto-promote every new Freight (`project-config.yaml`).
 - `production` and `levelbuilder` request Freight that has been verified in
   `test` and promote only when a person creates a Promotion.
-- Each Freight carries the image digest and the index annotation
+- Each Freight has the image digest and the index annotation
   `org.opencontainers.image.revision`, the `staging` commit the image was built
   from (stamped by `.github/workflows/cdo-rails-image.yml` in code-dot-org).
 
 ## The production gate
 
-The production Stage's first promotion step, `legacy-ancestry`, asks the GitHub
-compare API whether the Freight's commit is contained in the legacy `production`
-branch. The image carries no migrations and only the legacy EC2 deploy migrates
-the production database, so an image newer than legacy would run ahead of the
-schema. The step runs before anything is cloned or written and fails closed: no
-annotation, an unknown commit, a commit ahead of `production`, or an unreachable
-GitHub all block the promotion.
-
-Runbook, with when to promote, failure messages, rollback and the accepted gaps:
+The production Stage's first promotion step, `legacy-ancestry`, blocks any
+Freight whose image commit is not already in the legacy `production` branch.
+Staging and test have no gate. Why the gate exists, when to promote, failure
+messages, rollback and the accepted gaps:
 [`docs/production-promotion.md`](../../../../docs/production-promotion.md).
-
-Staging and test have no gate: their namespaces share databases with legacy
-staging and test and already run ahead of them.

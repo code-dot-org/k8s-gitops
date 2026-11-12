@@ -28,7 +28,7 @@ in. The first also needs `kubectl` with read access to the cluster, and `jq`.
 
    It prints the latest legacy release, the current legacy `production` HEAD,
    the staging commit legacy production runs (the merge base of `production`
-   and `staging`), every Freight that carries a revision annotation, and a
+   and `staging`), every Freight that has a revision annotation, and a
    verdict on the last line.
 
    This example was taken while a DTP was in progress, before CI stamped any image:
@@ -42,9 +42,9 @@ in. The first also needs `kubectl` with read access to the cluster, and `jq`.
             Promote after that release exists.
 
    Freight with a revision annotation, newest last (246 Freight in kargo-project-codeai):
-     none: no Freight carries org.opencontainers.image.revision yet
+     none: no Freight has org.opencontainers.image.revision yet
 
-   NONE     no Freight carries bb4653156e595eb29cd61cf705492afd09fdc1c2.
+   NONE     no Freight contains bb4653156e595eb29cd61cf705492afd09fdc1c2.
             CI did not publish an image for that commit, or the Warehouse missed it.
             Wait for the next DTP. Promote an older Freight only after bin/rollback-review.
    ```
@@ -59,9 +59,9 @@ in. The first also needs `kubectl` with read access to the cluster, and `jq`.
    OK       the latest release covers production HEAD, so the legacy deploy is done.
 
    Freight with a revision annotation, newest last (249 Freight in kargo-project-codeai):
-     none: no Freight carries org.opencontainers.image.revision yet
+     none: no Freight has org.opencontainers.image.revision yet
 
-   NONE     no Freight carries 8a701b7aad71e0b33ed2ee85226adda1a93cd70c.
+   NONE     no Freight contains 8a701b7aad71e0b33ed2ee85226adda1a93cd70c.
            CI did not publish an image for that commit, or the Warehouse missed it.
            Wait for the next DTP. Promote an older Freight only after bin/rollback-review.
    ```
@@ -70,11 +70,11 @@ in. The first also needs `kubectl` with read access to the cluster, and `jq`.
 
    | verdict                                       | meaning                                                                                                                                                                                                                                                                                | do                                                                                                  |
    | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-   | `PROMOTE`                                     | The Freight named carries the merge base, is verified in `test`, and the legacy deploy that put that commit on `production` has finished.                                                                                                                                              | Step 3.                                                                                             |
+   | `PROMOTE`                                     | The Freight named contains the merge base, is verified in `test`, and the legacy deploy that put that commit on `production` has finished.                                                                                                                                             | Step 3.                                                                                             |
    | `WAIT`, a DTP merged after the latest release | The `production` branch moves one to two minutes before that deploy's `db:migrate` finishes, and the gate reads the branch. The release is created after the migration, the fleet replacement and the CDN flush, so until it exists a promotion could start a pod ahead of the schema. | Wait for the release, then run the finder again.                                                    |
    | `CHECK`, a hotfix moved production            | A direct push to `production` moved HEAD after the latest release, and hotfixes get no release.                                                                                                                                                                                        | Confirm in `#infra-production` that the hotfix deploy finished, then act on the rest of the output. |
    | `WAIT`, not yet verified in test              | Freight for the merge base exists, but `test` has not verified it. The Stage only accepts Freight verified there.                                                                                                                                                                      | Wait, then run the finder again.                                                                    |
-   | `NONE`                                        | No Freight carries the merge base: CI did not publish an image for that commit, or the `latest` Warehouse missed it.                                                                                                                                                                   | Wait for the next DTP. Promoting an older Freight is a rollback; see [Roll back](#roll-back).       |
+   | `NONE`                                        | No Freight contains the merge base: CI did not publish an image for that commit, or the `latest` Warehouse missed it.                                                                                                                                                                  | Wait for the next DTP. Promoting an older Freight is a rollback; see [Roll back](#roll-back).       |
    | `DONE`                                        | The merge-base Freight is already in production.                                                                                                                                                                                                                                       | Nothing.                                                                                            |
 
 3. **Promote in the Kargo UI.** Project `kargo-project-codeai`, Stage
@@ -140,7 +140,7 @@ branch, not against the Freight being replaced.
    that migration's own change and is harmless. One in `up` or `change` means
    the older image may fail against the current schema, exactly as a legacy
    code rollback to that commit would, and it is the same decision. One release
-   can carry a destructive migration, so no distance is exempt.
+   can include a destructive migration, so no distance is exempt.
 
 4. **Promote the older Freight** as in [Promote](#promote) step 3, and allow
    for the worker drain: up to 35 minutes per worker pod.
@@ -148,12 +148,12 @@ branch, not against the Freight being replaced.
 ## When it fails
 
 Kargo shows the failed step's message on the Promotion. For `legacy-ancestry`
-the message carries the HTTP status and one of two texts.
+the message includes the HTTP status and one of two texts.
 
 | what you see                                                                                                         | cause                                                                                                                                                                                                                                               | what to do                                                                                                                    |
 | -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `legacy-ancestry` failed, HTTP 404 or 422, "no revision annotation, or GitHub does not know the commit"              | The Freight has no `org.opencontainers.image.revision` (built before CI stamped it), or the annotation names a commit GitHub does not have.                                                                                                         | Promote a Freight that carries a revision. `bin/production-freight` lists them.                                               |
-| `legacy-ancestry` failed, HTTP 200, "image commit is N commit(s) ahead of legacy production (ahead)" or "(diverged)" | The image is newer than what legacy production runs.                                                                                                                                                                                                | Wait for the DTP that carries that commit and its release, then promote. Or promote the merge-base Freight the finder names.  |
+| `legacy-ancestry` failed, HTTP 404 or 422, "no revision annotation, or GitHub does not know the commit"              | The Freight has no `org.opencontainers.image.revision` (built before CI stamped it), or the annotation names a commit GitHub does not have.                                                                                                         | Promote a Freight that has a revision. `bin/production-freight` lists them.                                                   |
+| `legacy-ancestry` failed, HTTP 200, "image commit is N commit(s) ahead of legacy production (ahead)" or "(diverged)" | The image is newer than what legacy production runs.                                                                                                                                                                                                | Wait for the DTP that contains that commit and its release, then promote. Or promote the merge-base Freight the finder names. |
 | `legacy-ancestry` still Running for minutes, then failed with a timeout                                              | GitHub returned 5xx, rate-limited the call, timed out or was unreachable. Kargo retries until the step's 5 minute timeout. The step's `errorThreshold` of 20 is what lets request errors retry at all; Kargo's default of 1 stops at the first one. | Retry the promotion. If it repeats, run the compare by hand (below) and check GitHub's status page.                           |
 | `argocd-update` failed, application `codeai-production` not found                                                    | The production deployment is still disabled, so the Argo Application does not exist. Expected only in that state, and how the gate rehearsal's passing case ends. The values file was already updated.                                              | Nothing, while the deployment is disabled. After it is enabled this signature means the Application was deleted; investigate. |
 
@@ -185,7 +185,7 @@ The image promoted to `production` must be built from a commit that legacy
 production already runs: a `staging` commit that is an ancestor of, or equal
 to, the legacy `production` branch HEAD.
 
-Why: the `cdo-rails` image carries no migrations. Schema changes reach the
+Why: the `cdo-rails` image contains no migrations. Schema changes reach the
 production database only through the legacy EC2 deploy (DTP, "deploy to
 production"). A k8s worker running code newer than that schema fails jobs in
 confusing ways. Running behind is safe with respect to that hazard, with the

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Prints what docs/production-promotion.md needs for a promotion: the latest
 # legacy release and whether it covers legacy production HEAD, the staging
-# commit legacy production runs, and the Freight that carries it.
+# commit legacy production runs, and the Freight that contains it.
 # Read-only: gh api and kubectl get.
 #
 # Usage: bin/production-freight
@@ -59,7 +59,7 @@ rows=$(jq -r '
 
 echo "Freight with a revision annotation, newest last ($total Freight in $project):"
 if [ -z "$rows" ]; then
-  echo "  none: no Freight carries org.opencontainers.image.revision yet"
+  echo "  none: no Freight has org.opencontainers.image.revision yet"
 else
   { printf 'ALIAS\tCREATED\tREVISION\tVERIFIED-IN-TEST\tCURRENTLY-IN\n'; echo "$rows"; } \
     | column -t -s "$(printf '\t')" | sed 's/^/  /'
@@ -72,25 +72,25 @@ match=$(jq -r --arg rev "$base" '
   | "\(.alias)\t\(.metadata.name)\t\(if .status.verifiedIn.test then "yes" else "no" end)\t\(if .status.currentlyIn.production then "yes" else "no" end)"' <<<"$freight")
 
 if [ -z "$match" ]; then
-  echo "NONE     no Freight carries $base."
+  echo "NONE     no Freight contains $base."
   echo "         CI did not publish an image for that commit, or the Warehouse missed it."
   echo "         Wait for the next DTP. Promote an older Freight only after bin/rollback-review."
   exit 1
 fi
 IFS="$(printf '\t')" read -r alias name verified current <<<"$match"
 if [ "$current" = yes ]; then
-  echo "DONE     Freight $alias ($name) carries $base and is already in production."
+  echo "DONE     Freight $alias ($name) contains $base and is already in production."
   exit 0
 fi
 if [ "$verified" != yes ]; then
-  echo "WAIT     Freight $alias ($name) carries $base but is not yet verified in test."
+  echo "WAIT     Freight $alias ($name) contains $base but is not yet verified in test."
   exit 1
 fi
 if [ "$wait" = 1 ]; then
-  echo "WAIT     Freight $alias ($name) carries $base, but the legacy deploy is not done (above)."
+  echo "WAIT     Freight $alias ($name) contains $base, but the legacy deploy is not done (above)."
   exit 1
 fi
-echo "PROMOTE  Freight $alias ($name) carries $base and is verified in test."
+echo "PROMOTE  Freight $alias ($name) contains $base and is verified in test."
 if [ "$hotfix" = 1 ]; then
   echo "         Once the hotfix deploy is confirmed finished (CHECK above):"
 fi

@@ -1,13 +1,9 @@
 # Kargo Stage: production (codeai project).
 #
-# Promotion to production is a manual decision, guarded by the `legacy-ancestry`
-# step below. The Freight's image commit must already be contained in the legacy
-# `production` branch, so a k8s worker never runs code ahead of the production
-# database schema: legacy's EC2 deploy is the only path that migrates that
-# database, and this image carries no migrations.
-#
-# When to promote, what each failure message means, rollback and the accepted
-# gaps: docs/production-promotion.md at the repository root.
+# Promotion to production is a manual decision, gated by the `legacy-ancestry`
+# step below. Why the gate exists, when to promote, what each failure message
+# means, rollback and the accepted gaps: docs/production-promotion.md at the
+# repository root.
 apiVersion: kargo.akuity.io/v1alpha1
 kind: Stage
 metadata:
