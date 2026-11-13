@@ -46,6 +46,7 @@ Tasks marked **(user)** need an action only the user takes: git commit and push,
   - the hotfix caveat
   - the accepted gaps: a legacy migration rollback (answered by re-promoting the Freight whose commit matches the rolled-back branch) and hand edits to the values file (which bypass the gate and are not a sanctioned path)
   - the NetworkPolicy allowance a future default-deny policy must keep for the Kargo controller
+- [x] 4.2 Add two read-only helper scripts and restructure the runbook as numbered procedures that call them: `bin/production-freight` (latest release and whether it covers legacy production HEAD, the merge base, the Freight carrying it and its state) and `bin/rollback-review <revision>` (migrations added between the revision and legacy `production`, listed from the git trees API so the compare API's 300-file cap does not apply, destructive operations flagged)
 
 ## 5. Rollout
 

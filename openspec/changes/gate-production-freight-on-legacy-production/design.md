@@ -18,7 +18,7 @@
 
 - Make it impossible, through Kargo, to promote Freight to `production` whose commit is not contained in the legacy `production` branch.
 - Keep the gate fail-closed: no commit annotation, an unknown commit, or an unreachable GitHub all block.
-- Give the person at the Kargo gate a short runbook with the rule for when to promote and the checks the machinery does not do.
+- Give the person at the Kargo gate a short runbook with the rule for when to promote and the checks the machinery does not do. Two read-only scripts, `bin/production-freight` and `bin/rollback-review`, do its lookups so each procedure is one command and a UI action.
 - Land everything before the production deployment is enabled, so the first production promotion is gated.
 
 **Non-Goals:**

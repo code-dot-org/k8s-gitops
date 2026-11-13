@@ -7,6 +7,7 @@ k8s-gitops SHALL contain `docs/production-promotion.md` describing how Freight i
 - **The rule and the gate.** The image's commit is contained in what legacy production runs, and the `legacy-ancestry` step enforces it.
 - **When to promote.** Only after the GitHub release for the DTP that carried the commit exists. The `production` branch moves one to two minutes before that deploy's `db:migrate` finishes, and the gate reads the branch.
 - **Checks before promoting.** The Freight is verified in `test`; the release exists.
+- **Helper scripts.** Two read-only scripts in `bin/` do the lookups: `production-freight` prints the latest release, whether it covers legacy production HEAD, the merge base and the Freight carrying it; `rollback-review <revision>` lists the migrations added between a revision and legacy `production` and flags destructive operations. The procedures SHALL call them, and SHALL still state what each check means.
 - **Checks after promoting.** Production pods are `Running`, plus whatever application-level health signal exists at the time, such as a Honeybadger test exception raised from a production worker or a canary job.
 - **Rollout and rollback timing**, given the worker's 2100-second termination grace period.
 - **The rollback procedure.** Re-promote an earlier Freight, which passes the gate. Before every rollback, including to the previous Freight, list the migrations between the older Freight's commit and the revision legacy production has deployed, and review them for `drop_table`, `remove_column` and renames. The Freight being replaced is not the upper bound, since the shared database can be ahead of it. The gate certifies missing prerequisites only, not that older code fits a newer schema.
@@ -28,7 +29,7 @@ k8s-gitops SHALL contain `docs/production-promotion.md` describing how Freight i
 #### Scenario: Rollback
 
 - **WHEN** a promoted Freight must be rolled back
-- **THEN** the runbook's procedure reviews the migrations between the older Freight's commit and the legacy `production` branch, re-promotes the earlier Freight through Kargo, and states how long the worker pod may take to drain
+- **THEN** the runbook's procedure reviews the migrations between the older Freight's commit and the legacy `production` branch with `bin/rollback-review`, re-promotes the earlier Freight through Kargo, and states how long the worker pod may take to drain
 
 #### Scenario: Legacy rolled a migration back
 

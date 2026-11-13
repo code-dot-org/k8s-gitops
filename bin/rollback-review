@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# Before a rollback per docs/production-promotion.md: lists the migrations the
+# production database has that an older cdo-rails image does not, and flags
+# destructive operations in them. The upper bound is the legacy `production`
+# branch, because the shared database is migrated to what legacy has deployed,
+# which can be ahead of the Freight being replaced.
+# Read-only: gh api only. Reads the migration directory's git tree at each
+# end, so the range is not subject to the compare API's 300-file cap.
+#
+# Usage: bin/rollback-review <revision>
+#   <revision>  org.opencontainers.image.revision of the Freight to roll back
+#               to (bin/production-freight lists them)
+# Exit: 0 no destructive operation found
+#       1 at least one found; review it before promoting
+#       2 usage, missing tool, or <revision> not contained in production
+set -euo pipefail
+
+repo=code-dot-org/code-dot-org
+dir=dashboard/db/migrate
+pattern='drop_table|remove_columns?|rename_(table|column)'
+
+old=${1:-}
+[ -n "$old" ] || { echo "usage: $(basename "$0") <revision>" >&2; exit 2; }
+command -v gh >/dev/null 2>&1 || { echo "gh is required" >&2; exit 2; }
+
+compare=$(gh api "repos/$repo/compare/$old...production" --jq '"\(.status) \(.ahead_by)"')
+status=${compare%% *}
+case $status in
+  identical) echo "$old is legacy production HEAD. Nothing to review."; exit 0 ;;
+  ahead) echo "Legacy production is ${compare#* } commits ahead of $old." ;;
+  *) echo "$old is not contained in legacy production (compare status: $status). The gate would block it." >&2; exit 2 ;;
+esac
+
+# Migration files at a ref, read from the directory's tree object.
+migrations() {
+  local tree
+  tree=$(gh api "repos/$repo/contents/$(dirname "$dir")?ref=$1" \
+    --jq ".[] | select(.name == \"$(basename "$dir")\") | .sha")
+  gh api "repos/$repo/git/trees/$tree" \
+    --jq 'if .truncated then error("tree listing truncated") else .tree[] | select(.type == "blob") | .path end' | sort
+}
+
+old_list=$(migrations "$old")
+new_list=$(migrations production)
+added=$(comm -13 <(echo "$old_list") <(echo "$new_list"))
+removed=$(comm -23 <(echo "$old_list") <(echo "$new_list"))
+
+if [ -n "$removed" ]; then
+  echo "Migrations present at $old but absent on production (unusual, find out why):"
+  sed 's/^/  /' <<<"$removed"
+fi
+if [ -z "$added" ]; then
+  echo "No migrations were added between $old and production. Nothing to review."
+  exit 0
+fi
+
+echo "Migrations added between $old and production:"
+found=0
+for f in $added; do
+  hits=$(gh api -H 'Accept: application/vnd.github.raw+json' "repos/$repo/contents/$dir/$f?ref=production" \
+    | grep -nE "$pattern" || true)
+  if [ -n "$hits" ]; then
+    found=1
+    echo "  $f   <-- destructive operation"
+    sed 's/^/        /' <<<"$hits"
+    echo "        https://github.com/$repo/blob/production/$dir/$f"
+  else
+    echo "  $f"
+  fi
+done
+echo
+if [ "$found" = 1 ]; then
+  echo "REVIEW   read each flagged line in context. A drop_table or remove_column inside a"
+  echo "         down method reverses that migration's own change and is not destructive."
+  echo "         Anything in up or change is: the older image may fail against the schema."
+  exit 1
+fi
+echo "OK       no destructive operation found. Promote the older Freight from the Kargo UI."

@@ -1,3 +1,9 @@
+# Kargo Stage: production (codeai project).
+#
+# Promotion to production is a manual decision, gated by the `legacy-ancestry`
+# step below. Why the gate exists, when to promote, what each failure message
+# means, rollback and the accepted gaps: docs/production-promotion.md at the
+# repository root.
 apiVersion: kargo.akuity.io/v1alpha1
 kind: Stage
 metadata:
@@ -17,6 +23,39 @@ spec:
         - name: gitopsRepo
           value: https://github.com/code-dot-org/k8s-gitops.git
       steps:
+        # Gate: legacy-ancestry. Asks the GitHub compare API whether the image
+        # commit (the index annotation CI stamps on every cdo-rails build) is
+        # contained in the legacy `production` branch. Runs before anything is
+        # cloned or written, and fails closed:
+        #   404 or 422             no revision annotation, or GitHub does not know the commit
+        #   200 with ahead_by > 0  the image is ahead of legacy production
+        #   5xx or rate limited    re-polled every 30s until the 5 minute timeout, then fails
+        #   timeout, no connection an error, retried with backoff until the 5 minute timeout
+        # Request errors count against retry.errorThreshold, not the timeout, and
+        # Kargo's default threshold of 1 stops at the first one. 20 is more attempts
+        # than fit in 5 minutes, so the timeout governs in every case.
+        # Removing this step is an incident action; see docs/production-promotion.md.
+        - uses: http
+          as: legacy-ancestry
+          retry:
+            timeout: 5m
+            errorThreshold: 20
+          config:
+            method: GET
+            url: https://api.github.com/repos/code-dot-org/code-dot-org/compare/production...${{ imageFrom("ghcr.io/code-dot-org/cdo-rails").Annotations["org.opencontainers.image.revision"] }}
+            headers:
+              - name: Accept
+                value: application/vnd.github+json
+            timeout: 30s
+            successExpression: response.status == 200 && response.body.ahead_by == 0
+            failureExpression: response.status == 404 || response.status == 422 || (response.status == 200 && response.body.ahead_by > 0)
+            errorExpression: >-
+              response.status == 200
+              ? ("image commit is " + string(response.body.ahead_by) + " commit(s) ahead of legacy production (" + response.body.status + ")")
+              : ("no revision annotation, or GitHub does not know the commit (HTTP " + string(response.status) + ")")
+            outputs:
+              - name: status
+                fromExpression: response.body.status
         - uses: git-clone
           config:
             repoURL: ${{ vars.gitopsRepo }}
