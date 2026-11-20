@@ -16,6 +16,7 @@ Observed on the staging worker, read-only:
 - The pod runs as service account `cdo-app` with an IRSA role, and the app IAM policy allows `cloudwatch:PutMetricData`.
 - `Rails.logger` is `Syslog::Logger` in production and staging. In a pod its lines reach `kubectl logs` prefixed `dashboard[1]:`. With no syslog daemon in the container, the syslog client falls back to the console, which exists because the chart sets `tty: true`.
 - An ActiveJob lifecycle line from a real job has not been observed; the pod had only polled.
+- Sentry is running in the worker. `enable_sentry` is true for staging and production, `dashboard_sentry_dsn` is synced into the pod, and the boot log shows Sentry initialising. `sentry-rails` reports any exception that escapes a job's `perform_now`, with the job class and ActiveJob ID attached.
 
 Constraints:
 
@@ -38,21 +39,22 @@ Constraints:
 - Shipping container logs anywhere.
 - Alert rules on the new metric, and alert routing.
 - Moving `delayed_job`'s own logger, which writes to a file in the container, to stdout.
-- Adding `Platform` to existing metrics.
+- Adding `Platform` to existing metrics. Decision 2 describes the follow-up.
+- Giving worker errors their own Sentry project. They go to the Dashboard project, with web errors. `activejobs_sentry_dsn` is defined and synced, but nothing reads it yet.
 - Any change to `apps/monitoring` or the Alloy collector.
 
 ## Decisions
 
 ### 1. A counter first, logs later
 
-The first question about a new worker is "is it working". A counter gives evidence for that in one panel and can later drive an alert. Logs answer "why did it fail", which Honeybadger already covers for exceptions.
+What is missing is evidence that the worker completes jobs. A counter gives that in one panel and can later drive an alert. Logs help explain why a job failed, and for exceptions Honeybadger and Sentry already do that.
 
 Log shipping also costs more than it looks. Alloy has no `otelcol.exporter.awscloudwatchlogs`, and an upgrade would not add one:
 
-| Alloy | Helm chart | CloudWatch Logs exporter |
-|---|---|---|
-| v1.19.2 (pinned) | 1.12.1 | no |
-| v1.22.0 (latest at the time of writing) | 1.16.0 | no |
+| Alloy                                   | Helm chart | CloudWatch Logs exporter |
+| --------------------------------------- | ---------- | ------------------------ |
+| v1.19.2 (pinned)                        | 1.12.1     | no                       |
+| v1.22.0 (latest at the time of writing) | 1.16.0     | no                       |
 
 - The upstream request, [grafana/alloy#627](https://github.com/grafana/alloy/issues/627), has been open since April 2024.
 - Alloy's CloudWatch components all read from AWS: `otelcol.receiver.awscloudwatch` pulls logs out of CloudWatch, and `prometheus.exporter.cloudwatch` pulls metrics.
@@ -61,7 +63,10 @@ The workable routes each bring new infrastructure:
 
 - A Fluent Bit DaemonSet in a new app.
 - Alloy `loki.source.kubernetes` to `otelcol.exporter.otlphttp` with `otelcol.auth.sigv4`, against the CloudWatch Logs OTLP endpoint. Every component is already in v1.19.2, so this needs no upgrade either, and users on the upstream issue report it working with IRSA. It needs log groups and streams created ahead of time, and `provider-aws-cloudwatchlogs`, which is not installed.
-- The CloudWatch Observability EKS add-on, through tofu.
+- The CloudWatch Observability EKS add-on (`amazon-cloudwatch-observability`, version 6.2.0 or later, with `otelContainerInsights.enabled`), installed through tofu. AWS's [quickstart](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/container-insights-eks-otel-quickstart.html) says it sends infrastructure metrics and container logs to CloudWatch. It has the least to build, so it is the first candidate. Three things to settle before choosing it, none of which the quickstart answers:
+  - whether it runs on EKS Auto Mode, where no DaemonSets run today
+  - whether logs can be enabled without the Container Insights metrics, which would duplicate what Alloy already collects
+  - what it costs
 
 Choosing between them is easier once we have seen what production worker logs look like and how often we reach for them.
 
@@ -71,7 +76,19 @@ Choosing between them is easier once we have seen what production worker logs lo
 
 CloudWatch treats each distinct dimension set as a separate metric. Adding `Platform` to `common_dimensions` would move `WaitTime`, `ExecutionTime` and the per-job gauges to new series. Every existing panel and the KEDA trigger would then read empty series. So the new metric builds its own dimension list, and `common_dimensions` is not touched.
 
-*Alternative considered:* add `Outcome` to `ExecutionTime` and count its samples. Rejected: same renaming problem, and `after_perform` does not run on failure.
+_Alternatives considered:_
+
+- Add `Outcome` to `ExecutionTime` and count its samples. Rejected: same renaming problem, and `after_perform` does not run on failure.
+- Build it from what exists: count `ExecutionTime` samples for successes, and read `FailedJobCount` for failures with the archive cron turned off. Rejected:
+  - `ExecutionTime` has no `Platform`, so it cannot separate k8s from EC2 without the rename above.
+  - `FailedJobCount` is a count of failed rows in the shared table, pushed by whichever process enqueues a job and by the EC2 cron. It says how many failed rows exist, not which platform failed them.
+  - It misses failures that leave no failed row: a job that handles its own exception with `rescue_from`, and an attempt that `retry_on` will run again.
+  - Without the archive, failed rows stay in `delayed_jobs` and the gauge only rises.
+
+**Follow-up: `Platform` on the timing metrics.** `WaitTime`, `ExecutionTime` and `TotalTime` are pushed by the worker that ran the job, so `Platform` means something on them, and `CDO.compute_platform` is already there to supply it.
+
+- The code change is one line. The cost is the rename: two Grafana dashboards and one CloudFormation dashboard read the current series. Both dimension sets have to be emitted for a while, or the dashboards moved in step. That is its own change.
+- The queue gauges should not get `Platform`. They are computed from the shared table by the process that enqueues, so the value would be the reporter's platform. Each gauge would split into two series that both describe the whole queue, and the KEDA trigger reads one of them.
 
 ### 3. `around_perform`, with the outcome decided in `ensure`
 
@@ -104,7 +121,7 @@ end
 - **Everything else lives in the helper.** The worker check, the push and the error report all sit inside one guarded method, so none of them can raise into the `ensure`.
 - **Why the report is guarded too.** `Observability::Errors.report` has no guard of its own. Raising from an `ensure` would fail a successful job or replace a failed job's real exception. The other reporters in this file share that exposure; this change does not touch them.
 
-*Alternative considered:* a `Delayed::Plugin` lifecycle hook. Rejected: the dimensions and helpers already live in the concern.
+_Alternative considered:_ a `Delayed::Plugin` lifecycle hook. Rejected: the dimensions and helpers already live in the concern.
 
 ### 4. Counted in worker processes only
 
@@ -123,7 +140,7 @@ The callback sees whether the chain raised. It cannot see whether `perform` itse
 
 That is the right reading for this metric: the worker took the job off the queue and finished it without error. The spec, the panel description and the tests say so in those words.
 
-*Alternative considered:* a third outcome, `skipped`. Rejected for now: detecting it generically means intercepting `perform` on every job subclass.
+_Alternative considered:_ a third outcome, `skipped`. Rejected for now: detecting it generically means intercepting `perform` on every job subclass.
 
 ### 6. Platform comes from CDO config, set by the chart for every pod
 
@@ -140,7 +157,7 @@ Consequences worth knowing:
 - The pod template has no checksum for this ConfigMap, so pods pick the value up at their next rollout. The image change that carries the metric code causes one.
 - `ec2` is also the value on a developer laptop or in CI. Nothing is emitted there unless a worker is started, and those have other `Environment` values.
 
-*Alternatives considered:*
+_Alternatives considered:_
 
 - An environment variable in `activeJobWorker.extraEnv`. Works, but ties a chart-wide fact to one component.
 - Detecting `KUBERNETES_SERVICE_HOST`. No chart change at all, but implicit, harder to test, and it cannot express a third platform.
@@ -170,36 +187,50 @@ No alert rule. Grafana's alert routing is not in code (the only contact point wa
 
 The follow-up is a scheduled canary job with an alert on a missed deadline. It must run on a queue only the k8s worker reads: on the shared queue an EC2 worker can take it, and its completion would say nothing about k8s.
 
-### 9. The smoke test uses `SampleJob`
+### 9. The smoke test uses `AutoscalingTestJob`
 
-`SampleJob` exists for exercising the queue by hand. It has no side effects beyond `puts` and a short sleep. It gains one keyword argument:
+`AutoscalingTestJob` is the existing test job for the k8s worker. It runs on the low-priority queue, sleeps for a requested number of seconds and has no other side effects. It logs a `started` and a `completed` event to stdout, each carrying the ActiveJob ID and the hostname of the worker that ran it. It gains one keyword argument:
 
 ```ruby
-def perform(*message, fail: false)
-  raise 'SampleJob failure requested' if fail
+def perform(run_id:, duration_seconds:, fail: false)
   ...
+  log_event('started', context)
+  sleep duration_seconds
+  raise 'AutoscalingTestJob failure requested' if fail
+  log_event('completed', context)
 end
 ```
 
-- Success: `SampleJob.set(queue: CDO.active_job_queues[:low_priority]).perform_later('smoke')`
-- Failure: the same with `fail: true`
+- Success: `AutoscalingTestJob.perform_later(run_id: 'smoke-success', duration_seconds: 0)`
+- Failure: `AutoscalingTestJob.perform_later(run_id: 'smoke-failure', duration_seconds: 0, fail: true)`
 
-The queue gives the job priority 10, which the k8s worker accepts. The raise happens inside `perform`, so it is inside the instrumentation. A failed `SampleJob` leaves one failed row and one Honeybadger notice, both expected.
+Why this shape:
+
+- The job's queue gives it priority 10, which the k8s worker accepts, so no `.set(queue:)` is needed.
+- The raise is inside `perform`, so it is inside the instrumentation.
+- The raise comes after the `started` event, so a failing job still records which worker took it.
+- A failed job leaves one failed row, one Honeybadger notice and one Sentry event, all expected.
+- There is still one test job class for the worker, with priority (`.set(priority:)`), duration and outcome all selectable.
 
 EC2 workers read the same queue, so a smoke job may be taken by EC2. The test repeats a bounded number of times and records which worker took each job.
 
-*Alternative considered:* any existing job given arguments that make it fail. Rejected: the failure point is not controlled, and a real job can have side effects.
+_Alternatives considered:_
 
-### 10. Logs: verify, do not change
+- Any existing job given arguments that make it fail. Rejected: the failure point is not controlled, and a real job can have side effects.
+
+### 10. Logs and error reports: verify, do not change
 
 `Rails.logger` output already reaches `kubectl logs` on the worker. ActiveJob's log subscriber writes `Performing`, `Performed` and `Error performing` through `Rails.logger` at info level, and production logs at info. So job lifecycle lines should already be visible. The smoke test proves it with the same two jobs; it is a check, not a requirement of its own.
 
-Two limits are stated so they are not rediscovered:
+Error reports get the same treatment. Sentry already runs in the worker and reports exceptions that escape a job (see Context), so nothing is built. The smoke test confirms that the failing job's event arrives in the Dashboard Sentry project, found by its ActiveJob ID.
 
-- This depends on `tty: true`. The chart comment on that line is extended to say so, since the flag otherwise looks like something to tidy away.
+Three limits are stated so they are not rediscovered:
+
+- The log lines depend on `tty: true`. The chart comment on that line is extended to say so, since the flag otherwise looks like something to tidy away.
 - `delayed_job`'s own lines still go to `log/delayed_job.log` inside the container. Moving them is separate work.
+- An exception a job handles itself with `rescue_from` does not escape the job, so `sentry-rails` does not see it. It reaches Sentry only if the handler reports it, as `ProjectStorage::AnonymousGeoBackfillingJob`'s does.
 
-If the check fails, that is a finding to report, not something this change fixes.
+If either check fails, that is a finding to report, not something this change fixes.
 
 ## Risks / Trade-offs
 
@@ -214,7 +245,7 @@ If the check fails, that is a finding to report, not something this change fixes
 ## Migration Plan
 
 1. Merge the code-dot-org PR to `staging`. Argo applies the chart; Kargo promotes the image; the staging worker rolls.
-2. Run the smoke test on staging: `PerformCount` samples for both outcomes with `Platform=k8s`, existing series intact, KEDA still reading, job lifecycle lines in `kubectl logs`.
+2. Run the smoke test on staging: `PerformCount` samples for both outcomes with `Platform=k8s`, existing series intact, KEDA still reading, job lifecycle lines in `kubectl logs`, the failing job's event in Sentry.
 3. Build and apply the panel.
 4. The normal DTP carries the change to legacy production. `Platform=ec2` series appear there.
 5. The first Kargo promotion to production k8s that includes the change makes `Platform=k8s` appear for `Environment=production`.
@@ -225,4 +256,5 @@ Rollback is a revert of the code-dot-org PR. The series stop receiving data and 
 
 - **Do ActiveJob lifecycle lines reach `kubectl logs`?** Expected yes; the smoke test answers it.
 - **Does a staging pod's `PutMetricData` succeed end to end?** IAM and IRSA look right; the smoke test answers it.
+- **Does a failing job on the k8s worker produce a Sentry event?** Expected yes: Sentry initialises in the staging worker. The smoke test answers it.
 - **Is `ec2` the right name for "not the chart"?** It is accurate for every environment whose series anyone reads. `legacy` is the alternative if the name bothers anyone in review.

@@ -3,11 +3,11 @@
 Nothing tells us whether a k8s ActiveJob worker is finishing jobs:
 
 - **No job outcome is counted.** `ActiveJobMetrics` emits `ExecutionTime` from `after_perform`, which runs only on success. Failures show only as the `FailedJobCount` gauge, which the hourly archive cron resets.
-- **k8s and EC2 are indistinguishable.** Workers on both push the same `Environment` value and drain the same `delayed_jobs` table. No series attributes a completed job to a k8s pod.
+- **k8s and EC2 are indistinguishable.** Workers on both push the same `Environment` value and drain the same `delayed_jobs` table. No series attributes a completed job to a platform.
 
 Shipping container logs to CloudWatch Logs is the other way to get visibility into the worker. It is the wrong first step:
 
-- Logs answer "why did this job fail", not "are jobs succeeding". The second question comes first.
+- It answers a different question. Logs help explain why a job failed; they do not show whether jobs are completing. Exceptions from failed jobs are already reported to Honeybadger and Sentry.
 - It needs new infrastructure. The cluster's collector, Grafana Alloy, has no CloudWatch Logs exporter, so shipping means a new DaemonSet, a new Crossplane provider or an EKS add-on.
   - Upgrading Alloy does not change this. The exporter is missing from the pinned v1.19.2 and from the latest release at the time of writing, v1.22.0. The upstream request for it has been open since April 2024 ([grafana/alloy#627](https://github.com/grafana/alloy/issues/627)).
 
@@ -21,11 +21,11 @@ What the signal is: evidence that worker processes on a platform recently ran jo
   - `failure` means the run raised. `success` means it finished without raising, which includes a run the job's own callbacks chose to skip.
   - Jobs run outside a worker process (a console, a rake task) are not counted.
 - **Platform identity (code-dot-org).** A new CDO config key, `compute_platform`, defaults to `ec2`. The codeai Helm chart sets it to `k8s` for every pod it renders.
-- **Smoke-test job (code-dot-org).** `SampleJob` gains a `fail:` argument that makes it raise on request, so a harmless success and a controlled failure can each be enqueued with one line.
+- **Smoke-test job (code-dot-org).** `AutoscalingTestJob`, the existing test job for the worker, gains a `fail:` argument that makes it raise on request, so a harmless success and a controlled failure can each be enqueued with one line. It stays the one test job class, with priority, duration and outcome all selectable.
 - **One dashboard panel (infrastructure).** `activejob-overview` gains "Jobs performed by platform": `PerformCount` per minute, split by `Platform` and `Outcome`.
-- **Staging smoke test.** One succeeding and one failing `SampleJob` on the staging k8s worker confirm the metric end to end. The same run checks that ActiveJob's `Performing`, `Performed` and `Error performing` lines reach `kubectl logs`. No logging code changes; the chart comment on `tty: true` is extended to say that those lines depend on it.
+- **Staging smoke test.** One succeeding and one failing `AutoscalingTestJob` on the staging k8s worker confirm the metric end to end. The same run checks that ActiveJob's `Performing`, `Performed` and `Error performing` lines reach `kubectl logs`, and that the failure arrives in Sentry. No logging or error-reporting code changes; the chart comment on `tty: true` is extended to say that those log lines depend on it.
 - **Unchanged on purpose.**
-  - Existing ActiveJob metrics keep their names and dimension sets. `Platform` is not added to them. CloudWatch matches dimension sets exactly, so adding it would rename every existing series and break `activejob-overview`, the GenAI latency panels and the KEDA trigger on `PendingJobCount`.
+  - Existing ActiveJob metrics keep their names and dimension sets. `Platform` is not added to them in this change. CloudWatch matches dimension sets exactly, so adding it would rename every existing series and break `activejob-overview`, the GenAI latency panels and the KEDA trigger on `PendingJobCount`.
   - No alert rule, no contact-point routing, no log shipper, no `delayed_job` logger change, no change to `apps/monitoring`.
 
 ## Accepted risks
@@ -37,7 +37,7 @@ What the signal is: evidence that worker processes on a platform recently ran jo
   - A failure before the perform callbacks run (argument deserialization, unknown job class) records no datum. `FailedJobCount` and Honeybadger do see these.
 - **`success` includes skips.** `ProjectStorage::AnonymousGeoBackfillingJob` aborts when a DCDO flag is set and skips when it cannot take its advisory lock. Both count as `success`.
 - **Counts are per attempt.** A job retried by `retry_on` counts one failure per failed attempt.
-- **Worker logs die with the pod.** Every rollout replaces the worker pod and its log. Until logs are shipped, Honeybadger is the durable record of a failure.
+- **Worker logs die with the pod.** Every rollout replaces the worker pod and its log. Until logs are shipped, Honeybadger and Sentry are the durable record of a failure.
 - **Legacy production is touched.** Every EC2 job gains one buffered metric datum and one callback. An error in the metric path is contained; it cannot fail a job.
 - **Cost.** At most 72 new series per environment (about 18 job classes, two outcomes, two platforms), about $22 a month per environment if every one is active. Fewer in practice: a failure series exists only for a class that has failed, and the k8s worker takes low-priority jobs only.
 
@@ -56,7 +56,7 @@ None. `openspec/specs/` holds no existing capabilities.
 
 - **code-dot-org**, one PR to `staging`:
   - `dashboard/app/jobs/concerns/active_job_metrics.rb` and its tests
-  - `dashboard/app/jobs/sample_job.rb`
+  - `dashboard/app/jobs/autoscaling_test_job.rb`, its test, and its usage notes in `k8s/README.md`
   - `config.yml.erb` (new key `compute_platform`)
   - `k8s/helm/templates/locals.yml.yaml`, a comment in `k8s/helm/templates/dashboard/_dashboard.yaml`, and `k8s/helm/Chart.yaml` (version bump)
 - **infrastructure**: `observability/dashboards/grafana/src/dashboards/backend/rails/active-job/overview/index.ts`, then a build and a tofu apply.

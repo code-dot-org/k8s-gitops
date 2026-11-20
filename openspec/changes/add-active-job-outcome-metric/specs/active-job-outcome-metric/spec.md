@@ -113,27 +113,27 @@ The chart's `locals.yml` ConfigMap SHALL set `compute_platform` to `k8s`, so tha
 
 ### Requirement: A harmless job can be made to succeed or fail on request
 
-`SampleJob` SHALL accept a `fail:` keyword argument, false by default. When it is true, `perform` SHALL raise before doing anything else. With it false or absent, `SampleJob` SHALL behave as it did before this change.
+`AutoscalingTestJob` SHALL accept a `fail:` keyword argument, false by default. When it is true, `perform` SHALL log its `started` event, sleep for the requested duration, and then raise instead of logging `completed`. With it false or absent, `AutoscalingTestJob` SHALL behave as it did before this change.
 
 #### Scenario: A controlled failure
 
-- **WHEN** `SampleJob` is enqueued with `fail: true` and a worker runs it
-- **THEN** it raises inside `perform`, and one `PerformCount` datum is pushed with `JobName=SampleJob` and `Outcome=failure`
+- **WHEN** `AutoscalingTestJob` is enqueued with `fail: true` and a worker runs it
+- **THEN** it logs `started` with the worker's hostname, raises inside `perform` without logging `completed`, and one `PerformCount` datum is pushed with `JobName=AutoscalingTestJob` and `Outcome=failure`
 
 #### Scenario: A harmless success
 
-- **WHEN** `SampleJob` is enqueued without `fail:` and a worker runs it
-- **THEN** it completes, and one `PerformCount` datum is pushed with `JobName=SampleJob` and `Outcome=success`
+- **WHEN** `AutoscalingTestJob` is enqueued without `fail:` and a worker runs it
+- **THEN** it completes, and one `PerformCount` datum is pushed with `JobName=AutoscalingTestJob` and `Outcome=success`
 
 ### Requirement: The metric is verified on staging before production relies on it
 
-Before the change is promoted to production k8s, one succeeding and one failing `SampleJob` SHALL be run by the staging k8s worker. For each, the record SHALL include the ActiveJob ID, the enqueue time, and the evidence that a k8s pod ran it (`locked_by`, or the pod's log lines for that job ID).
+Before the change is promoted to production k8s, one succeeding and one failing `AutoscalingTestJob` SHALL be run by the staging k8s worker. For each, the record SHALL include the ActiveJob ID, the enqueue time, and the evidence that a k8s pod ran it (the job's `started` event in the pod's log, which carries the job ID and hostname, or `locked_by`).
 
-CloudWatch SHALL then return a datapoint for each when `PerformCount` statistics are requested with all four dimensions: `Environment=staging`, `JobName=SampleJob`, `Platform=k8s`, and the outcome. Metric discovery (`list-metrics`) SHALL NOT be the pass condition, because CloudWatch can take up to 15 minutes to list a new metric.
+CloudWatch SHALL then return a datapoint for each when `PerformCount` statistics are requested with all four dimensions: `Environment=staging`, `JobName=AutoscalingTestJob`, `Platform=k8s`, and the outcome. Metric discovery (`list-metrics`) SHALL NOT be the pass condition, because CloudWatch can take up to 15 minutes to list a new metric.
 
 #### Scenario: The smoke test passes
 
-- **WHEN** the staging k8s worker has run one succeeding and one failing `SampleJob`
+- **WHEN** the staging k8s worker has run one succeeding and one failing `AutoscalingTestJob`
 - **THEN** within five minutes a statistics query with all four dimensions returns a datapoint for `Outcome=success` and one for `Outcome=failure`
 
 #### Scenario: An EC2 worker takes the job

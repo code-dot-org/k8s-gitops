@@ -36,10 +36,10 @@ Before the first edit in `code-dot-org` and in `infrastructure`, ask the user wh
   - report failure: the push raises and `Observability::Errors.report` raises; a successful job still completes, and a failing job still raises its own exception
   - `common_dimensions` still returns exactly `Environment` and `JobName`
 - [ ] 1.5 Run `dashboard/test/jobs/` and the other test files that set expectations on `Cdo::Metrics.push` (`grep -rl "Cdo::Metrics.expects(:push)" dashboard/test`). They run outside a worker context and should see no new push; if one fails, find out why before changing it
-- [ ] 1.6 In `dashboard/app/jobs/sample_job.rb`, add a `fail: false` keyword argument to `perform` and raise `'SampleJob failure requested'` as its first line when it is true. Extend the file's header comment with the two smoke-test enqueue lines:
-  - `SampleJob.set(queue: CDO.active_job_queues[:low_priority]).perform_later('smoke')`
-  - the same with `fail: true`
-- [ ] 1.7 Add a small test for `SampleJob`: it completes by default and raises with `fail: true`. Stub `sleep` so the test is fast
+- [ ] 1.6 In `dashboard/app/jobs/autoscaling_test_job.rb`, add a `fail: false` keyword argument to `perform`. When it is true, raise `'AutoscalingTestJob failure requested'` after the sleep, in place of logging `completed`. Leave the argument validation and the `started` event as they are. In `k8s/README.md`, under "Generate test work", document `fail: true` and add the two smoke-test enqueue lines:
+  - `AutoscalingTestJob.perform_later(run_id: 'smoke-success', duration_seconds: 0)`
+  - `AutoscalingTestJob.perform_later(run_id: 'smoke-failure', duration_seconds: 0, fail: true)`
+- [ ] 1.7 Extend `dashboard/test/jobs/autoscaling_test_job_test.rb`: with `fail: true` the job sleeps, raises, and logs `started` only. The existing cases cover the default and must still pass unchanged
 - [ ] 1.8 Run rubocop on the changed Ruby files and fix what it reports
 
 ## 2. code-dot-org: chart
@@ -58,9 +58,9 @@ Before the first edit in `code-dot-org` and in `infrastructure`, ask the user wh
 - [ ] 3.1 **(user)** Open the PR to `staging`, get review, merge
 - [ ] 3.2 After Kargo has promoted an image containing the merge commit to staging, confirm read-only that the staging worker pod runs that image and has `CDO_compute_platform=k8s` in its resolved environment (`kubectl get pod -o yaml` plus the ConfigMap; no `exec`)
 - [ ] 3.3 **(user)** On staging, enqueue the two smoke jobs from task 1.6, one succeeding and one with `fail: true`. Record each job's ActiveJob ID and enqueue time
-- [ ] 3.4 For each job, record which worker ran it and the evidence: the `locked_by` value while it ran, or the worker pod's log lines for that job ID. If an EC2 worker took it, ask the user to enqueue it again, at most five times per case. If the k8s worker has taken none after that, stop and report
+- [ ] 3.4 For each job, record which worker ran it and the evidence: the job's `started` event in the worker pod's log (`kubectl logs`, filter on `namespace=autoscaling_test_job` and the run ID), which carries the job ID and hostname, or the `locked_by` value while it ran. If an EC2 worker took it, ask the user to enqueue it again, at most five times per case. If the k8s worker has taken none after that, stop and report
 - [ ] 3.5 Verify the metric with `AWS_PROFILE=cdo aws cloudwatch get-metric-statistics` on namespace `code-dot-org/ActiveJob`, metric `PerformCount`, statistic `Sum`, period 60, over a window around the job, with all four dimensions:
-  - `Environment=staging`, `JobName=SampleJob`, `Platform=k8s`, `Outcome=success` returns a datapoint
+  - `Environment=staging`, `JobName=AutoscalingTestJob`, `Platform=k8s`, `Outcome=success` returns a datapoint
   - the same with `Outcome=failure` returns a datapoint
   - do not use `list-metrics` as the pass condition; a new metric can take up to 15 minutes to be listed
   - if a datapoint is missing after five minutes, stop and investigate in this order before reporting: which worker ran the job, `compute_platform` in the pod, the query's dimensions, the buffer flush (up to 60 seconds), then `PutMetricData` errors in the pod log and the pod's IAM policy
@@ -71,7 +71,8 @@ Before the first edit in `code-dot-org` and in `infrastructure`, ask the user wh
   - the succeeding job shows `Performing` and `Performed` lines with its job ID
   - the failing job shows an `Error performing` line with the exception
   - if either is missing, record what was seen under Open Questions in `design.md` and report it; do not change any logger
-- [ ] 3.8 Note the expected leftovers from the failing smoke job for the user: one failed `delayed_jobs` row and one Honeybadger notice on staging
+- [ ] 3.8 **(user)** In the Dashboard Sentry project, find the failing job's event by its ActiveJob ID (the `job_id` tag). This check does not block the rollout: if the event is missing, record what was seen under Open Questions in `design.md` and report it; do not change any Sentry configuration
+- [ ] 3.9 Note the expected leftovers from the failing smoke job for the user: one failed `delayed_jobs` row, one Honeybadger notice and one Sentry event on staging
 
 ## 4. infrastructure: dashboard panel
 
