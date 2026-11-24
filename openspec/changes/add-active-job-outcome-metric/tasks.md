@@ -12,18 +12,18 @@ Before the first edit in `code-dot-org` and in `infrastructure`, ask the user wh
 
 ## 1. code-dot-org: outcome counter
 
-- [ ] 1.1 Add `compute_platform: ec2` to `config.yml.erb`, next to the other ActiveJob keys, with a comment: which platform this process runs on, `ec2` by default, set to `k8s` by the Helm chart, used as the `Platform` metric dimension
-- [ ] 1.2 In `dashboard/app/jobs/concerns/active_job_metrics.rb`, register `around_perform :report_outcome` in the `included` block and add the method:
+- [x] 1.1 Add `compute_platform: ec2` to `config.yml.erb`, next to the other ActiveJob keys, with a comment: which platform this process runs on, `ec2` by default, set to `k8s` by the Helm chart, used as the `Platform` metric dimension
+- [x] 1.2 In `dashboard/app/jobs/concerns/active_job_metrics.rb`, register `around_perform :report_outcome` in the `included` block and add the method:
   - set a local `succeeded = false`, `yield`, set it `true`, and call the push helper from `ensure`
   - no `rescue` around the `yield`, and nothing else in the method, so the original exception propagates untouched
   - a comment saying `success` means the attempt finished without raising, which includes attempts a job's own callbacks abort or skip
-- [ ] 1.3 Add the push helper used by 1.2, one guarded method holding everything that could raise:
+- [x] 1.3 Add the push helper used by 1.2, one guarded method holding everything that could raise:
   - return early unless `CDO.running_active_job_worker?`
   - one `Cdo::Metrics.push(METRICS_NAMESPACE, [...])` with `metric_name: 'PerformCount'`, `value: 1`, `unit: 'Count'`, `timestamp: Time.now`
   - dimensions built here, not from `common_dimensions`: `Environment` (`CDO.rack_env`), `JobName` (`self.class.name`), `Outcome`, `Platform` (`CDO.compute_platform`)
   - `rescue => exception` calling `Observability::Errors.report(exception, error_message: 'Error reporting ActiveJob metrics')`, with that call itself wrapped in a `rescue` that swallows, since this runs from an `ensure`
   - a comment saying why `Platform` is not in `common_dimensions`: CloudWatch matches dimension sets exactly, so adding it would rename every existing series
-- [ ] 1.4 Extend `dashboard/test/jobs/application_job_test.rb`, using the file's existing `includes_metrics` and `includes_dimensions` matchers. Stub `CDO.running_active_job_worker?` to true except where noted:
+- [x] 1.4 Extend `dashboard/test/jobs/application_job_test.rb`, using the file's existing `includes_metrics` and `includes_dimensions` matchers. Stub `CDO.running_active_job_worker?` to true except where noted:
   - success: `perform_now` pushes `PerformCount` with `Outcome: 'success'` and `Platform: 'ec2'`
   - failure: a testable job whose `perform` raises pushes `Outcome: 'failure'`, and `perform_now` still raises the same exception
   - swallowed failure: a testable job with `rescue_from` pushes `Outcome: 'failure'`
@@ -35,23 +35,23 @@ Before the first edit in `code-dot-org` and in `infrastructure`, ask the user wh
   - push failure after failure: the exception seen is the job's own
   - report failure: the push raises and `Observability::Errors.report` raises; a successful job still completes, and a failing job still raises its own exception
   - `common_dimensions` still returns exactly `Environment` and `JobName`
-- [ ] 1.5 Run `dashboard/test/jobs/` and the other test files that set expectations on `Cdo::Metrics.push` (`grep -rl "Cdo::Metrics.expects(:push)" dashboard/test`). They run outside a worker context and should see no new push; if one fails, find out why before changing it
-- [ ] 1.6 In `dashboard/app/jobs/autoscaling_test_job.rb`, add a `fail: false` keyword argument to `perform`. When it is true, raise `'AutoscalingTestJob failure requested'` after the sleep, in place of logging `completed`. Leave the argument validation and the `started` event as they are. In `k8s/README.md`, under "Generate test work", document `fail: true` and add the two smoke-test enqueue lines:
+- [x] 1.5 Run `dashboard/test/jobs/` and the other test files that set expectations on `Cdo::Metrics.push` (`grep -rl "Cdo::Metrics.expects(:push)" dashboard/test`). They run outside a worker context and should see no new push; if one fails, find out why before changing it
+- [x] 1.6 In `dashboard/app/jobs/autoscaling_test_job.rb`, add a `fail: false` keyword argument to `perform`. When it is true, raise `'AutoscalingTestJob failure requested'` after the sleep, in place of logging `completed`. Leave the argument validation and the `started` event as they are. In `k8s/README.md`, under "Generate test work", document `fail: true` and add the two smoke-test enqueue lines:
   - `AutoscalingTestJob.perform_later(run_id: 'smoke-success', duration_seconds: 0)`
   - `AutoscalingTestJob.perform_later(run_id: 'smoke-failure', duration_seconds: 0, fail: true)`
-- [ ] 1.7 Extend `dashboard/test/jobs/autoscaling_test_job_test.rb`: with `fail: true` the job sleeps, raises, and logs `started` only. The existing cases cover the default and must still pass unchanged
-- [ ] 1.8 Run rubocop on the changed Ruby files and fix what it reports
+- [x] 1.7 Extend `dashboard/test/jobs/autoscaling_test_job_test.rb`: with `fail: true` the job sleeps, raises, and logs `started` only. The existing cases cover the default and must still pass unchanged
+- [x] 1.8 Run rubocop on the changed Ruby files and fix what it reports
 
 ## 2. code-dot-org: chart
 
-- [ ] 2.1 In `k8s/helm/templates/locals.yml.yaml`, add `compute_platform: k8s` to the ConfigMap's shared data, with a comment naming the `Platform` metric dimension as its reader
-- [ ] 2.2 In `k8s/helm/templates/dashboard/_dashboard.yaml`, extend the comment on `tty: true`: application log lines reach `kubectl logs` only through the syslog console fallback this enables, so it stays until the app logs to stdout directly
-- [ ] 2.3 Bump `version:` in `k8s/helm/Chart.yaml` from whatever `staging` has at the time
-- [ ] 2.4 Render the chart with `helm template` using the staging and the production value layering from `k8s-gitops/apps/codeai`, and confirm:
+- [x] 2.1 In `k8s/helm/templates/locals.yml.yaml`, add `compute_platform: k8s` to the ConfigMap's shared data, with a comment naming the `Platform` metric dimension as its reader
+- [x] 2.2 In `k8s/helm/templates/dashboard/_dashboard.yaml`, extend the comment on `tty: true`: application log lines reach `kubectl logs` only through the syslog console fallback this enables, so it stays until the app logs to stdout directly
+- [x] 2.3 Bump `version:` in `k8s/helm/Chart.yaml` from whatever `staging` has at the time
+- [x] 2.4 Render the chart with `helm template` using the staging and the production value layering from `k8s-gitops/apps/codeai`, and confirm:
   - the `locals.yml` ConfigMap carries `compute_platform: k8s`
   - the worker Deployment takes that ConfigMap through `envFrom` with prefix `CDO_`
   - the diff against a render of the unchanged chart is the ConfigMap key, the comment and the chart version label, nothing else
-- [ ] 2.5 Confirm no file under `k8s-gitops/apps/codeai/` sets `compute_platform` or replaces the `locals.yml` ConfigMap, so no k8s-gitops values change is needed
+- [x] 2.5 Confirm no file under `k8s-gitops/apps/codeai/` sets `compute_platform` or replaces the `locals.yml` ConfigMap, so no k8s-gitops values change is needed
 
 ## 3. code-dot-org: land and smoke-test on staging
 
@@ -76,21 +76,21 @@ Before the first edit in `code-dot-org` and in `infrastructure`, ask the user wh
 
 ## 4. infrastructure: dashboard panel
 
-- [ ] 4.1 In `observability/dashboards/grafana/src/dashboards/backend/rails/active-job/overview/index.ts`, add a `jobsPerformedByPlatformPanel` function modelled on `jobsStartedPerMinutePanel`:
+- [x] 4.1 In `observability/dashboards/grafana/src/dashboards/backend/rails/active-job/overview/index.ts`, add a `jobsPerformedByPlatformPanel` function modelled on `jobsStartedPerMinutePanel`:
   - title "Jobs performed by platform", CloudWatch datasource, `min(0)`, the default legend, an unused panel ID
   - four hidden targets, one per pair of `Platform` (`ec2`, `k8s`) and `Outcome` (`success`, `failure`): `SEARCH('{code-dot-org/ActiveJob,Environment,JobName,Outcome,Platform} Environment="$environment" MetricName="PerformCount" Platform="<p>" Outcome="<o>"', 'Sum', 60)`
   - four visible `SUM(<id>)` targets labelled `ec2 success`, `ec2 failure`, `k8s success`, `k8s failure`
   - overrides colouring the two failure series red
   - a description covering the four points in the panel spec: one count per attempt run by a worker, retries count again; `success` means finished without raising and includes attempts a job chose to skip; jobs killed mid-run and failures before `perform` starts are not counted; no data means unknown, not healthy
-- [ ] 4.2 Place the panel in the dashboard layout next to "Jobs Started per Minute", shifting later panels down. Do not edit any other panel's queries
-- [ ] 4.3 Run `yarn typecheck` and `yarn build` in `observability/dashboards/grafana`. Confirm the emitted `activejob-overview` JSON in `dist/` contains the new panel and that every other panel's targets are unchanged from a build of the previous commit
+- [x] 4.2 Place the panel in the dashboard layout next to "Jobs Started per Minute", shifting later panels down. Do not edit any other panel's queries
+- [x] 4.3 Run `yarn typecheck` and `yarn build` in `observability/dashboards/grafana`. Confirm the emitted `activejob-overview` JSON in `dist/` contains the new panel and that every other panel's targets are unchanged from a build of the previous commit
 - [ ] 4.4 **(user)** Commit, push, and run the tofu apply for `observability/opentofu/environments/prod`
 - [ ] 4.5 Open `activejob-overview` in Grafana with `$environment` set to `staging` and confirm the panel shows the `k8s success` and `k8s failure` samples from task 3, and that the panel renders without error when a pair has no data
 
 ## 5. Production rollout
 
 - [ ] 5.1 After the DTP that carries the code-dot-org merge commit, confirm with `AWS_PROFILE=cdo` that `PerformCount` has `Environment=production`, `Platform=ec2` datapoints, and that the production panels that existed before still have data
-- [ ] 5.2 In `k8s-gitops/docs/production-promotion.md`, add the "Jobs performed by platform" panel to the post-promotion checks, saying:
+- [x] 5.2 In `k8s-gitops/docs/production-promotion.md`, add the "Jobs performed by platform" panel to the post-promotion checks, saying:
   - `k8s success` datapoints after the promotion are evidence the worker is taking and finishing jobs; `k8s failure` datapoints need a look
   - no `k8s` data means no recent evidence of completion, not a healthy worker: it may be idle, broken, or unable to push metrics
   - what to check then: `locked_by` on running `delayed_jobs` rows, the pod's restart count and last termination reason, and rows with an old `locked_at` (a job killed mid-run stays locked for up to 4 hours and leaves no metric or Honeybadger notice)
