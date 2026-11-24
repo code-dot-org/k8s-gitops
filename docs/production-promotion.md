@@ -89,8 +89,11 @@ in. The first also needs `kubectl` with read access to the cluster, and `jq`.
      `apps/codeai/deployments/production/values.yaml` on `main` names the new
      digest.
    - Argo `codeai-production` is Synced and Healthy, with the new pods Running.
-   - Whatever application-level signal exists at the time, such as a Honeybadger
-     test exception raised from a production worker, or a canary job.
+   - In Grafana, on the "ActiveJob — Overview" dashboard with `$environment` set
+     to `production`, the "Jobs performed by platform" panel shows `k8s success`
+     datapoints after the promotion. See
+     [Worker job outcomes](#worker-job-outcomes) for how to read the panel and
+     what to check when it shows nothing.
 
    An old worker pod stays until its current job finishes or its 35-minute
    grace period ends, so the rollout can take that long per worker pod. See
@@ -234,6 +237,43 @@ The production envType sets the worker's `terminationGracePeriodSeconds` to
 old worker pod stays until its current job finishes or that period ends, so a
 rollout or a rollback can take up to 35 minutes per worker pod. An idle worker
 exits in seconds. Web pods use the chart default.
+
+### Worker job outcomes
+
+The "Jobs performed by platform" panel counts job attempts per minute, by the
+platform whose worker ran them (`ec2` or `k8s`) and by how the attempt ended. It
+reads the `PerformCount` metric in the `code-dot-org/ActiveJob` CloudWatch
+namespace, which workers push within about a minute of finishing a job.
+
+- `k8s success` datapoints after the promotion are evidence that the worker is
+  taking jobs and finishing them.
+- `k8s failure` datapoints need a look. Honeybadger and Sentry have the
+  exception.
+- No `k8s` data means no recent evidence of completion. It does not mean the
+  worker is healthy. The worker may be idle (it takes low-priority jobs only),
+  broken, or unable to push metrics.
+
+When there is no `k8s` data, check:
+
+- `locked_by` on running `delayed_jobs` rows. It names the pod that holds each
+  job.
+- The worker pod's restart count and last termination reason.
+- `delayed_jobs` rows with an old `locked_at`. A job killed mid-run stays locked
+  for up to 4 hours, then runs again, and leaves no metric and no Honeybadger
+  notice.
+
+To produce evidence on demand, enqueue one job of each kind from a production
+Rails console:
+
+```ruby
+AutoscalingTestJob.perform_later(run_id: 'smoke-success', duration_seconds: 0)
+AutoscalingTestJob.perform_later(run_id: 'smoke-failure', duration_seconds: 0, fail: true)
+```
+
+EC2 workers read the same queue, so either job may be taken by EC2 and counted
+as `ec2`. Each job logs a `started` event with the hostname that ran it. The
+failing job leaves one failed `delayed_jobs` row, one Honeybadger notice and one
+Sentry event.
 
 ### What the gate does not cover
 
